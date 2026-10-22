@@ -1,7 +1,7 @@
 # Build outputs (published from the working tree by `prepublishOnly`)
-dist/
-lib/
-plugin/
+/dist/
+/lib/
+/plugin/
 *.tgz
 *.tsbuildinfo
 
