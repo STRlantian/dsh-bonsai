@@ -88,16 +88,32 @@ dsh plugin --profile desktop add "file:<仓库路径>/plugin"
 不修改 DSH 主仓库，不追加自定义会话事件 —— 树完全由 `user/message`、`assistant/message`、
 `tool/result` 重放得到，所以重载后仍可复现。
 
-## 发布
+## 版本与发布
+
+仓库里的版本号**永远是测试版**（例如 `0.1.1-test.0`），它**不会**被发布；发布时脚本把它转成正式版：
 
 ```powershell
-# 本机 npm 配的是镜像源，不能发布；脚本会显式指定官方源
-powershell -File scripts/release.ps1 -DryRun   # 演练：构建 + 109 测试 + 打包清单
-npm login --registry https://registry.npmjs.org/
-powershell -File scripts/release.ps1           # 真发布（开了 2FA 就加 -Otp <code>）
+# 1. 平时改代码：版本保持 x.y.z-test.N，随便提交、随便装机
+git commit -am "feat: ..."
+
+# 2. 演练：不会真的发布
+powershell -File scripts/release.ps1 -DryRun
+
+# 3. 正式发布
+powershell -File scripts/release.ps1
 ```
 
-`prepublishOnly` 会先跑构建、暂存与全部测试，任何一步失败都不会上传。
+第 3 步做五件事（失败会自动回滚到测试版，不会卡在已被占用的版本号上）：
+
+1. 读 `0.1.1-test.0`，算出正式版 `0.1.1`；
+2. 查 npm：若 `0.1.1` 已存在则中止（提示先 bump）；
+3. 把 `package.json` 写成 `0.1.1`，`npm publish --tag latest`；
+4. 本地版本推进到 `0.1.2-test.0`（下一轮开发）；
+5. 提交、打 tag `v0.1.1`、推送 GitHub。
+
+中途想手动推进测试版：`node scripts/bump-test-version.mjs`（`0.1.1-test.0` → `0.1.1-test.1`）。
+
+安装方看到的就是正式版：`dsh plugin add dsh-bonsai` 拿到 `latest`，不会拿到 `-test` 开头的版本。
 
 ## 开发
 

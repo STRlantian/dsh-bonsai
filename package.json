@@ -1,7 +1,7 @@
 {
   "name": "dsh-bonsai",
-  "version": "0.1.0",
-  "description": "Bonsai (盆栽): weighted conversation-tree memory, branch editing and reflection backtracking for DeepSeek Harness",
+  "version": "0.1.1-test.0",
+  "description": "Bonsai (閻╁棙鐗?: weighted conversation-tree memory, branch editing and reflection backtracking for DeepSeek Harness",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -33,7 +33,8 @@
     "typecheck": "node scripts/build.mjs --noEmit",
     "test": "node --test --test-isolation=none \"tests/*.test.ts\"",
     "check": "node scripts/build.mjs --noEmit && node --test --test-isolation=none \"tests/*.test.ts\"",
-    "prepublishOnly": "node scripts/build.mjs && node scripts/stage.mjs && node --test --test-isolation=none \"tests/*.test.ts\""
+    "prepublishOnly": "node scripts/build.mjs && node scripts/stage.mjs && node --test --test-isolation=none \"tests/*.test.ts\"",
+    "version:test": "node scripts/bump-test-version.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
