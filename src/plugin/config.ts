@@ -59,6 +59,15 @@ export interface Config {
   tokenizerVersion?: string
   /** Model id, matched against installed tokenizer directory names before versions. */
   modelId?: string
+  /**
+   * Compact automatically once the measured conversation passes this many tokens.
+   *
+   * `0` disables it. Compaction is the only lever that reduces prompt size instead of
+   * growing it, so this is off by default: losing detail is a decision for the user.
+   */
+  autoCompactAboveTokens?: number
+  /** Minimum delay between two automatic compactions, in milliseconds. */
+  autoCompactCooldownMs?: number
   /** Fraction of the token budget to trust when the counts are estimates rather than measurements. */
   conservativeBudgetRatio?: number
   /** Reflect on failures and backtrack automatically at turn boundaries. */
@@ -117,6 +126,10 @@ export interface ResolvedConfig {
   modelId?: string
   /** Budget factor applied while token counts are estimates. */
   conservativeBudgetRatio: number
+  /** Conversation size that triggers an automatic compaction; `0` disables it. */
+  autoCompactAboveTokens: number
+  /** Minimum gap between automatic compactions. */
+  autoCompactCooldownMs: number
   /** Whether to supervise failures. */
   autoReflect: boolean
   /** Whether subagent sessions are tracked. */
@@ -335,6 +348,8 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
           : undefined,
         ...(typeof source.modelId === 'string' && source.modelId.trim() !== '' ? { modelId: source.modelId.trim() } : {}),
         conservativeBudgetRatio: scalar(source, 'conservativeBudgetRatio', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input > 0 && input <= 1, issues, 'a number within (0, 1]') ?? 0.85,
+        autoCompactAboveTokens: scalar(source, 'autoCompactAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
+        autoCompactCooldownMs: scalar(source, 'autoCompactCooldownMs', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 300000,
         tokenizerVersion: typeof source.tokenizerVersion === 'string' && source.tokenizerVersion.trim() !== ''
           ? source.tokenizerVersion.trim()
           : typeof source.tokenizerVersion === 'number'

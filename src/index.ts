@@ -13,7 +13,7 @@
 import type { ContextLike } from './plugin/dsh.ts'
 import type { ResolvedConfig } from './plugin/config.ts'
 import { createTools } from './plugin/tools.ts'
-import { installHooks } from './plugin/hooks.ts'
+import { installCompactionHook, installHooks } from './plugin/hooks.ts'
 import { installCommand } from './plugin/command.ts'
 import { installHttpRoute } from './plugin/http.ts'
 import { TokenTreeService } from './plugin/service.ts'
@@ -104,6 +104,12 @@ export function apply(ctx: ContextLike, config: ResolvedConfig): void {
   })
   guard('hooks', () => {
     installHooks(ctx, service, config)
+  })
+  guard('auto compaction', () => {
+    // Optional: only mounts where the host provides a compaction service.
+    ctx.inject?.(['compaction'], (scoped) => {
+      installCompactionHook(scoped, service)
+    })
   })
   guard('/tree command', () => {
     installCommand(ctx, service)

@@ -93,6 +93,17 @@ export interface SessionState {
   lastCounted?: number
   /** Last hint decision, for /api/token-tree/settings and support. */
   lastHint?: { counted: number | undefined; above: number; fast: number; fired: boolean; reason: string }
+  /** When the last automatic compaction ran, for the cooldown. */
+  lastCompactAt?: number
+  /** Last auto-compaction decision, for diagnostics. */
+  autoCompactProbe?: {
+    tokens: number
+    threshold: number
+    due: boolean
+    hasService: boolean
+    fired: boolean
+    at: number
+  }
   /** Shape of the last `decision.messages` we were given, for diagnosing the hook. */
   probe?: { count: number; chars: number; kinds: string[] }
   /** Field names and sizes of the last decision object, for the same purpose. */
@@ -261,7 +272,15 @@ export class TokenTreeService {
    * so a switch flipped in the UI takes effect on the next turn without a restart.
    * @returns Effective value of each user-facing switch.
    */
-  effective(): { autoInject: boolean; retrievalHint: boolean; autoReflect: boolean; hintMinNodes: number; admitRelevance: number; summaryMatch: boolean } {
+  effective(): {
+    autoInject: boolean
+    retrievalHint: boolean
+    autoReflect: boolean
+    hintMinNodes: number
+    admitRelevance: number
+    summaryMatch: boolean
+    autoCompactAboveTokens: number
+  } {
     const overrides = this.settings?.all() ?? {}
     return {
       autoInject: overrides.autoInject ?? this.config.autoInject,
@@ -270,6 +289,7 @@ export class TokenTreeService {
       hintMinNodes: overrides.hintMinNodes ?? this.config.hintMinNodes,
       admitRelevance: overrides.admitRelevance ?? this.config.weights.admitRelevance,
       summaryMatch: overrides.summaryMatch ?? this.config.weights.summaryMatch,
+      autoCompactAboveTokens: overrides.autoCompactAboveTokens ?? this.config.autoCompactAboveTokens,
     }
   }
 
@@ -333,6 +353,7 @@ export class TokenTreeService {
     locale: string
     lastPrompt: SessionState['probe'] | null
     lastDecision: SessionState['decisionShape'] | null
+    autoCompact: SessionState['autoCompactProbe'] | null
     drift: { samples: number; ratio: number | null }
     lastHint: SessionState['lastHint'] | null
   } {
@@ -346,6 +367,7 @@ export class TokenTreeService {
         hintMinNodes: this.config.hintMinNodes,
         admitRelevance: this.config.weights.admitRelevance,
         summaryMatch: this.config.weights.summaryMatch,
+        autoCompactAboveTokens: this.config.autoCompactAboveTokens,
         hintAboveTokens: this.config.hintAboveTokens,
         tokenizerPath: this.config.tokenizerPath ?? null,
       },
@@ -367,6 +389,7 @@ export class TokenTreeService {
       locale: this.settings?.all().locale ?? 'auto',
       lastPrompt: this.lastPromptInfo(),
       lastDecision: this.lastDecisionInfo(),
+      autoCompact: this.autoCompactInfo(),
       drift: this.driftInfo(),
       lastHint: this.lastHintInfo(),
     }
@@ -1306,6 +1329,15 @@ export class TokenTreeService {
     }
   }
 
+  /** Last auto-compaction decision, for diagnostics. */
+  private autoCompactInfo(): SessionState['autoCompactProbe'] | null {
+    let latest: SessionState['autoCompactProbe'] | undefined
+    for (const state of this.states.values()) {
+      if (state.autoCompactProbe !== undefined) latest = state.autoCompactProbe
+    }
+    return latest ?? null
+  }
+
   /** Shape of the last decision object handed to `agent/pre-step`. */
   private lastDecisionInfo(): SessionState['decisionShape'] | null {
     let latest: SessionState['decisionShape'] | undefined
@@ -1322,6 +1354,51 @@ export class TokenTreeService {
       if (state.probe !== undefined) latest = state.probe
     }
     return latest ?? null
+  }
+
+  /**
+   * Decide whether this session should be compacted now.
+   *
+   * Compaction replaces history with a checkpoint, so it is only worth its own cost once the
+   * conversation is genuinely large, and only once per cooldown — otherwise a session that
+   * stays above the threshold would compact every turn.
+   * @param sessionId - session identity.
+   * @param now - current time, injectable for tests.
+   * @returns The measured size when a compaction is due, otherwise `null`.
+   */
+  autoCompactDue(sessionId: string, now = Date.now()): { tokens: number; threshold: number } | null {
+    const threshold = this.settings?.all().autoCompactAboveTokens ?? this.config.autoCompactAboveTokens
+    if (threshold <= 0) return null
+    if (this.tokenizer === undefined) {
+      // Without a tokenizer the count can be 40% off; compacting on a guess throws away
+      // detail for no reason.
+      this.loadTokenizer()
+      if (this.tokenizer === undefined) return null
+    }
+    const state = this.stateOf(sessionId)
+    const cooldown = this.config.autoCompactCooldownMs
+    if (state.lastCompactAt !== undefined && now - state.lastCompactAt < cooldown) return null
+    const tokens = this.conversationTokens(sessionId)
+    if (tokens < threshold) return null
+    return { tokens, threshold }
+  }
+
+  /**
+   * Record what the auto-compaction decision looked like.
+   * @param sessionId - session identity.
+   * @param probe - the decision and its inputs.
+   */
+  noteAutoCompactProbe(sessionId: string, probe: NonNullable<SessionState['autoCompactProbe']>): void {
+    this.stateOf(sessionId).autoCompactProbe = probe
+  }
+
+  /**
+   * Record that a compaction was requested.
+   * @param sessionId - session identity.
+   * @param now - current time.
+   */
+  noteCompacted(sessionId: string, now = Date.now()): void {
+    this.stateOf(sessionId).lastCompactAt = now
   }
 
   /** Current learned ratio, for the settings panel and the logs. */

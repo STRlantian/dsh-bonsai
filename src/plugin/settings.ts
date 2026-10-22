@@ -16,6 +16,8 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** Keys the settings surface may override. */
+const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'autoCompactAboveTokens', 'admitRelevance', 'summaryMatch'] as const
+
 export interface SettingsOverrides {
   /** Push a memory block every turn instead of the one-line hint. */
   autoInject?: boolean
@@ -31,6 +33,8 @@ export interface SettingsOverrides {
   tokenizerVersion?: string
   /** Interface language: `auto` follows the system, or `zh` / `en`. */
   locale?: string
+  /** Conversation tokens that trigger an automatic compaction; `0` disables it. */
+  autoCompactAboveTokens?: number
   /**
    * Raw-relevance floor for admitting a node into the retrieval buffer (0–1).
    * Ranking still uses the blended score; this only decides who is allowed in.
@@ -71,6 +75,10 @@ export function defaultSettingsPath(): string {
  * @returns The value when it has the right type, otherwise `undefined`.
  */
 function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number | string | undefined {
+  if (key === 'autoCompactAboveTokens') {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined
+    return value
+  }
   if (key === 'locale') {
     if (typeof value !== 'string') return undefined
     const normalised = value.trim().toLowerCase()
@@ -143,7 +151,7 @@ export class SettingsStore {
    */
   private validate(source: Record<string, unknown>): SettingsOverrides {
     const out: SettingsOverrides = {}
-    for (const key of ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'admitRelevance', 'summaryMatch'] as const) {
+    for (const key of SETTING_KEYS) {
       if (!(key in source)) continue
       const value = coerce(key, source[key])
       if (value !== undefined) (out as Record<string, boolean | number | string>)[key] = value
@@ -165,7 +173,7 @@ export class SettingsStore {
    */
   apply(patch: Record<string, unknown>): SettingsOverrides {
     const next: SettingsOverrides = { ...this.current }
-    for (const key of ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'admitRelevance', 'summaryMatch'] as const) {
+    for (const key of SETTING_KEYS) {
       if (!(key in patch)) continue
       const raw = patch[key]
       if (raw === null) {

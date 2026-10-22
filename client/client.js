@@ -45,6 +45,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "单击选中；双击跳到对话中的这一轮": "Click to select; double-click to jump to that turn",
   "这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。": "That turn is outside the rendered transcript (virtualised list); see the detail panel instead.",
   "界面语言": "Language",
+  "自动压缩阈值": "Auto-compact threshold",
+  "对话 token 超过这个值就主动压缩（0 = 关闭）。这是唯一能真正减少 input 的手段，代价是丢失细节": "Compact once the conversation passes this many tokens (0 disables). The only lever that actually reduces input, at the cost of detail.",
   "「自动」跟随浏览器/系统语言；选择后只影响这个插件，不影响宿主": "Auto follows the browser language; the choice only affects this plugin",
   "自动": "Auto",
   "中文": "Chinese",
@@ -1316,6 +1318,27 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               : settings.tokenizer.available.join(', '),
             settings.budget === undefined ? '-' : settings.budget.factor.toFixed(2),
             settings.billing === undefined ? '-' : (settings.billing.active ? t(t('生效')) : t(t('样本不足'))))),
+        settingRow({
+          key: 'autoCompactAboveTokens',
+          label: t('自动压缩阈值'),
+          hint: t('对话 token 超过这个值就主动压缩（0 = 关闭）。这是唯一能真正减少 input 的手段，代价是丢失细节'),
+          control: h('input', {
+            type: 'number',
+            min: 0,
+            step: 1000,
+            defaultValue: String(effective.autoCompactAboveTokens === undefined ? 0 : effective.autoCompactAboveTokens),
+            disabled: busy,
+            style: { width: '92px' },
+            onBlur: function (event) {
+              var next = Number(event.target.value)
+              if (!Number.isFinite(next) || next < 0) {
+                event.target.value = String(effective.autoCompactAboveTokens === undefined ? 0 : effective.autoCompactAboveTokens)
+                return
+              }
+              saveSetting('autoCompactAboveTokens', Math.round(next))
+            },
+          }),
+        }),
         settingRow({
           key: 'locale',
           label: t('界面语言'),
