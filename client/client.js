@@ -27,6 +27,20 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "在左边选一个节点，然后点「从这里继续」。下一轮你输入的问题会成为它的子节点。": "Select a node on the left, then click \"Continue here\". The question you send next becomes its child.",
   "拖动一行到另一行可以改父节点（整棵子树一起移动）；删除只是隐藏，可撤销。": "Drag one row onto another to reparent it (the whole subtree moves). Delete only hides, and can be undone.",
   "节点": "nodes",
+  "原始相关度（余弦）达到这个值才进入排序，0 表示不设门槛；实测 0.3 召回不降、返回节点约少四成，0.5 会让七成查询空手（空手时会自动放宽一次）": "Raw cosine similarity needed to enter ranking; 0 disables it. Measured: 0.3 keeps recall with ~40% fewer nodes, 0.5 leaves 70% of queries empty (it relaxes once when empty)",
+  "下拉里列的是磁盘上实际找到的 tokenizer.json；「自主学习」不用词表，靠估算 + 账单校准，节点预算会自动打 0.85 折": "The list shows the tokenizer.json files found on disk. \"Learned\" uses no vocabulary: estimates plus billing calibration, with the budget discounted to 0.85",
+  "tokenizer: {} · 可用 {} · 预算折扣 {} · 账单拟合 {}": "tokenizer: {} · available {} · budget factor {} · billing fit {}",
+  "（未知）": "(unknown)",
+  "（未配置）": "(not configured)",
+  "无": "none",
+  "已覆盖": "overridden",
+  "生效": "active",
+  "样本不足": "not enough samples",
+  "这些开关立即生效，写入 {}，重启后仍然有效。": "These switches apply immediately and are stored in {}; they survive a restart.",
+  "已保存：{}": "Saved: {}",
+  "已保存：{} = {}": "Saved: {} = {}",
+  "保存失败：{}": "Save failed: {}",
+  "读取设置失败：{}": "Could not read settings: {}",
   "单击选中（操作在右侧）；双击跳到对话中的这一轮": "Click to select (actions on the right); double-click to jump to that turn",
   "单击选中；双击跳到对话中的这一轮": "Click to select; double-click to jump to that turn",
   "这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。": "That turn is outside the rendered transcript (virtualised list); see the detail panel instead.",
@@ -1028,7 +1042,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           // Language can change here, and the whole dock has to re-render for it.
           if (applyLocale(payload)) setLocaleTick(function (value) { return value + 1 })
         })
-        .catch(function (error) { if (!cancelled) setNote('读取设置失败：' + error.message) })
+        .catch(function (error) { if (!cancelled) setNote(tf('读取设置失败：{}', error.message)) })
       return function () { cancelled = true }
     }, [])
 
@@ -1044,11 +1058,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       patch[key] = value
       settingsPost(patch)
         .then(function () {
-          setNote('已保存：' + key + ' = ' + (value === null ? t('跟随配置') : String(value)))
+          setNote(tf('已保存：{} = {}', key, value === null ? t('跟随配置') : String(value)))
           return settingsGet()
         })
         .then(function (payload) { setSettings(payload) })
-        .catch(function (error) { setNote('保存失败：' + error.message) })
+        .catch(function (error) { setNote(tf('保存失败：{}', error.message)) })
         .finally(function () { setBusy(false) })
     }
 
@@ -1064,7 +1078,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           h('b', null, options.label),
           h('span', { className: 'twt-hint' }, options.hint),
           h('span', { className: 'twt-ebadge', style: { color: overridden ? '#e0a458' : undefined } },
-            overridden ? '已覆盖' : t('跟随配置'))),
+            overridden ? t('已覆盖') : t('跟随配置'))),
         h('div', { className: 'twt-scontrol' },
           options.control,
           overridden
@@ -1183,7 +1197,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var effective = (settings && settings.effective) || {}
       settingsPanel = h('div', { className: 'twt-settings' },
         h('p', { className: 'twt-hint' },
-          '这些开关立即生效，写入 ' + (settings.path === null ? '（未配置）' : settings.path) + '，重启后仍然有效。'),
+          tf('这些开关立即生效，写入 {}，重启后仍然有效。', settings.path === null ? t('（未配置）') : settings.path)),
         settingRow({
           key: 'autoInject',
           label: t('自动注入记忆块'),
@@ -1238,8 +1252,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'admitRelevance',
           label: t('检索准入阈值'),
-          hint: '原始相关度（余弦）达到这个值才进入排序，0 表示不设门槛；'
-            + '实测 0.3 召回不降、返回节点约少四成，0.5 会让七成查询空手（空手时会自动放宽一次）',
+          hint: t('原始相关度（余弦）达到这个值才进入排序，0 表示不设门槛；实测 0.3 召回不降、返回节点约少四成，0.5 会让七成查询空手（空手时会自动放宽一次）'),
           control: h('input', {
             type: 'number',
             min: 0,
@@ -1282,8 +1295,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'tokenizerVersion',
           label: 'tokenizer',
-          hint: '下拉里列的是磁盘上实际找到的 tokenizer.json；'
-            + '「自主学习」不用词表，靠估算 + 账单校准，节点预算会自动打 0.85 折',
+          hint: t('下拉里列的是磁盘上实际找到的 tokenizer.json；「自主学习」不用词表，靠估算 + 账单校准，节点预算会自动打 0.85 折'),
           control: h('select', {
             defaultValue: currentTokenizerChoice(effective, settings),
             disabled: busy,
@@ -1295,13 +1307,15 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           }, tokenizerOptions(effective, settings)),
         }),
         h('p', { className: 'twt-hint' },
-          'tokenizer: ' + (settings.tokenizer === undefined
-            ? '（未知）'
-            : settings.tokenizer.state
-              + (settings.tokenizer.version ? ' v' + settings.tokenizer.version : '')
-              + ' · 可用 ' + (settings.tokenizer.available.length === 0 ? '无' : settings.tokenizer.available.join(', ')))
-          + ' · 预算折扣 ' + (settings.budget === undefined ? '-' : settings.budget.factor.toFixed(2))
-          + ' · 账单拟合 ' + (settings.billing === undefined ? '-' : (settings.billing.active ? '生效' : '样本不足'))),
+          tf('tokenizer: {} · 可用 {} · 预算折扣 {} · 账单拟合 {}',
+            settings.tokenizer === undefined
+              ? t(t('（未知）'))
+              : settings.tokenizer.state + (settings.tokenizer.version ? ' v' + settings.tokenizer.version : ''),
+            settings.tokenizer === undefined || settings.tokenizer.available.length === 0
+              ? t(t('无'))
+              : settings.tokenizer.available.join(', '),
+            settings.budget === undefined ? '-' : settings.budget.factor.toFixed(2),
+            settings.billing === undefined ? '-' : (settings.billing.active ? t(t('生效')) : t(t('样本不足'))))),
         settingRow({
           key: 'locale',
           label: t('界面语言'),
@@ -1770,7 +1784,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           h('span', null, h('b', null, '来源'), originLabel(selected.origin)),
           h('span', null, h('b', null, t('入边代价')), String(selected.cost)),
           h('span', null, h('b', null, t('距当前')), String(selected.pathCost)),
-          h('span', null, h('b', null, t(t('工具'))), blockTools.length === 0 ? '无' : String(blockTools.length))),
+          h('span', null, h('b', null, t(t('工具'))), blockTools.length === 0 ? t('无') : String(blockTools.length))),
         blockTools.length === 0 ? null : h('div', { className: 'twt-tools' },
           blockTools.map(function (tool, index) {
             return h('span', { key: index, className: 'twt-tool', 'data-ok': String(tool.ok) }, tool.name)

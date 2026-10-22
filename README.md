@@ -84,6 +84,17 @@ dsh plugin --profile desktop add "file:<仓库路径>/plugin"
 不修改 DSH 主仓库，不追加自定义会话事件 —— 树完全由 `user/message`、`assistant/message`、
 `tool/result` 重放得到，所以重载后仍可复现。
 
+## 发布
+
+```powershell
+# 本机 npm 配的是镜像源，不能发布；脚本会显式指定官方源
+powershell -File scripts/release.ps1 -DryRun   # 演练：构建 + 109 测试 + 打包清单
+npm login --registry https://registry.npmjs.org/
+powershell -File scripts/release.ps1           # 真发布（开了 2FA 就加 -Otp <code>）
+```
+
+`prepublishOnly` 会先跑构建、暂存与全部测试，任何一步失败都不会上传。
+
 ## 开发
 
 ```powershell
