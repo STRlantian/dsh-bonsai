@@ -6,6 +6,7 @@
 dsh-bonsai   ·   DeepSeek Harness 插件   ·   零运行时依赖   ·   MIT
 ```
 
+[![npm](https://img.shields.io/npm/v/dsh-bonsai.svg)](https://www.npmjs.com/package/dsh-bonsai)
 ![status](https://img.shields.io/badge/status-0.1.0--experimental-orange)
 ![license](https://img.shields.io/badge/license-MIT-blue)
 
@@ -24,8 +25,11 @@ dsh-bonsai   ·   DeepSeek Harness 插件   ·   零运行时依赖   ·   MIT
 要求：DeepSeek Harness（桌面版或 `dsh` CLI）。
 
 ```powershell
-# 装到某个 profile（桌面版请先完全退出）
+# 从 npm 安装（桌面版请先完全退出）
 dsh plugin --profile desktop add dsh-bonsai
+
+# 或者先看包里的东西
+npm view dsh-bonsai
 ```
 
 从本地源码安装（开发用）：
