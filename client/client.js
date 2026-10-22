@@ -27,6 +27,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "在左边选一个节点，然后点「从这里继续」。下一轮你输入的问题会成为它的子节点。": "Select a node on the left, then click \"Continue here\". The question you send next becomes its child.",
   "拖动一行到另一行可以改父节点（整棵子树一起移动）；删除只是隐藏，可撤销。": "Drag one row onto another to reparent it (the whole subtree moves). Delete only hides, and can be undone.",
   "节点": "nodes",
+  "单击选中（操作在右侧）；双击跳到对话中的这一轮": "Click to select (actions on the right); double-click to jump to that turn",
+  "单击选中；双击跳到对话中的这一轮": "Click to select; double-click to jump to that turn",
+  "这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。": "That turn is outside the rendered transcript (virtualised list); see the detail panel instead.",
   "界面语言": "Language",
   "「自动」跟随浏览器/系统语言；选择后只影响这个插件，不影响宿主": "Auto follows the browser language; the choice only affects this plugin",
   "自动": "Auto",
@@ -820,6 +823,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           if (props.moveSource !== null && props.moveSource !== node.id) props.onMoveTarget(node.id)
           else onPick(node.id)
         },
+        onDoubleClick: function () {
+          if (graphPanMoved) return
+          if (props.moveSource !== null) return
+          if (typeof props.onJump === 'function') props.onJump(node.id)
+        },
       },
         h('rect', {
           width: NODE_W,
@@ -1541,6 +1549,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
      * Select one entry and jump the transcript to it.
      * @param {object} entry - row from the active view (block or node).
      */
+    /**
+     * Select an entry. Kept separate from jumping: selecting is the common action.
+     * @param {object} entry - list entry.
+     */
     function pickEntry(entry) {
       // In move mode a click on a row picks the new parent, same as the graph.
       if (moveSource !== null) {
@@ -1548,8 +1560,18 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         return
       }
       setPicked(entry.id)
+    }
+
+    /**
+     * Jump to an entry's turn, then close the editor so the transcript is visible.
+     * @param {object} entry - list entry.
+     */
+    function jumpToEntry(entry) {
+      if (moveSource !== null) return
+      setPicked(entry.id)
       revealDeep(entry.label, entry.turn).then(function (found) {
-        if (!found) setNote('已选中 ' + entry.id + '；这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。')
+        if (found && typeof onClose === 'function') onClose()
+        if (!found) setNote(t('这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。'))
       })
     }
 
@@ -1558,7 +1580,19 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
      * @param {string} id - node id.
      */
     function pickNode(id) {
+      if (moveSource !== null) {
+        completeMove(id)
+        return
+      }
       setPicked(id)
+    }
+
+    /**
+     * Jump from the graph to a node's turn and close the editor.
+     * @param {string} id - node id.
+     */
+    function jumpToNodeById(id) {
+      if (moveSource !== null) return
       var preview = ''
       var turn
       for (var index = 0; index < graphNodes.length; index++) {
@@ -1568,8 +1602,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           break
         }
       }
+      setPicked(id)
       revealDeep(preview, turn).then(function (found) {
-        if (!found) setNote('已选中 ' + id + '；这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。')
+        if (found && typeof onClose === 'function') onClose()
+        if (!found) setNote(t('这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。'))
       })
     }
 
@@ -1621,6 +1657,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         style: { marginLeft: (entry.depth * 12) + 'px' },
         draggable: true,
         onClick: function () { pickEntry(entry) },
+        onDoubleClick: function () { jumpToEntry(entry) },
+        title: t('单击选中；双击跳到对话中的这一轮'),
         onDragStart: function (event) {
           dragId = entry.id
           setDragId(entry.id)
@@ -1830,6 +1868,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
                         moveSource: moveSource,
                         onMoveTarget: completeMove,
                         onPick: pickNode,
+                        onJump: jumpToNodeById,
                       })
                       : entries.length === 0 ? h('p', { className: 'twt-note' }, mode === 'nodes' ? t('这个会话还没有节点。') : t('这个会话还没有对话块。'))
                         : list),
@@ -1961,6 +2000,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var anchorState = React.useState(null)
     var anchoredId = anchorState[0]
     var setAnchored = anchorState[1]
+
+    // Last hidden branch, so one click can restore it.
+    var removedState = React.useState(null)
+    var removedId = removedState[0]
+    var setRemoved = removedState[1]
     var moveState = React.useState(null)
     var moveSource = moveState[0]
     var setMoveSource = moveState[1]
@@ -2132,12 +2176,25 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     }
 
     /** Click one row or graph box: select it and jump the transcript to its turn. */
+    /**
+     * Mark a node as selected. Selecting must not scroll the transcript: the host remounts
+     * this slot while it pages history, so a jump used to close the dock on every click.
+     * @param {object} node - node payload.
+     */
     function pickNode(node) {
       if (moveSource !== null) {
         completeMove(node.id)
         return
       }
       setPicked(node.id)
+    }
+
+    /**
+     * Scroll the transcript to the node's turn. Bound to a double click.
+     * @param {object} node - node payload.
+     */
+    function jumpToNode(node) {
+      if (moveSource !== null) return
       revealDeep(node.preview || '', node.turn).then(function (found) {
         if (!found) setNote('已选中 ' + node.id + '；这条不在对话区当前渲染范围内（列表虚拟化）。')
       })
@@ -2236,8 +2293,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         'data-future': String(moveSource !== null && moveSource !== node.id),
         'data-ignored': String(node.ignored === true),
         onClick: function () { pickNode(node) },
-        onDoubleClick: function () { anchor(node.id) },
-        title: t('单击选中并跳到这条对话；双击直接锚定（下一问挂到它下面）'),
+        onDoubleClick: function () { jumpToNode(node) },
+        title: t('单击选中（操作在右侧）；双击跳到对话中的这一轮'),
       },
         h('span', { className: 'twt-ekind', 'data-kind': node.kind }, kindLabel(node.kind)),
         h('span', { className: 'twt-id' }, node.id),
@@ -2316,6 +2373,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         moveSource: moveSource,
         onMoveTarget: completeMove,
         onPick: function (id) { pickNode(nodeById[id] === undefined ? { id: id } : nodeById[id]) },
+        onJump: function (id) { jumpToNode(nodeById[id] === undefined ? { id: id } : nodeById[id]) },
       })
       : h('div', { style: { overflow: 'auto', flex: 1, minHeight: 0 } }, rows)
 

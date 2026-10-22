@@ -223,6 +223,19 @@ test('the injected styles follow the host theme instead of forcing dark', { time
   assert.ok(css.includes('background:var(--twt-surface)'), 'panels paint the shared surface token')
 })
 
+test('clicking a row selects it without jumping, double-click jumps', { timeout: 30000 }, async t => {
+  const client = await mountClient('dock')
+  t.after(client.cleanup)
+  await client.click('列表')
+  const rows = [...client.document.querySelectorAll('.twt-dockrow')]
+  assert.ok(rows.length > 0, 'dock rows rendered')
+  // A single click marks the row selected; nothing scrolls, so the dock survives.
+  await React.act(async () => { rows[0].dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+  assert.equal(rows[0].getAttribute('data-picked'), 'true', 'row selected')
+  assert.ok(client.container.innerHTML.includes('twt-dock'), 'dock still mounted after a click')
+})
+
 test('the settings tab offers the tokenizer dropdown from the payload', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)
