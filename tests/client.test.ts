@@ -170,6 +170,14 @@ async function mountClient(which, locale = 'zh') {
     await flush()
   }
 
+  const clickRow = async label => {
+    const rows = [...window.document.querySelectorAll('.twt-erow, [data-id]')]
+    const target = rows.find(row => (row.textContent ?? '').includes(label))
+    assert.ok(target !== undefined, `row "${label}" exists`)
+    await React.act(async () => { target.dispatchEvent(new window.MouseEvent('click', { bubbles: true })) })
+    await flush()
+  }
+
   const cleanup = async () => {
     try {
       await React.act(async () => { root.unmount() })
@@ -178,7 +186,7 @@ async function mountClient(which, locale = 'zh') {
     }
   }
 
-  return { window, document: window.document, container, requests, click, flush, cleanup }
+  return { window, document: window.document, container, requests, click, clickRow, flush, cleanup }
 }
 
 test('the dock renders the conversation tree it fetched', { timeout: 30000 }, async t => {
@@ -227,27 +235,30 @@ test('the settings tab offers the tokenizer dropdown from the payload', { timeou
   assert.equal(select.value, '4', 'shows the generation actually in use')
 })
 
-test('the compare tab shows one column per branch and folds answers away', { timeout: 30000 }, async t => {
+test('selecting a forked node lists its branches beside it', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)
   await client.click('盆栽')
-  await client.click('分支对比')
-  const columns = [...client.document.querySelectorAll('.twt-branch-col')]
-  assert.equal(columns.length, 2, 'two sibling branches, not the answer or the tool result')
-  const texts = columns.map(column => column.textContent ?? '')
-  assert.ok(texts[0].includes('计数布隆过滤器'), 'first branch question')
-  assert.ok(texts[1].includes('直接换哈希表'), 'second branch question')
+  await client.click('完整树')
+  // Pick the parent of the two branches.
+  await client.clickRow('布隆过滤器的误判率')
+  const rows = [...client.document.querySelectorAll('.twt-branch-row')]
+  assert.equal(rows.length, 2, 'two branches, not the answer or the tool result')
+  const labels = rows.map(row => row.textContent ?? '')
+  assert.ok(labels[0].includes('计数布隆'), 'first branch question')
+  assert.ok(labels[1].includes('直接换哈希表'), 'second branch question')
 })
 
-test('anchoring from a comparison column calls the focus route', { timeout: 30000 }, async t => {
+test('anchoring from a branch row calls the focus route', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)
   await client.click('盆栽')
-  await client.click('分支对比')
-  const columns = [...client.document.querySelectorAll('.twt-branch-col')]
-  assert.ok(columns.length > 0, 'columns rendered')
-  const button = [...columns[0].querySelectorAll('button')].find(entry => (entry.textContent ?? '').includes('从这里继续'))
-  assert.ok(button !== undefined, 'continue button exists in a column')
+  await client.click('完整树')
+  await client.clickRow('布隆过滤器的误判率')
+  const rows = [...client.document.querySelectorAll('.twt-branch-row')]
+  assert.ok(rows.length > 0, 'branch rows rendered')
+  const button = [...rows[0].querySelectorAll('button')].find(entry => (entry.textContent ?? '').includes('从这里继续'))
+  assert.ok(button !== undefined, 'continue button exists in the row')
   await React.act(async () => { button.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
   await client.flush()
   const focusCall = client.requests.find(entry => entry.url.includes('/api/token-tree/focus') && entry.method === 'POST')

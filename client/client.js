@@ -27,6 +27,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "在左边选一个节点，然后点「从这里继续」。下一轮你输入的问题会成为它的子节点。": "Select a node on the left, then click \"Continue here\". The question you send next becomes its child.",
   "拖动一行到另一行可以改父节点（整棵子树一起移动）；删除只是隐藏，可撤销。": "Drag one row onto another to reparent it (the whole subtree moves). Delete only hides, and can be undone.",
   "节点": "nodes",
+  "这个节点下有 {} 个分支：": "{} branches under this node:",
   "问": "Q",
   "答": "A",
   "工具": "tools",
@@ -42,8 +43,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     "精简": "Compact",
     "全图": "Fit",
     "回到当前": "Current",
-    "分支对比": "Compare",
-    "设置": "Settings",
+      "设置": "Settings",
     "对话块": "Blocks",
     "完整树": "Full tree",
     "刷新": "Refresh",
@@ -107,10 +107,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     "下拉里列的是磁盘上实际找到的 tokenizer.json；「自主学习」不用词表，靠估算 + 账单校准，节点预算会自动打 0.85 折": "The list shows the tokenizer.json files actually found on disk. \"Learned\" uses no vocabulary: estimates plus billing calibration, with the budget discounted to 0.85",
     "自动（最新一代）": "Auto (newest)",
     "自主学习（不用词表）": "Learned (no vocabulary)",
-    "分支对比：同一个节点下并列的": "Compare: the branches under one node, side by side — ",
-    " 个分支（父节点 ": " branches (parent ",
-    "）。点「从这里继续」把下一轮挂到这条分支上。": "). Click \"Continue here\" to attach the next turn to that branch.",
-    "拖动一行到另一行可以改父节点（整棵树一起移动）；删除只是隐藏，可撤销。": "Drag one row onto another to reparent it (the subtree moves with it). Delete only hides, and can be undone.",
+          "拖动一行到另一行可以改父节点（整棵树一起移动）；删除只是隐藏，可撤销。": "Drag one row onto another to reparent it (the subtree moves with it). Delete only hides, and can be undone.",
     "锚定只影响下一轮：你回到对话输入框发出的那条问题会挂到锚定节点下。": "Anchoring affects the next turn only: the next question you send attaches under the anchored node.",
     "单击选中并跳到这条对话；双击直接锚定（下一问挂到它下面）": "Click to select and jump to that turn; double-click to anchor the next question under it",
     "在只显示节点号和显示问题/回答摘要之间切换": "Toggle between node ids and question/answer summaries",
@@ -306,6 +303,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-constraints{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--twt-border);font-size:11px}',
     '.twt-constraints-label{opacity:.6}',
     '.twt-constraint{border:1px solid rgba(224,164,88,.45);color:#e0a458;border-radius:999px;padding:0 8px;line-height:17px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.twt-branches{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--twt-border);padding-top:8px}',
+    '.twt-branches-head{font-size:11px;opacity:.65}',
+    '.twt-branch-row{border:1px solid var(--twt-border);border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:4px;cursor:pointer}',
+    '.twt-branch-row:hover{background:var(--twt-hover)}',
+    '.twt-branch-row[data-anchored="true"]{border-color:var(--twt-warn)}',
+    '.twt-branch-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:10px;opacity:.85}',
     // Editor: a separate surface, big enough to read a long conversation and pick a node.
     '.twt-eoverlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:80;display:flex;align-items:center;justify-content:center}',
     '.twt-editor{width:min(880px,90vw);height:min(600px,72vh);display:flex;flex-direction:column;',
@@ -1056,76 +1059,56 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
    * @param {object} props - nodes, parent, anchoredId, busy, onAnchor, onPick.
    * @returns {object} React element.
    */
-  function BranchCompare(props) {
+  /**
+   * The selected node's branches, listed in the detail panel.
+   *
+   * This replaces the old side-by-side tab: the graph shows the shape, this shows what each
+   * branch actually concluded. Rows only appear for a node that has more than one branch,
+   * because a single child is just the conversation continuing.
+   * @param {object} props - nodes, parent, anchoredId, busy, onAnchor, onPick.
+   * @returns {object|null} The list, or null when there is nothing to compare.
+   */
+  function BranchList(props) {
     var nodes = props.nodes || []
-    var byId = {}
-    nodes.forEach(function (node) { byId[node.id] = node })
-    if (nodes.length === 0) {
-      return h('p', { className: 'twt-note' }, t('还没有节点可以比较。'))
-    }
-    // Default: the node with the most direct children, so the view is useful immediately.
-    var childCount = {}
-    nodes.forEach(function (node) {
-      if (node.parentId === null || node.parentId === undefined) return
-      childCount[node.parentId] = (childCount[node.parentId] || 0) + 1
-    })
     var parent = props.parent
-    if (parent === null || parent === undefined || childCount[parent] === undefined) {
-      var best = null
-      Object.keys(childCount).forEach(function (id) {
-        if (best === null || childCount[id] > childCount[best]) best = id
-      })
-      parent = best
-    }
-    if (parent === null) {
-      return h('p', { className: 'twt-note' }, t('没有发生过分叉，暂时无从比较。'))
-    }
-    // Answers and tool results are body text, not branches: comparing them makes no sense.
+    if (parent === null || parent === undefined) return null
     var branches = nodes.filter(function (node) {
       return node.parentId === parent && node.kind !== 'answer' && node.kind !== 'tool_result'
     })
-
-    var columns = branches.map(function (node) {
-      // An answer is shown inside its question's column, not as its own branch.
+    if (branches.length < 2) return null
+    var rows = branches.map(function (node) {
       var answer = nodes.find(function (candidate) {
         return candidate.parentId === node.id && candidate.kind === 'answer'
       })
       var isAnchored = props.anchoredId === node.id
       return h('div', {
         key: node.id,
-        className: 'twt-branch-col',
+        className: 'twt-branch-row',
         'data-anchored': String(isAnchored),
+        onClick: function () { props.onPick(node.id) },
       },
         h('div', { className: 'twt-branch-head' },
           h('b', null, node.id),
-          h('span', { className: 'twt-count' }, node.turn === undefined ? '' : ' 轮 ' + node.turn),
+          h('span', { className: 'twt-count' }, node.turn === undefined ? '' : ' ' + t('轮') + ' ' + node.turn),
           isAnchored ? h('span', { className: 'twt-ebadge' }, t('锚定中')) : null),
         h('div', { className: 'twt-branch-q' }, node.preview || t('（空问题）')),
         h('div', { className: 'twt-branch-a' }, answer === undefined
           ? h('span', { className: 'twt-hint' }, t('（这个分支还没有回答）'))
           : (answer.detail || answer.preview || t('（空）'))),
-        h('div', { className: 'twt-dgrid twt-branch-stats' },
-          h('span', null, h('b', null, t('入边代价')), String(node.pathCost === undefined ? '-' : node.pathCost)),
-          h('span', null, h('b', null, t('子节点')), String(childCount[node.id] === undefined ? 0 : childCount[node.id]))),
-        h('div', { className: 'twt-actions' },
-          h('button', {
-            className: 'twt-action',
-            'data-kind': 'primary',
-            disabled: props.busy,
-            onClick: function () { props.onAnchor(node.id) },
-          }, isAnchored ? t('已锚定（重新确认）') : t('从这里继续')),
+        h('div', { className: 'twt-branch-foot' },
+          h('span', { className: 'twt-count' }, t('入边代价') + ' ' + String(node.pathCost === undefined ? '-' : node.pathCost)),
           h('button', {
             className: 'twt-action',
             disabled: props.busy,
-            onClick: function () { props.onPick(node.id) },
-          }, t('选中'))))
+            onClick: function (event) {
+              event.stopPropagation()
+              props.onAnchor(node.id)
+            },
+          }, isAnchored ? t('已锚定（重新确认）') : t('从这里继续'))))
     })
-
-    return h('div', { className: 'twt-compare' },
-      h('p', { className: 'twt-hint' },
-        tf('分支对比：同一个节点下并列的 {} 个分支（父节点 {}）。点「从这里继续」把下一轮挂到这条分支上。', branches.length, parent)
-        + '点「从这里继续」把下一轮挂到这条分支上。'),
-      h('div', { className: 'twt-compare-cols' }, columns))
+    return h('div', { className: 'twt-branches' },
+      h('div', { className: 'twt-branches-head' }, tf('这个节点下有 {} 个分支：', branches.length)),
+      rows)
   }
 
   var settingsPanel = null
@@ -1738,12 +1721,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             'data-kind': mode === 'graph' ? 'primary' : undefined,
             onClick: function () { setMode('graph'); setPicked(null) },
           }, t('图形')),
-          h('button', {
-            className: 'twt-action',
-            style: { padding: '3px 10px' },
-            'data-kind': mode === 'compare' ? 'primary' : undefined,
-            onClick: function () { setMode('compare') },
-          }, t('分支对比')),
+
           h('button', {
             className: 'twt-action',
             style: { padding: '3px 10px' },
@@ -1763,22 +1741,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             ? settingsPanel
             : h(React.Fragment, null,
               h('div', {
-                className: mode === 'graph'
-                  ? 'twt-elist twt-elist-graph'
-                  : (mode === 'compare' ? 'twt-elist twt-elist-graph' : 'twt-elist'),
+                className: mode === 'graph' ? 'twt-elist twt-elist-graph' : 'twt-elist',
               },
                 view.loading ? h('p', { className: 'twt-note' }, t('读取中…'))
                   : view.error ? h('p', { className: 'twt-note twt-err' }, view.error)
-                    : mode === 'compare'
-                      ? h(BranchCompare, {
-                        nodes: data === null ? [] : data.nodes,
-                        parent: picked,
-                        anchoredId: anchoredId,
-                        busy: busy,
-                        onAnchor: anchor,
-                        onPick: setPicked,
-                      })
-                      : mode === 'graph'
+                    : mode === 'graph'
                       ? h(TreeGraph, {
                         nodes: graphNodes,
                         selectedId: picked,
@@ -1792,6 +1759,14 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
                         : list),
               h('div', { className: 'twt-edetail' },
                 detail,
+                h(BranchList, {
+                  nodes: data === null ? [] : data.nodes,
+                  parent: picked,
+                  anchoredId: anchoredId,
+                  busy: busy,
+                  onAnchor: anchor,
+                  onPick: setPicked,
+                }),
                 h('p', { className: 'twt-hint' },
                   t('拖动一行到另一行可以改父节点（整棵子树一起移动）；删除只是隐藏，可撤销。')
                   + t('锚定只影响下一轮：你回到对话输入框发出的那条问题会挂到锚定节点下。')),

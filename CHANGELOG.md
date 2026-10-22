@@ -17,8 +17,8 @@ with retrieval shipped off by default.
 - **Embedded panel above the composer** — graph and list views with a side action rail:
   move a branch to another parent, hide a subtree, jump to a node's turn in the transcript.
 - **Standalone editor** with five tabs: blocks, full tree, graph, **branch compare**, settings.
-- **Branch compare** — sibling branches side by side with each branch's question, answer,
-  edge cost and child count, plus "continue from here" anchoring.
+- **Branch list in the detail panel** — selecting a node with two or more branches lists each
+  branch's question, answer, edge cost and child count, with a "continue here" button per row.
 - **Precise token accounting** — official HuggingFace `tokenizer.json` support with a
   from-scratch BPE reader; nodes are counted at creation, and the whole tree is recounted
   when a tokenizer loads.
@@ -33,6 +33,8 @@ with retrieval shipped off by default.
   identifiability check (three coefficients cannot be separated from collinear prompts).
 - **Runtime settings** (no restart): injection mode, hint thresholds, reflection, admission
   threshold, summary matching, tokenizer choice. Stored in `~/.dsh/token-tree/settings.json`.
+- **UI language** — follows the host: Chinese when `<html lang>` is `zh*`, English otherwise
+  (90+ phrases; unknown phrases fall back to the Chinese source).
 - **Theme awareness** — UI resolves the host's design tokens and follows light/dark, with
   `color-scheme` set so native controls match.
 - **Tests**: 101 backend cases (graph, retrieval, reflection, persistence, routes, tokenizer,
