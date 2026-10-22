@@ -95,7 +95,7 @@ async function loadFactory(window) {
  * @param {'dock'|'header'} which - composer dock, or the header button that opens the editor.
  * @returns {Promise<object>} DOM handles plus `click` and `cleanup`.
  */
-async function mountClient(which) {
+async function mountClient(which, locale = 'zh') {
   const dom = new JSDOM('<!doctype html><html><head></head><body><div id="root"></div></body></html>', {
     url: 'http://localhost/',
   })
@@ -106,6 +106,8 @@ async function mountClient(which) {
   globalThis.HTMLElement = window.HTMLElement
   globalThis.Node = window.Node
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  // Pin the locale: the component reads it once, at load.
+  window.__BONSAI_LOCALE__ = locale
   // The dock remembers its open state per session; open it so the body renders.
   window.sessionStorage.setItem('twt-dock-open:session-1', '1')
 
@@ -189,6 +191,14 @@ test('the dock renders the conversation tree it fetched', { timeout: 30000 }, as
   const html = client.container.innerHTML
   assert.ok(html.includes('布隆过滤器的误判率'), 'question text is rendered in the list view')
   assert.ok(html.includes('由位数组大小'), 'answer text is rendered')
+})
+
+test('the UI follows the host language, English included', { timeout: 30000 }, async t => {
+  const client = await mountClient('dock', 'en')
+  t.after(client.cleanup)
+  assert.ok(client.container.innerHTML.includes('Bonsai'), 'product name in English')
+  assert.ok(client.container.innerHTML.includes('Graph'), 'tab label translated')
+  assert.ok(!client.container.innerHTML.includes('\u56fe\u5f62'), 'no Chinese tab label left in English mode')
 })
 
 test('the injected styles follow the host theme instead of forcing dark', { timeout: 30000 }, async t => {

@@ -18,6 +18,150 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   var createPortal = require('react-dom').createPortal
   var h = React.createElement
 
+  // --- i18n ---------------------------------------------------------------
+  // Phrase table keyed by the Chinese source string. A missing entry falls back to the
+  // source, so a partially translated surface still renders.
+  var PHRASES = {
+    "盆栽": "Bonsai",
+  "🌳 盆栽": "🌳 Bonsai",
+  "在左边选一个节点，然后点「从这里继续」。下一轮你输入的问题会成为它的子节点。": "Select a node on the left, then click \"Continue here\". The question you send next becomes its child.",
+  "拖动一行到另一行可以改父节点（整棵子树一起移动）；删除只是隐藏，可撤销。": "Drag one row onto another to reparent it (the whole subtree moves). Delete only hides, and can be undone.",
+  "节点": "nodes",
+  "问": "Q",
+  "答": "A",
+  "工具": "tools",
+  "收起": "Collapse",
+  "展开": "Expand",
+  "在左边点一个节点，操作会出现在这里。": "Click a node on the left; its actions appear here.",
+  "收起（输入框始终可用）": "Collapse (the input stays usable)",
+  "就地展开盆栽（对话树），不离开对话区": "Open Bonsai in place, without leaving the conversation",
+    "盆栽（树编辑器）": "Bonsai (tree editor)",
+    "图形": "Graph",
+    "列表": "List",
+    "详细": "Detailed",
+    "精简": "Compact",
+    "全图": "Fit",
+    "回到当前": "Current",
+    "分支对比": "Compare",
+    "设置": "Settings",
+    "对话块": "Blocks",
+    "完整树": "Full tree",
+    "刷新": "Refresh",
+    "关闭": "Close",
+    "隐藏工具结果": "Hide tool results",
+    "跟随配置": "Follow config",
+    "读取中…": "Loading…",
+    "读取设置中…": "Loading settings…",
+    "恢复默认": "Reset",
+    "（空）": "(empty)",
+    "（空问题）": "(empty question)",
+    "（这个分支还没有回答）": "(no answer in this branch yet)",
+    "还没有节点可以比较。": "No nodes to compare yet.",
+    "没有发生过分叉，暂时无从比较。": "No branches yet, so nothing to compare.",
+    "这个会话还没有节点。": "This session has no nodes yet.",
+    "这个会话还没有对话块。": "This session has no blocks yet.",
+    "选中": "Select",
+    "从这里继续": "Continue here",
+    "已锚定（重新确认）": "Anchored (confirm again)",
+    "取消锚定": "Clear anchor",
+    "置顶": "Pin",
+    "取消置顶": "Unpin",
+    "忽略": "Ignore",
+    "取消忽略": "Unignore",
+    "隐藏此分支": "Hide this branch",
+    "撤销删除": "Undo delete",
+    "撤销移动": "Undo move",
+    "取消移动": "Cancel move",
+    "把刚才隐藏的分支恢复回来": "Restore the branch just hidden",
+    "入边代价": "Edge cost",
+    "距当前": "From current",
+    "深度": "Depth",
+    "父节点": "Parent",
+    "状态": "State",
+    "已忽略": "ignored",
+    "已置顶": "pinned",
+    "普通": "normal",
+    "根": "root",
+    "子节点": "Children",
+    "已锚定": "anchored",
+    "锚定中": "anchored",
+    "轮": "turn",
+    "问": "Q",
+    "答": "A",
+    "工具": "tools",
+    "节点": "nodes",
+    "分支": "branches",
+    "块": "blocks",
+    "自动注入记忆块": "Inject a memory block",
+    "每回合把检索到的节点作为一块推到上下文里（实测约 428 token/轮）": "Push retrieved nodes into the context every turn (~428 tokens/turn measured)",
+    "一行检索提示": "One-line retrieval hint",
+    "不注入整块，只在尾部加一行提醒模型可以调用 retrieve_context（约 57 token/轮）": "Skip the block; append one line suggesting retrieve_context (~57 tokens/turn)",
+    "提示起始节点数": "Hint after N nodes",
+    "节点数达到这个值才开始发提示；被压缩过的会话不受此限，会立即提示": "Start hinting once the session has this many nodes; compacted sessions hint immediately",
+    "自动反思与回溯": "Reflect and backtrack",
+    "回合结束时评估失败、写反思节点，并把 Agent 拉回更优的兄弟分支": "On failure, write a reflection node and move the agent to a better sibling branch",
+    "检索准入阈值": "Admission threshold",
+    "原始相关度（余弦）达到这个值才进入排序，0 表示不设门槛；实测 0.3 召回不降、返回节点约少四成，0.5 会让七成查询空手（空手时会自动放宽一次）": "Raw cosine similarity needed to enter ranking; 0 disables it. Measured: 0.3 keeps recall with ~40% fewer nodes, 0.5 leaves 70% of queries empty (it relaxes once when empty)",
+    "提示起始 token 数": "Hint after N tokens",
+    "实测对话 token 达到这个值才发检索提示；有 tokenizer 时按实测、没有时按估算（并自动打 0.85 折）": "Start hinting once the conversation reaches this many measured tokens; without a tokenizer the estimate is used and the budget is discounted to 0.85",
+    "下拉里列的是磁盘上实际找到的 tokenizer.json；「自主学习」不用词表，靠估算 + 账单校准，节点预算会自动打 0.85 折": "The list shows the tokenizer.json files actually found on disk. \"Learned\" uses no vocabulary: estimates plus billing calibration, with the budget discounted to 0.85",
+    "自动（最新一代）": "Auto (newest)",
+    "自主学习（不用词表）": "Learned (no vocabulary)",
+    "分支对比：同一个节点下并列的": "Compare: the branches under one node, side by side — ",
+    " 个分支（父节点 ": " branches (parent ",
+    "）。点「从这里继续」把下一轮挂到这条分支上。": "). Click \"Continue here\" to attach the next turn to that branch.",
+    "拖动一行到另一行可以改父节点（整棵树一起移动）；删除只是隐藏，可撤销。": "Drag one row onto another to reparent it (the subtree moves with it). Delete only hides, and can be undone.",
+    "锚定只影响下一轮：你回到对话输入框发出的那条问题会挂到锚定节点下。": "Anchoring affects the next turn only: the next question you send attaches under the anchored node.",
+    "单击选中并跳到这条对话；双击直接锚定（下一问挂到它下面）": "Click to select and jump to that turn; double-click to anchor the next question under it",
+    "在只显示节点号和显示问题/回答摘要之间切换": "Toggle between node ids and question/answer summaries",
+    "缩放到能看见整棵树": "Zoom to fit the whole tree",
+    "回到当前节点": "Go to the current node",
+    "恢复成 profile 配置里的值": "Reset to the profile value",
+    "视图渲染出错，刷新页面可恢复": "The view failed to render; reload the page to recover",
+    "盆栽：对话树的详细信息与设置": "Bonsai: details and settings for this conversation tree"
+  }
+
+  /**
+   * Pick a locale: explicit override, then the host page, then the browser.
+   * @returns {'en'|'zh'} Active locale.
+   */
+  function detectLocale() {
+    try {
+      var forced = window.__BONSAI_LOCALE__
+      if (forced === 'en' || forced === 'zh') return forced
+      var html = document.documentElement && document.documentElement.lang
+      if (typeof html === 'string' && html.length > 0) return html.toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en'
+      var nav = navigator && navigator.language ? navigator.language.toLowerCase() : ''
+      return nav.indexOf('zh') === 0 ? 'zh' : 'en'
+    } catch (error) {
+      return 'zh'
+    }
+  }
+
+  var LOCALE = detectLocale()
+
+  /**
+   * Translate a template with `{}` placeholders.
+   * @param {string} template - Chinese source template.
+   * @param {...(string|number)} values - Substitutions, in order.
+   * @returns {string} The filled template.
+   */
+  function tf(template, ...values) {
+    let index = 0
+    return t(template).replace(/\{\}/g, () => String(values[index++]))
+  }
+
+  /**
+   * Translate a source phrase.
+   * @param {string} text - Chinese source string.
+   * @returns {string} The phrase in the active locale.
+   */
+  function t(text) {
+    if (LOCALE === 'zh') return text
+    var translated = PHRASES[text]
+    return translated === undefined ? text : translated
+  }
+
   var ROUTE = '/api/token-tree/tree'
   var FOCUS = '/api/token-tree/focus'
   var EDIT = '/api/token-tree/edit'
@@ -703,14 +847,14 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         className: 'twt-action twt-graph-reset',
         style: { position: 'absolute', right: '10px', bottom: '10px', padding: '3px 10px' },
         onClick: function () { setBox(allBox) },
-        title: '缩放到能看见整棵树',
-      }, '全图'),
+        title: t('缩放到能看见整棵树'),
+      }, t('全图')),
       h('button', {
         className: 'twt-action',
         style: { position: 'absolute', right: '10px', bottom: '42px', padding: '3px 10px' },
         onClick: function () { setBox(null) },
-        title: '回到当前节点',
-      }, '回到当前'),
+        title: t('回到当前节点'),
+      }, t('回到当前')),
       // Move-mode banner: the graph pan-gesture steals drag-to-move, so the mode has
       // to be visible and explicit.
       props.moveSource === null ? null : h('div', {
@@ -831,7 +975,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       patch[key] = value
       settingsPost(patch)
         .then(function () {
-          setNote('已保存：' + key + ' = ' + (value === null ? '跟随配置' : String(value)))
+          setNote('已保存：' + key + ' = ' + (value === null ? t('跟随配置') : String(value)))
           return settingsGet()
         })
         .then(function (payload) { setSettings(payload) })
@@ -851,7 +995,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           h('b', null, options.label),
           h('span', { className: 'twt-hint' }, options.hint),
           h('span', { className: 'twt-ebadge', style: { color: overridden ? '#e0a458' : undefined } },
-            overridden ? '已覆盖' : '跟随配置')),
+            overridden ? '已覆盖' : t('跟随配置'))),
         h('div', { className: 'twt-scontrol' },
           options.control,
           overridden
@@ -860,8 +1004,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               style: { padding: '2px 8px' },
               disabled: busy,
               onClick: function () { saveSetting(options.key, null) },
-              title: '恢复成 profile 配置里的值',
-            }, '恢复默认')
+              title: t('恢复成 profile 配置里的值'),
+            }, t('恢复默认'))
             : null))
     }
 
@@ -878,7 +1022,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   function tokenizerOptions(effective, settings) {
     var choices = settings && settings.tokenizer && settings.tokenizer.choices
     if (!Array.isArray(choices) || choices.length === 0) {
-      choices = [{ id: 'auto', label: '自动（最新一代）' }, { id: 'off', label: '自主学习（不用词表）' }]
+      choices = [{ id: 'auto', label: t('自动（最新一代）') }, { id: 'off', label: t('自主学习（不用词表）') }]
     }
     return choices.map(function (choice) {
       return h('option', { key: choice.id, value: choice.id }, choice.label)
@@ -917,7 +1061,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var byId = {}
     nodes.forEach(function (node) { byId[node.id] = node })
     if (nodes.length === 0) {
-      return h('p', { className: 'twt-note' }, '还没有节点可以比较。')
+      return h('p', { className: 'twt-note' }, t('还没有节点可以比较。'))
     }
     // Default: the node with the most direct children, so the view is useful immediately.
     var childCount = {}
@@ -934,7 +1078,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       parent = best
     }
     if (parent === null) {
-      return h('p', { className: 'twt-note' }, '没有发生过分叉，暂时无从比较。')
+      return h('p', { className: 'twt-note' }, t('没有发生过分叉，暂时无从比较。'))
     }
     // Answers and tool results are body text, not branches: comparing them makes no sense.
     var branches = nodes.filter(function (node) {
@@ -955,45 +1099,46 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         h('div', { className: 'twt-branch-head' },
           h('b', null, node.id),
           h('span', { className: 'twt-count' }, node.turn === undefined ? '' : ' 轮 ' + node.turn),
-          isAnchored ? h('span', { className: 'twt-ebadge' }, '锚定中') : null),
-        h('div', { className: 'twt-branch-q' }, node.preview || '（空问题）'),
+          isAnchored ? h('span', { className: 'twt-ebadge' }, t('锚定中')) : null),
+        h('div', { className: 'twt-branch-q' }, node.preview || t('（空问题）')),
         h('div', { className: 'twt-branch-a' }, answer === undefined
-          ? h('span', { className: 'twt-hint' }, '（这个分支还没有回答）')
-          : (answer.detail || answer.preview || '（空）')),
+          ? h('span', { className: 'twt-hint' }, t('（这个分支还没有回答）'))
+          : (answer.detail || answer.preview || t('（空）'))),
         h('div', { className: 'twt-dgrid twt-branch-stats' },
-          h('span', null, h('b', null, '入边代价'), String(node.pathCost === undefined ? '-' : node.pathCost)),
-          h('span', null, h('b', null, '子节点'), String(childCount[node.id] === undefined ? 0 : childCount[node.id]))),
+          h('span', null, h('b', null, t('入边代价')), String(node.pathCost === undefined ? '-' : node.pathCost)),
+          h('span', null, h('b', null, t('子节点')), String(childCount[node.id] === undefined ? 0 : childCount[node.id]))),
         h('div', { className: 'twt-actions' },
           h('button', {
             className: 'twt-action',
             'data-kind': 'primary',
             disabled: props.busy,
             onClick: function () { props.onAnchor(node.id) },
-          }, isAnchored ? '已锚定（重新确认）' : '从这里继续'),
+          }, isAnchored ? t('已锚定（重新确认）') : t('从这里继续')),
           h('button', {
             className: 'twt-action',
             disabled: props.busy,
             onClick: function () { props.onPick(node.id) },
-          }, '选中')))
+          }, t('选中'))))
     })
 
     return h('div', { className: 'twt-compare' },
       h('p', { className: 'twt-hint' },
-        '分支对比：同一个节点下并列的 ' + branches.length + ' 个分支（父节点 ' + parent + '）。'
+        tf('分支对比：同一个节点下并列的 {} 个分支（父节点 {}）。点「从这里继续」把下一轮挂到这条分支上。', branches.length, parent)
         + '点「从这里继续」把下一轮挂到这条分支上。'),
       h('div', { className: 'twt-compare-cols' }, columns))
   }
 
   var settingsPanel = null
     if (settings !== null) {
-      var effective = settings.effective
+      // Defensive: an older or partial payload must not take the editor down.
+    var effective = (settings && settings.effective) || {}
       settingsPanel = h('div', { className: 'twt-settings' },
         h('p', { className: 'twt-hint' },
           '这些开关立即生效，写入 ' + (settings.path === null ? '（未配置）' : settings.path) + '，重启后仍然有效。'),
         settingRow({
           key: 'autoInject',
-          label: '自动注入记忆块',
-          hint: '每回合把检索到的节点作为一块推到上下文里（实测约 428 token/轮）',
+          label: t('自动注入记忆块'),
+          hint: t('每回合把检索到的节点作为一块推到上下文里（实测约 428 token/轮）'),
           control: h('input', {
             type: 'checkbox',
             checked: effective.autoInject === true,
@@ -1003,8 +1148,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'retrievalHint',
-          label: '一行检索提示',
-          hint: '不注入整块，只在尾部加一行提醒模型可以调用 retrieve_context（约 57 token/轮）',
+          label: t('一行检索提示'),
+          hint: t('不注入整块，只在尾部加一行提醒模型可以调用 retrieve_context（约 57 token/轮）'),
           control: h('input', {
             type: 'checkbox',
             checked: effective.retrievalHint === true,
@@ -1014,8 +1159,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'hintMinNodes',
-          label: '提示起始节点数',
-          hint: '节点数达到这个值才开始发提示；被压缩过的会话不受此限，会立即提示',
+          label: t('提示起始节点数'),
+          hint: t('节点数达到这个值才开始发提示；被压缩过的会话不受此限，会立即提示'),
           control: h('input', {
             type: 'number',
             min: 1,
@@ -1032,8 +1177,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'autoReflect',
-          label: '自动反思与回溯',
-          hint: '回合结束时评估失败、写反思节点，并把 Agent 拉回更优的兄弟分支',
+          label: t('自动反思与回溯'),
+          hint: t('回合结束时评估失败、写反思节点，并把 Agent 拉回更优的兄弟分支'),
           control: h('input', {
             type: 'checkbox',
             checked: effective.autoReflect === true,
@@ -1043,7 +1188,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'admitRelevance',
-          label: '检索准入阈值',
+          label: t('检索准入阈值'),
           hint: '原始相关度（余弦）达到这个值才进入排序，0 表示不设门槛；'
             + '实测 0.3 召回不降、返回节点约少四成，0.5 会让七成查询空手（空手时会自动放宽一次）',
           control: h('input', {
@@ -1066,8 +1211,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'hintAboveTokens',
-          label: '提示起始 token 数',
-          hint: '实测对话 token 达到这个值才发检索提示；有 tokenizer 时按实测、没有时按估算（并自动打 0.85 折）',
+          label: t('提示起始 token 数'),
+          hint: t('实测对话 token 达到这个值才发检索提示；有 tokenizer 时按实测、没有时按估算（并自动打 0.85 折）'),
           control: h('input', {
             type: 'number',
             min: 100,
@@ -1110,7 +1255,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           + ' · 账单拟合 ' + (settings.billing === undefined ? '-' : (settings.billing.active ? '生效' : '样本不足'))),
         note === '' ? null : h('p', { className: 'twt-flash' }, note))
     } else {
-      settingsPanel = h('div', { className: 'twt-settings' }, h('p', { className: 'twt-note' }, '读取设置中…'), note === '' ? null : h('p', { className: 'twt-flash' }, note))
+      settingsPanel = h('div', { className: 'twt-settings' }, h('p', { className: 'twt-note' }, t('读取设置中…')), note === '' ? null : h('p', { className: 'twt-flash' }, note))
     }
 
     // Conversation mode is a live surface: new turns must appear without a click.
@@ -1448,8 +1593,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         h('span', { className: 'twt-q' }, entry.label),
         h('span', { className: 'twt-meta' },
           entry.origin === 'manual' ? h('span', { className: 'twt-ebadge' }, '手动') : null,
-          entry.pinned === true ? h('span', { className: 'twt-ebadge' }, '置顶') : null,
-          entry.ignored === true ? h('span', { className: 'twt-ebadge', style: { color: '#e06c75' } }, '忽略') : null,
+          entry.pinned === true ? h('span', { className: 'twt-ebadge' }, t('置顶')) : null,
+          entry.ignored === true ? h('span', { className: 'twt-ebadge', style: { color: '#e06c75' } }, t('忽略')) : null,
           anchorTagged(anchoredId === entry.id),
           h('span', { className: 'twt-count' }, entry.tokens + 't'))
       )
@@ -1457,38 +1602,38 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
 
     var detail
     if (selected === null) {
-      detail = h('p', { className: 'twt-hint' }, '在左边选一个节点，然后点「从这里继续」。下一轮你输入的问题会成为它的子节点。')
+      detail = h('p', { className: 'twt-hint' }, t('在左边选一个节点，然后点「从这里继续」。下一轮你输入的问题会成为它的子节点。'))
     } else if (mode !== 'blocks') {
       // Node view: every node type can be selected, so the detail shows the node's
       // own text and counters instead of a question/answer pair.
       detail = h(React.Fragment, null,
         h('div', { className: 'twt-dtitle' }, kindLabel(selectedKind) + ' ' + selected.id),
-        h('div', { className: 'twt-dtext' }, selected.preview || '（空）'),
+        h('div', { className: 'twt-dtext' }, selected.preview || t('（空）')),
         h('div', { className: 'twt-dgrid' },
-          h('span', null, h('b', null, '入边代价'), String(selected.cost)),
-          h('span', null, h('b', null, '距当前'), String(selected.pathCost)),
-          h('span', null, h('b', null, '深度'), String(selected.depth)),
+          h('span', null, h('b', null, t('入边代价')), String(selected.cost)),
+          h('span', null, h('b', null, t('距当前')), String(selected.pathCost)),
+          h('span', null, h('b', null, t('深度')), String(selected.depth)),
           h('span', null, h('b', null, 'tokens'), String(selected.tokens)),
-          h('span', null, h('b', null, '父节点'), selected.parentId === null ? '根' : String(selected.parentId)),
-          h('span', null, h('b', null, '状态'), selected.ignored === true ? '已忽略' : (selected.pinned === true ? '已置顶' : '普通'))),
+          h('span', null, h('b', null, t('父节点')), selected.parentId === null ? t('根') : String(selected.parentId)),
+          h('span', null, h('b', null, t('状态')), selected.ignored === true ? t('已忽略') : (selected.pinned === true ? t('已置顶') : t('普通')))),
         h('div', { className: 'twt-actions' },
           h('button', {
             className: 'twt-action',
             'data-kind': 'primary',
             disabled: busy,
             onClick: function () { anchor(selected.id) },
-          }, anchoredId === selected.id ? '已锚定（重新确认）' : '从这里继续'),
-          anchoredId === null ? null : h('button', { className: 'twt-action', disabled: busy, onClick: clearAnchor }, '取消锚定'),
+          }, anchoredId === selected.id ? t('已锚定（重新确认）') : t('从这里继续')),
+          anchoredId === null ? null : h('button', { className: 'twt-action', disabled: busy, onClick: clearAnchor }, t('取消锚定')),
           h('button', {
             className: 'twt-action',
             disabled: busy,
             onClick: function () { togglePin(selected.id, selected.pinned !== true) },
-          }, selected.pinned === true ? '取消置顶' : '置顶'),
+          }, selected.pinned === true ? t('取消置顶') : t('置顶')),
           h('button', {
             className: 'twt-action',
             disabled: busy,
             onClick: function () { toggleIgnore(selected.id, selected.ignored !== true) },
-          }, selected.ignored === true ? '取消忽略' : '忽略'),
+          }, selected.ignored === true ? t('取消忽略') : t('忽略')),
           h('button', {
             className: 'twt-action',
             disabled: busy,
@@ -1497,24 +1642,24 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               if (moveSource === selected.id) cancelMove()
               else startMove(selected.id)
             },
-          }, moveSource === selected.id ? '取消移动' : '移动此分支'),
+          }, moveSource === selected.id ? t('取消移动') : '移动此分支'),
           lastMove === null ? null : h('button', {
             className: 'twt-action',
             disabled: busy,
             onClick: undoMove,
             title: '把 ' + lastMove.nodeId + ' 移回 ' + lastMove.from,
-          }, '撤销移动'),
+          }, t('撤销移动')),
           removedId === null ? null : h('button', {
             className: 'twt-action',
             disabled: busy,
             onClick: function () { restoreBranch(removedId) },
-            title: '把刚才隐藏的分支恢复回来',
+            title: t('把刚才隐藏的分支恢复回来'),
           }, '撤销删除 ' + removedId),
           h('button', {
             className: 'twt-action',
             disabled: busy,
             onClick: function () { removeBranch(selected.id) },
-          }, '隐藏此分支')))
+          }, t('隐藏此分支'))))
     } else {
       // A block selected from the block view. Guard every field: a node row that
       // slipped into this branch used to throw and take the whole header down.
@@ -1526,9 +1671,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         h('div', { className: 'twt-dtext' }, selected.answer || '（还没有回答）'),
         h('div', { className: 'twt-dgrid' },
           h('span', null, h('b', null, '来源'), originLabel(selected.origin)),
-          h('span', null, h('b', null, '入边代价'), String(selected.cost)),
-          h('span', null, h('b', null, '距当前'), String(selected.pathCost)),
-          h('span', null, h('b', null, '工具'), blockTools.length === 0 ? '无' : String(blockTools.length))),
+          h('span', null, h('b', null, t('入边代价')), String(selected.cost)),
+          h('span', null, h('b', null, t('距当前')), String(selected.pathCost)),
+          h('span', null, h('b', null, t(t('工具'))), blockTools.length === 0 ? '无' : String(blockTools.length))),
         blockTools.length === 0 ? null : h('div', { className: 'twt-tools' },
           blockTools.map(function (tool, index) {
             return h('span', { key: index, className: 'twt-tool', 'data-ok': String(tool.ok) }, tool.name)
@@ -1539,22 +1684,22 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             'data-kind': 'primary',
             disabled: busy,
             onClick: function () { anchor(selected.id) },
-          }, anchoredId === selected.id ? '已锚定（重新确认）' : '从这里继续'),
+          }, anchoredId === selected.id ? t('已锚定（重新确认）') : t('从这里继续')),
           anchoredId === null ? null : h('button', {
             className: 'twt-action',
             disabled: busy,
             onClick: clearAnchor,
-          }, '取消锚定'),
+          }, t('取消锚定')),
           h('button', {
             className: 'twt-action',
             disabled: busy,
             onClick: function () { togglePin(selected.id, selected.pinned !== true) },
-          }, selected.pinned === true ? '取消置顶' : '置顶'),
+          }, selected.pinned === true ? t('取消置顶') : t('置顶')),
           h('button', {
             className: 'twt-action',
             disabled: busy,
             onClick: function () { toggleIgnore(selected.id, selected.ignored !== true) },
-          }, selected.ignored === true ? '取消忽略' : '忽略'),
+          }, selected.ignored === true ? t('取消忽略') : t('忽略')),
           h('button', {
             className: 'twt-action',
             disabled: busy,
@@ -1570,7 +1715,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       'aria-label': '盆栽编辑器',
     },
         h('div', { className: 'twt-editor-head' },
-          h('b', null, conversation ? '盆栽' : '盆栽（树编辑器）'),
+          h('b', null, conversation ? t('盆栽') : t('盆栽（树编辑器）')),
           data === null ? null : h('span', { className: 'twt-count' }, mode === 'nodes'
             ? data.stats.nodes + ' 节点 · ' + data.stats.questions + ' 问 · ' + data.stats.answers + ' 答 · ' + data.stats.tools + ' 工具'
             : data.stats.blocks + ' 块 · ' + data.stats.branches + ' 分支 · ' + data.stats.tokens + ' tok'),
@@ -1580,39 +1725,39 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             style: { marginLeft: 'auto', padding: '3px 10px' },
             'data-kind': mode === 'blocks' ? 'primary' : undefined,
             onClick: function () { setMode('blocks'); setPicked(null) },
-          }, '对话块'),
+          }, t('对话块')),
           h('button', {
             className: 'twt-action',
             style: { padding: '3px 10px' },
             'data-kind': mode === 'nodes' ? 'primary' : undefined,
             onClick: function () { setMode('nodes'); setPicked(null) },
-          }, '完整树'),
+          }, t('完整树')),
           h('button', {
             className: 'twt-action',
             style: { padding: '3px 10px' },
             'data-kind': mode === 'graph' ? 'primary' : undefined,
             onClick: function () { setMode('graph'); setPicked(null) },
-          }, '图形'),
+          }, t('图形')),
           h('button', {
             className: 'twt-action',
             style: { padding: '3px 10px' },
             'data-kind': mode === 'compare' ? 'primary' : undefined,
             onClick: function () { setMode('compare') },
-          }, '分支对比'),
+          }, t('分支对比')),
           h('button', {
             className: 'twt-action',
             style: { padding: '3px 10px' },
             'data-kind': mode === 'settings' ? 'primary' : undefined,
             onClick: function () { setMode('settings'); setPicked(null) },
-          }, '设置'),
+          }, t('设置')),
           mode !== 'blocks' ? h('label', { className: 'twt-hint', style: { display: 'flex', alignItems: 'center', gap: '4px' } },
             h('input', {
               type: 'checkbox',
               checked: hideTools,
               onChange: function (event) { setHideTools(event.target.checked) },
-            }), '隐藏工具结果') : null,
-          h('button', { className: 'twt-action', style: { padding: '3px 10px' }, onClick: load }, '刷新'),
-          h('button', { className: 'twt-close', onClick: onClose, title: '关闭' }, '✕')),
+            }), t('隐藏工具结果')) : null,
+          h('button', { className: 'twt-action', style: { padding: '3px 10px' }, onClick: load }, t('刷新')),
+          h('button', { className: 'twt-close', onClick: onClose, title: t('关闭') }, '✕')),
         h('div', { className: 'twt-editor-body' },
           mode === 'settings'
             ? settingsPanel
@@ -1622,7 +1767,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
                   ? 'twt-elist twt-elist-graph'
                   : (mode === 'compare' ? 'twt-elist twt-elist-graph' : 'twt-elist'),
               },
-                view.loading ? h('p', { className: 'twt-note' }, '读取中…')
+                view.loading ? h('p', { className: 'twt-note' }, t('读取中…'))
                   : view.error ? h('p', { className: 'twt-note twt-err' }, view.error)
                     : mode === 'compare'
                       ? h(BranchCompare, {
@@ -1643,13 +1788,13 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
                         onMoveTarget: completeMove,
                         onPick: pickNode,
                       })
-                      : entries.length === 0 ? h('p', { className: 'twt-note' }, mode === 'nodes' ? '这个会话还没有节点。' : '这个会话还没有对话块。')
+                      : entries.length === 0 ? h('p', { className: 'twt-note' }, mode === 'nodes' ? t('这个会话还没有节点。') : t('这个会话还没有对话块。'))
                         : list),
               h('div', { className: 'twt-edetail' },
                 detail,
                 h('p', { className: 'twt-hint' },
-                  '拖动一行到另一行可以改父节点（整棵子树一起移动）；删除只是隐藏，可撤销。'
-                  + '锚定只影响下一轮：你回到对话输入框发出的那条问题会挂到锚定节点下。'),
+                  t('拖动一行到另一行可以改父节点（整棵子树一起移动）；删除只是隐藏，可撤销。')
+                  + t('锚定只影响下一轮：你回到对话输入框发出的那条问题会挂到锚定节点下。')),
                 note === '' ? null : h('p', { className: 'twt-flash' }, note)))))
     if (props.docked) return card
     return h('div', {
@@ -1688,8 +1833,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
 
   /** Short label for a node kind. */
   function kindLabel(kind) {
-    if (kind === 'question') return '问'
-    if (kind === 'answer') return '答'
+    if (kind === 'question') return t(t('问'))
+    if (kind === 'answer') return t(t('答'))
     if (kind === 'tool_result') return '具'
     if (kind === 'reflection') return '思'
     if (kind === 'note') return '记'
@@ -1994,11 +2139,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var bar = h('div', {
       className: 'twt-dockbar',
       onClick: function () { setOpen(!isOpen) },
-      title: isOpen ? '收起（输入框始终可用）' : '就地展开盆栽（对话树），不离开对话区',
+      title: isOpen ? t('收起（输入框始终可用）') : t('就地展开盆栽（对话树），不离开对话区'),
     },
-      h('span', { className: 'twt-docktitle' }, '🌳 盆栽'),
+      h('span', { className: 'twt-docktitle' }, t(t('🌳 盆栽'))),
       h('span', { className: 'twt-count' }, data === null
-        ? (view.loading ? '读取中…' : '')
+        ? (view.loading ? t('读取中…') : '')
         : data.stats.nodes + ' 节点 · ' + data.stats.questions + ' 问'),
       // The full ancestor chain is unreadable in one line; keep the last few hops.
       h('span', { className: 'twt-dockpath', title: path.join(' › ') },
@@ -2010,21 +2155,21 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         style: { padding: '2px 8px' },
         'data-kind': mode === 'graph' ? 'primary' : undefined,
         onClick: function (event) { event.stopPropagation(); setMode('graph') },
-      }, '图形'),
+      }, t('图形')),
       h('button', {
         className: 'twt-action',
         style: { padding: '2px 8px' },
         'data-kind': mode === 'list' ? 'primary' : undefined,
         onClick: function (event) { event.stopPropagation(); setMode('list') },
-      }, '列表'),
+      }, t('列表')),
       mode === 'graph' ? h('button', {
         className: 'twt-action',
         style: { padding: '2px 8px' },
         'data-kind': compact ? undefined : 'primary',
-        title: '在只显示节点号和显示问题/回答摘要之间切换',
+        title: t('在只显示节点号和显示问题/回答摘要之间切换'),
         onClick: function (event) { event.stopPropagation(); setCompact(!compact) },
-      }, compact ? '详细' : '精简') : null,
-      h('span', { className: 'twt-hint' }, isOpen ? '收起' : '展开'))
+      }, compact ? t('详细') : t('精简')) : null,
+      h('span', { className: 'twt-hint' }, isOpen ? t('收起') : t('展开')))
 
     var rows = nodes.map(function (node) {
       return h('div', {
@@ -2037,20 +2182,20 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         'data-ignored': String(node.ignored === true),
         onClick: function () { pickNode(node) },
         onDoubleClick: function () { anchor(node.id) },
-        title: '单击选中并跳到这条对话；双击直接锚定（下一问挂到它下面）',
+        title: t('单击选中并跳到这条对话；双击直接锚定（下一问挂到它下面）'),
       },
         h('span', { className: 'twt-ekind', 'data-kind': node.kind }, kindLabel(node.kind)),
         h('span', { className: 'twt-id' }, node.id),
-        h('span', { className: 'twt-q' }, node.preview || '（空）'),
-        node.pinned === true ? h('span', { className: 'twt-ebadge' }, '置顶') : null,
-        node.ignored === true ? h('span', { className: 'twt-ebadge', style: { color: '#e06c75' } }, '忽略') : null)
+        h('span', { className: 'twt-q' }, node.preview || t('（空）')),
+        node.pinned === true ? h('span', { className: 'twt-ebadge' }, t('置顶')) : null,
+        node.ignored === true ? h('span', { className: 'twt-ebadge', style: { color: '#e06c75' } }, t('忽略')) : null)
     })
 
     // Right rail: the selected node and every action, stacked, so the graph keeps the
     // whole width while the buttons stay in one predictable column.
     var side = h('div', { className: 'twt-dockside' },
       pickedNode === undefined
-        ? h('p', { className: 'twt-hint' }, '在左边点一个节点，操作会出现在这里。')
+        ? h('p', { className: 'twt-hint' }, t('在左边点一个节点，操作会出现在这里。'))
         : h(React.Fragment, null,
           h('div', { className: 'twt-dtitle' }, kindLabel(pickedNode.kind) + ' ' + pickedNode.id),
           h('div', { className: 'twt-dtext' }, pickedNode.detail === undefined ? (pickedNode.preview || '') : (pickedNode.preview + '\n\n' + pickedNode.detail)),
@@ -2068,38 +2213,38 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               className: 'twt-action',
               disabled: busy,
               onClick: function () { setAnchored(null); anchor(null) },
-            }, '取消锚定'),
+            }, t('取消锚定')),
             h('button', {
               className: 'twt-action',
               disabled: busy,
               onClick: function () { togglePin(picked, pickedNode.pinned !== true) },
-            }, pickedNode.pinned === true ? '取消置顶' : '置顶'),
+            }, pickedNode.pinned === true ? t('取消置顶') : t('置顶')),
             h('button', {
               className: 'twt-action',
               disabled: busy,
               onClick: function () { toggleIgnore(picked, pickedNode.ignored !== true) },
-            }, pickedNode.ignored === true ? '取消忽略' : '忽略'),
+            }, pickedNode.ignored === true ? t('取消忽略') : t('忽略')),
             h('button', {
               className: 'twt-action',
               disabled: busy,
               onClick: function () { setMoveSource(moveSource === picked ? null : picked) },
-            }, moveSource === picked ? '取消移动' : '改挂…'),
+            }, moveSource === picked ? t('取消移动') : '改挂…'),
             lastMove === null ? null : h('button', {
               className: 'twt-action',
               disabled: busy,
               onClick: function () { var move = lastMove; setLastMove(null); reparent(move.nodeId, move.from) },
-            }, '撤销移动'),
+            }, t('撤销移动')),
             removedId === null ? null : h('button', {
               className: 'twt-action',
               disabled: busy,
               onClick: function () { restoreBranch(removedId) },
-              title: '把刚才隐藏的分支恢复回来',
+              title: t('把刚才隐藏的分支恢复回来'),
             }, '撤销删除 ' + removedId),
             h('button', {
               className: 'twt-action',
               disabled: busy,
               onClick: function () { removeBranch(picked) },
-            }, '隐藏此分支'))),
+            }, t('隐藏此分支')))),
       note === '' ? null : h('p', { className: 'twt-flash' }, note))
 
     var main = mode === 'graph'
@@ -2189,8 +2334,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       className: 'twt-btn',
       'data-active': String(editorOpen),
       onClick: function () { setEditorOpen(!editorOpen) },
-      title: '盆栽：对话树的详细信息与设置',
-    }, h('span', null, '盆栽'))
+      title: t('盆栽：对话树的详细信息与设置'),
+    }, h('span', null, t('盆栽')))
 
     var editor = null
     if (editorOpen && typeof document !== 'undefined') {
@@ -2234,7 +2379,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         return h('button', {
           className: 'twt-btn',
           onClick: function () { window.location.reload() },
-          title: '视图渲染出错，刷新页面可恢复',
+          title: t('视图渲染出错，刷新页面可恢复'),
         }, '树（重载）')
       }
       return this.props.children
