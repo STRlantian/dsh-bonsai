@@ -87,6 +87,7 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     // Record the prompt shape so the billed usage can calibrate token counting.
     service.notePromptStats(payload.agent.session.id)
     service.notePromptShape(payload.agent.session.id, decision.messages)
+    service.noteDecisionShape(payload.agent.session.id, decision)
     const settings = service.effective()
     if (!settings.autoInject) {
       if (!settings.retrievalHint) return decision

@@ -95,6 +95,8 @@ export interface SessionState {
   lastHint?: { counted: number | undefined; above: number; fast: number; fired: boolean; reason: string }
   /** Shape of the last `decision.messages` we were given, for diagnosing the hook. */
   probe?: { count: number; chars: number; kinds: string[] }
+  /** Field names and sizes of the last decision object, for the same purpose. */
+  decisionShape?: { keys: string[]; sizes: Record<string, number> }
   /** Character classes of the last prompt handed to the provider, for billing calibration. */
   pendingStats?: { wide: number; narrow: number }
   /** Current turn number. */
@@ -330,6 +332,7 @@ export class TokenTreeService {
     budget: { factor: number; conservative: number }
     locale: string
     lastPrompt: SessionState['probe'] | null
+    lastDecision: SessionState['decisionShape'] | null
     drift: { samples: number; ratio: number | null }
     lastHint: SessionState['lastHint'] | null
   } {
@@ -363,6 +366,7 @@ export class TokenTreeService {
       // Interface language: `auto` means "let the client follow the system".
       locale: this.settings?.all().locale ?? 'auto',
       lastPrompt: this.lastPromptInfo(),
+      lastDecision: this.lastDecisionInfo(),
       drift: this.driftInfo(),
       lastHint: this.lastHintInfo(),
     }
@@ -1215,6 +1219,29 @@ export class TokenTreeService {
     this.stateOf(sessionId).probe = { count: messages.length, chars, kinds }
   }
 
+  /**
+   * Record the shape of the whole decision object (field names, approximate sizes).
+   * @param sessionId - session identity.
+   * @param decision - the object the hook may return.
+   */
+  noteDecisionShape(sessionId: string, decision: unknown): void {
+    const keys: string[] = []
+    const sizes: Record<string, number> = {}
+    if (decision !== null && typeof decision === 'object') {
+      for (const [key, value] of Object.entries(decision as Record<string, unknown>)) {
+        keys.push(key)
+        let size = 0
+        try {
+          size = JSON.stringify(value)?.length ?? 0
+        } catch {
+          size = -1
+        }
+        sizes[key] = size
+      }
+    }
+    this.stateOf(sessionId).decisionShape = { keys, sizes }
+  }
+
   notePromptStats(sessionId: string): void {
     // The character classes of the conversation so far, from the tree. Measured on a live
     // host: `decision.messages` at `agent/pre-step` is usually just the newest message — and
@@ -1277,6 +1304,15 @@ export class TokenTreeService {
       observations: this.billing.observations,
       active: this.tokenizer === undefined && this.billing.identifiable(),
     }
+  }
+
+  /** Shape of the last decision object handed to `agent/pre-step`. */
+  private lastDecisionInfo(): SessionState['decisionShape'] | null {
+    let latest: SessionState['decisionShape'] | undefined
+    for (const state of this.states.values()) {
+      if (state.decisionShape !== undefined) latest = state.decisionShape
+    }
+    return latest ?? null
   }
 
   /** Shape of the last prompt handed to `agent/pre-step`, for diagnostics. */
