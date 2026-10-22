@@ -815,3 +815,41 @@ lastHint: {"counted":90,"above":300,"fired":false,"reason":"conversation under t
 - 检索/反思这一路的成本是**可测的**（+46% 输入），收益**未被证明**；
 - 默认配置因此保持 `autoInject: false`、提示阈值 12,000（短会话零成本），
   让它在不需要时不花钱、需要时不添乱。
+
+## 实验 11：hook 里到底能不能"用检索替代拼接"（2026-10-23）
+
+设计初衷是"检索一个子集替代全量历史"。要成立，插件必须**拿到并能改写完整历史**。
+在 `agent/pre-step` 里实测两件事。
+
+### 1. `decision.messages` 只是新增消息
+
+| 轮次 | 收到的 messages | 字符数 | 来源 kind |
+|---|---|---|---|
+| 1 | 3 条 | 1,749 | user, runtime-context, skill-catalog |
+| 2 | **1 条** | 15 | user |
+| 3 | **1 条** | 15 | user |
+| 4 | **1 条** | 22 | user |
+| 5 | **1 条** | 22 | user |
+
+同期树里累计约 150 token，且模型确实能接着上文回答 —— 所以历史不是从这里来的。
+
+### 2. `decision` 只有两个字段
+
+| 轮次 | 字段 | messages 大小 | 条数 |
+|---|---|---|---|
+| 1 | kind, messages | 3,536 字节 | 3 |
+| 2 | kind, messages | 220 字节 | 1 |
+| 3 | kind, messages | 220 字节 | 1 |
+
+没有任何 history / context 容器。宿主把历史拼进 prompt 发生在 hook **之后**，
+插件既看不到也改不到。宿主自己减少上下文靠压缩（包内可见 `contextFold` 相关符号；
+桌面版实测触发过 2 次、共 73,838 token）。
+
+### 结论
+
+- 准确说法：**插件能改"这一步要追加的新消息"，不能改 prompt 里的历史**。
+- 所以"检索替代拼接"在当前扩展点**不可实现**，不是没做。
+- 注入只能增加 input：实测 +115%（19 轮）到 +149%（8 轮）；命中率变化在 ±0.5pt 噪声内。
+- 唯一能真正减少 input 的杠杆是**按实测 token 提前触发 `/compact`**。
+- 诊断字段：`settings.lastPrompt = {count, chars, kinds}`、`settings.lastDecision = {keys, sizes}`，
+  日后可随时复核这两条结论。
