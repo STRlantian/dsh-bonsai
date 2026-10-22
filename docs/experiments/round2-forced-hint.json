@@ -1,0 +1,201 @@
+{
+  "plan": "ABAB",
+  "factCount": 10,
+  "askCount": 5,
+  "summary": {
+    "A": {
+      "runs": 2,
+      "correct": 10,
+      "asked": 10,
+      "accuracy": "100%",
+      "input": 6033,
+      "cacheRead": 296448,
+      "inputPerRun": 3017,
+      "hitRate": "98.01%",
+      "injected": 0,
+      "retrieveCalls": 0
+    },
+    "B": {
+      "runs": 2,
+      "correct": 10,
+      "asked": 10,
+      "accuracy": "100%",
+      "input": 5956,
+      "cacheRead": 344960,
+      "inputPerRun": 2978,
+      "hitRate": "98.30%",
+      "injected": 0,
+      "retrieveCalls": 0
+    }
+  },
+  "runs": [
+    {
+      "position": 0,
+      "arm": "A",
+      "label": "base",
+      "sessionId": "session-fe1ff080-7287-4c51-a27e-f457cd9418a7",
+      "correct": 5,
+      "total": 5,
+      "input": 2956,
+      "cacheRead": 149120,
+      "cacheWrite": 0,
+      "output": 1328,
+      "injected": 0,
+      "injectedTokens": 0,
+      "retrieveCalls": 0,
+      "answers": [
+        {
+          "expect": "/srv/svc-1",
+          "answer": "/srv/svc-1",
+          "hit": true
+        },
+        {
+          "expect": "203",
+          "answer": "203",
+          "hit": true
+        },
+        {
+          "expect": "ops5@example.dev",
+          "answer": "ops5@example.dev",
+          "hit": true
+        },
+        {
+          "expect": "107",
+          "answer": "107",
+          "hit": true
+        },
+        {
+          "expect": "3009",
+          "answer": "3009",
+          "hit": true
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "arm": "B",
+      "label": "hint",
+      "sessionId": "session-9b1b8234-48ec-4df2-9bc5-b6b5fc38e88f",
+      "correct": 5,
+      "total": 5,
+      "input": 2893,
+      "cacheRead": 176384,
+      "cacheWrite": 0,
+      "output": 1600,
+      "injected": 0,
+      "injectedTokens": 0,
+      "retrieveCalls": 0,
+      "answers": [
+        {
+          "expect": "/srv/svc-1",
+          "answer": "/srv/svc-1",
+          "hit": true
+        },
+        {
+          "expect": "203",
+          "answer": "203",
+          "hit": true
+        },
+        {
+          "expect": "ops5@example.dev",
+          "answer": "ops5@example.dev",
+          "hit": true
+        },
+        {
+          "expect": "107",
+          "answer": "107",
+          "hit": true
+        },
+        {
+          "expect": "3009",
+          "answer": "3009",
+          "hit": true
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "arm": "A",
+      "label": "base",
+      "sessionId": "session-190fe235-5ddf-4e4c-b7e5-d072c84bb0ae",
+      "correct": 5,
+      "total": 5,
+      "input": 3077,
+      "cacheRead": 147328,
+      "cacheWrite": 0,
+      "output": 1170,
+      "injected": 0,
+      "injectedTokens": 0,
+      "retrieveCalls": 0,
+      "answers": [
+        {
+          "expect": "/srv/svc-1",
+          "answer": "`/srv/svc-1`",
+          "hit": true
+        },
+        {
+          "expect": "203",
+          "answer": "203",
+          "hit": true
+        },
+        {
+          "expect": "ops5@example.dev",
+          "answer": "ops5@example.dev",
+          "hit": true
+        },
+        {
+          "expect": "107",
+          "answer": "107",
+          "hit": true
+        },
+        {
+          "expect": "3009",
+          "answer": "3009",
+          "hit": true
+        }
+      ]
+    },
+    {
+      "position": 3,
+      "arm": "B",
+      "label": "hint",
+      "sessionId": "session-1dc470ee-ed49-4f0f-a923-5ca67b848f5d",
+      "correct": 5,
+      "total": 5,
+      "input": 3063,
+      "cacheRead": 168576,
+      "cacheWrite": 0,
+      "output": 673,
+      "injected": 0,
+      "injectedTokens": 0,
+      "retrieveCalls": 0,
+      "answers": [
+        {
+          "expect": "/srv/svc-1",
+          "answer": "/srv/svc-1",
+          "hit": true
+        },
+        {
+          "expect": "203",
+          "answer": "203",
+          "hit": true
+        },
+        {
+          "expect": "ops5@example.dev",
+          "answer": "ops5@example.dev",
+          "hit": true
+        },
+        {
+          "expect": "107",
+          "answer": "107",
+          "hit": true
+        },
+        {
+          "expect": "3009",
+          "answer": "3009",
+          "hit": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>token-tree · 对话块树 UI 原型</title>
+<style>
+  :root {
+    --bg: #16181d; --panel: #1d2026; --panel-2: #23272f; --line: #30353f;
+    --text: #e6e8ec; --muted: #9aa3b2; --accent: #6ea8fe; --auto: #8f7bf0;
+    --manual: #3fbf9a; --warn: #e0a458; --fail: #e06c75;
+    --radius: 10px; --shadow: 0 8px 24px rgba(0,0,0,.35);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 13px/1.55 -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    display: grid; grid-template-columns: 1fr 340px; height: 100vh; overflow: hidden;
+  }
+  header {
+    grid-column: 1 / -1; display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; border-bottom: 1px solid var(--line); background: var(--panel);
+  }
+  header h1 { font-size: 14px; margin: 0; font-weight: 600; }
+  header .spacer { flex: 1; }
+  .chip {
+    border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px;
+    color: var(--muted); font-size: 11px;
+  }
+  .chip b { color: var(--text); font-weight: 600; }
+  main { padding: 22px 26px; overflow: auto; }
+  .hint { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+  .hint kbd {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px;
+    padding: 0 4px; font-size: 11px;
+  }
+  .tree { display: flex; flex-direction: column; gap: 2px; }
+  .branch { position: relative; }
+  .node { position: relative; }
+  .row { display: flex; align-items: stretch; gap: 0; }
+  .rail { width: 26px; flex: none; position: relative; }
+  .rail::before {
+    content: ''; position: absolute; left: 12px; top: 0; bottom: 0;
+    border-left: 1px solid var(--line);
+  }
+  .node:last-child > .row > .rail::before { bottom: 50%; }
+  .rail .elbow {
+    position: absolute; left: 12px; top: 50%; width: 14px; border-top: 1px solid var(--line);
+  }
+  .block {
+    flex: 1; display: grid; grid-template-columns: 3px 1fr; gap: 0;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    margin: 5px 0; overflow: hidden; cursor: pointer; transition: border-color .12s, transform .12s;
+  }
+  .block:hover { border-color: #465063; }
+  .block.selected { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(110,168,254,.35); }
+  .block.focus { border-color: var(--warn); }
+  .block .stripe { background: var(--line); }
+  .block.q .stripe { background: #4b5563; }
+  .block.a .stripe { background: #2f6f5e; }
+  .body { padding: 9px 12px 10px; min-width: 0; }
+  .meta { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11px; flex-wrap: wrap; }
+  .tag {
+    border-radius: 999px; padding: 0 7px; font-size: 10px; line-height: 16px;
+    border: 1px solid currentColor; opacity: .9;
+  }
+  .tag.auto { color: var(--auto); }
+  .tag.manual { color: var(--manual); }
+  .tag.new { color: var(--accent); }
+  .tag.pin { color: var(--warn); }
+  .tag.ignored { color: var(--fail); text-decoration: line-through; }
+  .id { font-variant-numeric: tabular-nums; }
+  .text { margin-top: 4px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .text.q { font-weight: 600; }
+  .tools { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .tool {
+    font-size: 10px; color: var(--muted); border: 1px dashed var(--line);
+    border-radius: 6px; padding: 0 6px;
+  }
+  .tool.fail { color: var(--fail); border-color: color-mix(in srgb, var(--fail) 45%, transparent); }
+  aside {
+    border-left: 1px solid var(--line); background: var(--panel); overflow: auto; padding: 14px 16px;
+  }
+  aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 10px; }
+  .kv { display: grid; grid-template-columns: 92px 1fr; gap: 5px 8px; font-size: 12px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .bar { height: 4px; background: var(--panel-2); border-radius: 2px; overflow: hidden; margin-top: 3px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  button {
+    font: inherit; font-size: 12px; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 7px; padding: 5px 10px; cursor: pointer;
+  }
+  button:hover { border-color: #465063; }
+  button.primary { border-color: color-mix(in srgb, var(--accent) 60%, transparent); color: var(--accent); }
+  button.ghost { background: transparent; }
+  .note { color: var(--muted); font-size: 11px; margin-top: 10px; }
+  .empty { color: var(--muted); font-size: 12px; }
+  .legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 16px; color: var(--muted); font-size: 11px; }
+  .legend span::before {
+    content: ''; display: inline-block; width: 16px; height: 0; vertical-align: middle;
+    margin-right: 5px; border-top: 1px solid currentColor;
+  }
+  .legend .solid { color: #5b6472; }
+  .legend .auto { color: var(--auto); }
+  .legend .auto::before { border-top-style: dashed; }
+  .legend .manual { color: var(--manual); }
+  .legend .manual::before { border-top-style: dotted; }
+</style>
+</head>
+<body>
+<header>
+  <h1>token-tree</h1>
+  <span class="chip">会话 <b>learn-2048</b></span>
+  <span class="chip"><b>7</b> 块</span>
+  <span class="chip"><b>2</b> 个分支点</span>
+  <span class="chip">自动分叉 <b>开</b></span>
+  <span class="spacer"></span>
+  <span class="chip">数据：会话投影 · 只读</span>
+</header>
+
+<main>
+  <div class="hint">
+    每个块 = 一轮对话（问 + 答 + 工具）。点块看右侧详情；<kbd>空格</kbd> 选中、<kbd>B</kbd> 在该块下分叉。
+    虚线 = 系统自动挂载，点线 = 用户手动分叉。
+  </div>
+  <div class="tree" id="tree"></div>
+  <div class="legend">
+    <span class="solid">链式（承接上一轮）</span>
+    <span class="auto">自动挂载（系统判定更相关）</span>
+    <span class="manual">手动分叉（用户指定）</span>
+  </div>
+</main>
+
+<aside>
+  <h2>块详情</h2>
+  <div id="inspector"><p class="empty">点左侧任意块。</p></div>
+</aside>
+
+<script>
+// ---------------------------------------------------------------------------
+// 原型数据：与后端 MemoryTree 一一对应（question/answer 组合成一个块）
+// kind: 'chain' 承接上一轮 | 'auto' 系统挂载 | 'manual' 用户分叉 | 'topic' 新话题
+// ---------------------------------------------------------------------------
+const blocks = [
+  { id: 'b1', parent: null, kind: 'chain', q: '什么是注意力机制？',
+    a: '注意力用查询和键的相似度给值加权求和，让模型按相关性聚合信息，其中 token 是基本单位。',
+    cost: 0.79, weight: 0.62, tokens: 412, score: null, tools: [] },
+
+  { id: 'b2', parent: 'b1', kind: 'auto', q: '其中的 token 是什么？',
+    a: 'token 是分词器切分出来的最小文本单位，常见算法是 BPE。',
+    cost: 0.75, weight: 0.58, tokens: 356, score: 0.25, tools: [] },
+
+  { id: 'b3', parent: 'b1', kind: 'auto', q: '注意力里的查询和键分别是什么意思？',
+    a: '查询是你想匹配的模式，键是被匹配的索引，值是被聚合的内容。',
+    cost: 1.23, weight: 0.55, tokens: 398, score: 0.37, tools: [] },
+
+  { id: 'b4', parent: 'b2', kind: 'manual', q: 'BPE 和 WordPiece 有什么区别？',
+    a: 'BPE 按频率合并字符对，WordPiece 按似然选择合并。',
+    cost: 0.92, weight: 0.51, tokens: 240, score: null, tools: [] },
+
+  { id: 'b5', parent: null, kind: 'topic', q: '向我介绍 dijkstra 算法',
+    a: 'Dijkstra 解决单源最短路径：每次取出距离最小的节点并松弛它的出边，时间复杂度 O(E log V)。',
+    cost: 0.78, weight: 0.64, tokens: 520, score: 0.03,
+    tools: [{ name: 'web_search', ok: true }, { name: 'fs_read', ok: false, error: 'ENOENT' }] },
+
+  { id: 'b6', parent: 'b5', kind: 'chain', q: '什么是复杂度',
+    a: '复杂度描述输入规模变大时资源增长的速度，分时间复杂度和空间复杂度。',
+    cost: 0.76, weight: 0.60, tokens: 430, score: 0.14, tools: [] },
+
+  { id: 'b7', parent: null, kind: 'topic', q: '向我介绍线段树',
+    a: '线段树是一棵二叉树，每个节点代表数组的一个区间，支持区间查询与区间修改。',
+    cost: 1.44, weight: 0.57, tokens: 610, score: 0.02,
+    tools: [{ name: 'web_fetch', ok: true }] },
+]
+const FOCUS = 'b7'
+
+// ---------------------------------------------------------------------------
+// 渲染
+// ---------------------------------------------------------------------------
+const childrenOf = id => blocks.filter(b => b.parent === id)
+const roots = childrenOf(null)
+let selected = FOCUS
+
+function tagOf(block) {
+  if (block.kind === 'auto') return `<span class="tag auto" title="系统按语义相似度挂到此父块；相似度 ${block.score}">auto ${block.score}</span>`
+  if (block.kind === 'manual') return `<span class="tag manual" title="用户在 ${block.parent} 下手动分叉">manual</span>`
+  if (block.kind === 'topic') return `<span class="tag new" title="与当前分支无关，自动新起顶层分支">新话题</span>`
+  return ''
+}
+
+function blockHtml(block) {
+  const tools = block.tools.length === 0 ? '' : `<div class="tools">${block.tools.map(t =>
+    `<span class="tool ${t.ok ? '' : 'fail'}">${t.name}${t.ok ? '' : ' ✕'}</span>`).join('')}</div>`
+  return `
+  <div class="block ${block.kind === 'chain' ? 'a' : 'q'} ${block.id === selected ? 'selected' : ''} ${block.id === FOCUS ? 'focus' : ''}"
+       data-id="${block.id}">
+    <div class="stripe"></div>
+    <div class="body">
+      <div class="meta">
+        <span class="id">${block.id}</span>
+        <span>cost ${block.cost.toFixed(2)}</span>
+        <span>w ${block.weight.toFixed(2)}</span>
+        <span>${block.tokens} tok</span>
+        ${tagOf(block)}
+        ${block.id === FOCUS ? '<span class="tag pin">当前</span>' : ''}
+      </div>
+      <div class="text q">Q ${block.q}</div>
+      <div class="text">A ${block.a}</div>
+      ${tools}
+    </div>
+  </div>`
+}
+
+function renderNode(block, depth) {
+  const kids = childrenOf(block.id)
+  const children = kids.length === 0 ? '' : `<div class="children">${kids.map(k => renderNode(k, depth + 1)).join('')}</div>`
+  return `
+  <div class="node" data-node="${block.id}">
+    <div class="row">
+      ${depth === 0 ? '' : '<div class="rail"><span class="elbow"></span></div>'}
+      ${blockHtml(block)}
+    </div>
+    ${children}
+  </div>`
+}
+
+document.getElementById('tree').innerHTML = roots.map(root => renderNode(root, 0)).join('')
+
+document.getElementById('tree').addEventListener('click', event => {
+  const el = event.target.closest('.block')
+  if (el === null) return
+  selected = el.dataset.id
+  document.querySelectorAll('.block').forEach(node => node.classList.toggle('selected', node.dataset.id === selected))
+  renderInspector()
+})
+
+// ---------------------------------------------------------------------------
+// 检查器
+// ---------------------------------------------------------------------------
+function renderInspector() {
+  const block = blocks.find(candidate => candidate.id === selected)
+  const host = document.getElementById('inspector')
+  if (block === undefined) { host.innerHTML = '<p class="empty">点左侧任意块。</p>'; return }
+  const kids = childrenOf(block.id)
+  host.innerHTML = `
+    <dl class="kv">
+      <dt>块</dt><dd>${block.id}${block.id === FOCUS ? ' · 当前焦点' : ''}</dd>
+      <dt>父块</dt><dd>${block.parent ?? '（顶层）'}</dd>
+      <dt>挂载方式</dt><dd>${{ chain: '承接上一轮', auto: `系统自动（score ${block.score}）`,
+                              manual: '用户手动分叉', topic: '自动新话题（顶层）' }[block.kind]}</dd>
+      <dt>子块</dt><dd>${kids.length === 0 ? '—' : kids.map(k => k.id).join(', ')}</dd>
+      <dt>边权 cost</dt><dd>${block.cost.toFixed(3)}</dd>
+      <dt>综合权重</dt><dd>${block.weight.toFixed(3)}<div class="bar"><i style="width:${Math.round(block.weight * 100)}%"></i></div></dd>
+      <dt>token</dt><dd>${block.tokens}</dd>
+      <dt>工具</dt><dd>${block.tools.length === 0 ? '—'
+        : block.tools.map(t => `${t.name}${t.ok ? '' : ' ✕ ' + (t.error ?? 'failed')}`).join('<br>')}</dd>
+    </dl>
+    <div class="actions">
+      <button class="primary" data-act="branch">在此分叉（B）</button>
+      <button data-act="reparent">改挂父块…</button>
+      <button data-act="pin">置顶</button>
+      <button data-act="ignore">忽略</button>
+      <button data-act="backtrack">回溯到此</button>
+    </div>
+    <p class="note">
+      手动分叉 = 显式指定归属；自动分叉 = 系统按相似度挂载，可在这里“改挂”覆盖。
+      两种来源在树上用不同线型表示，之后都参与同一套边权与检索。
+    </p>`
+}
+
+document.getElementById('inspector').addEventListener('click', event => {
+  const button = event.target.closest('button')
+  if (button === null) return
+  const block = blocks.find(candidate => candidate.id === selected)
+  const label = { branch: '在此分叉', reparent: '改挂父块', pin: '置顶', ignore: '忽略', backtrack: '回溯到此' }[button.dataset.act]
+  alert(`原型占位：${label} → ${block?.id}\n实现时走宿主命令 / 投影写回。`)
+})
+
+renderInspector()
+</script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+{
+  "plan": "ACCA",
+  "summary": {
+    "A": {
+      "runs": 2,
+      "correct": 8,
+      "asked": 8,
+      "retrievals": 0,
+      "hintLines": 0,
+      "inputPerRun": 4790
+    },
+    "C": {
+      "runs": 2,
+      "correct": 8,
+      "asked": 8,
+      "retrievals": 0,
+      "hintLines": 13,
+      "inputPerRun": 6995
+    }
+  },
+  "runs": [
+    {
+      "position": 0,
+      "arm": "A",
+      "label": "no-plugin",
+      "sessionId": "session-7b9ad37b-512f-44a5-85fd-d2899c28bd32",
+      "compacted": "{\"commandId\":\"cmd-2144c160-1\",\"result\":{\"kind\":\"success\",\"text\":\"Compacted 24 history items (~1735 tokens).\",\"sourceEventSeq\":114}}",
+      "correct": 4,
+      "asked": 4,
+      "details": [
+        {
+          "id": "A",
+          "expect": "1733",
+          "answer": "1733",
+          "hit": true
+        },
+        {
+          "id": "B",
+          "expect": "9f2c41ab77de",
+          "answer": "9f2c41ab77de05\n\nWait — 12 位. The string \"9f2c41ab77de05\" is 14 characters. The user asks for the 12-character prefix. So",
+          "hit": true
+        },
+        {
+          "id": "C",
+          "expect": "rbx-2291",
+          "answer": "rbx-2291",
+          "hit": true
+        },
+        {
+          "id": "D",
+          "expect": "0.42",
+          "answer": "0.42%",
+          "hit": true
+        }
+      ],
+      "input": 4514,
+      "cacheRead": 145536,
+      "cacheWrite": 0,
+      "hitRate": 96.99,
+      "hints": 0,
+      "retrievals": 0
+    },
+    {
+      "position": 1,
+      "arm": "C",
+      "label": "plugin",
+      "sessionId": "session-b9a4b571-fc51-4bd2-bfac-8e888a7387b9",
+      "compacted": "{\"commandId\":\"cmd-da6f881b-1\",\"result\":{\"kind\":\"success\",\"text\":\"Compacted 32 history items (~2124 tokens).\",\"sourceEventSeq\":136}}",
+      "correct": 4,
+      "asked": 4,
+      "details": [
+        {
+          "id": "A",
+          "expect": "1733",
+          "answer": "1733",
+          "hit": true
+        },
+        {
+          "id": "B",
+          "expect": "9f2c41ab77de",
+          "answer": "9f2c41ab77de",
+          "hit": true
+        },
+        {
+          "id": "C",
+          "expect": "rbx-2291",
+          "answer": "rbx-2291",
+          "hit": true
+        },
+        {
+          "id": "D",
+          "expect": "0.42",
+          "answer": "0.42%",
+          "hit": true
+        }
+      ],
+      "input": 5218,
+      "cacheRead": 205312,
+      "cacheWrite": 0,
+      "hitRate": 97.52,
+      "hints": 6,
+      "retrievals": 0
+    },
+    {
+      "position": 2,
+      "arm": "C",
+      "label": "plugin",
+      "sessionId": "session-cf63e297-c5d9-4301-81f7-206fd7ac5ecb",
+      "compacted": "{\"commandId\":\"cmd-da6f881b-2\",\"result\":{\"kind\":\"success\",\"text\":\"Compacted 50 history items (~7911 tokens).\",\"sourceEventSeq\":195}}",
+      "correct": 4,
+      "asked": 4,
+      "details": [
+        {
+          "id": "A",
+          "expect": "1733",
+          "answer": "1733",
+          "hit": true
+        },
+        {
+          "id": "B",
+          "expect": "9f2c41ab77de",
+          "answer": "9f2c41ab77de",
+          "hit": true
+        },
+        {
+          "id": "C",
+          "expect": "rbx-2291",
+          "answer": "rbx-2291",
+          "hit": true
+        },
+        {
+          "id": "D",
+          "expect": "0.42",
+          "answer": "0.42",
+          "hit": true
+        }
+      ],
+      "input": 8772,
+      "cacheRead": 395136,
+      "cacheWrite": 0,
+      "hitRate": 97.83,
+      "hints": 7,
+      "retrievals": 0
+    },
+    {
+      "position": 3,
+      "arm": "A",
+      "label": "no-plugin",
+      "sessionId": "session-61940637-4297-423d-a948-5dacfa42cc54",
+      "compacted": "{\"commandId\":\"cmd-2144c160-2\",\"result\":{\"kind\":\"success\",\"text\":\"Compacted 32 history items (~2265 tokens).\",\"sourceEventSeq\":138}}",
+      "correct": 4,
+      "asked": 4,
+      "details": [
+        {
+          "id": "A",
+          "expect": "1733",
+          "answer": "1733",
+          "hit": true
+        },
+        {
+          "id": "B",
+          "expect": "9f2c41ab77de",
+          "answer": "9f2c41ab77de",
+          "hit": true
+        },
+        {
+          "id": "C",
+          "expect": "rbx-2291",
+          "answer": "rbx-2291",
+          "hit": true
+        },
+        {
+          "id": "D",
+          "expect": "0.42",
+          "answer": "0.42%",
+          "hit": true
+        }
+      ],
+      "input": 5066,
+      "cacheRead": 193792,
+      "cacheWrite": 0,
+      "hitRate": 97.45,
+      "hints": 0,
+      "retrievals": 0
+    }
+  ]
+}

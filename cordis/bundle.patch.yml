@@ -1,0 +1,57 @@
+# Bundle layer for Bonsai (package `dsh-bonsai`).
+#
+# A profile that lists this package in `dsh.profile.bundles` reads this file and
+# applies the row below. The `name` is the package itself, so the row keeps
+# working wherever pnpm placed it (`link:` or a copy) and needs no absolute path.
+#
+# Override any field from the profile's own cordis.patch.yml by targeting
+# `- id: token-tree` — a patch replaces the whole `config`, so restate the keys
+# you keep.
+- insert:
+    - id: token-tree
+      name: dsh-bonsai
+      config:
+        # Tool-first default: a short conversation already carries its whole history,
+        # so pushing a memory block every turn is pure cost. The one-line hint points
+        # the model at retrieve_context instead; set autoInject: true to push instead.
+        #
+        # Measured: the block cost 428 tok/turn and doubled new input (4,265 → 9,166)
+        # with no recall change; the hint costs ~57 tok/turn and came out slightly
+        # cheaper than installing no plugin at all.
+        autoInject: false
+        retrievalHint: true
+        # The hint stays silent until it can pay for itself: after a compaction, or
+        # once the tree passes this many nodes (~20 exchanges).
+        hintMinNodes: 40
+        # Real token counts, when a HuggingFace tokenizer.json is available. With it the
+        # hint is gated on measured context size; without it, on node count.
+        # Pick the tokenizer by model generation: the plugin finds
+        # deepseek_v<N>_tokenizer/tokenizer.json under tokenizerDir and matches it to
+        # this value (uto = newest installed, 4, or a model id like deepseek-r1,
+        # which shares the v3 vocabulary). off disables exact counting entirely.
+        tokenizerVersion: auto
+        hintAboveTokens: 12000
+        autoReflect: true
+        includeSubagents: false
+        injectBudgetTokens: 600
+        maxNodesPerSession: 400
+        logEdgeUpdates: true
+        embeddingDimension: 256
+        weights:
+          lambda: 0.5
+          alpha: 0.6
+          combine: linear
+          threshold: 0.12
+          topK: 12
+          tokenBudget: 2000
+          failureDelta: 0.75
+          successDelta: 0.25
+          descentPenalty: 0.35
+        loop:
+          maxSteps: 12
+          maxReflections: 4
+          maxBacktracks: 3
+          timeoutMs: 120000
+          failureThreshold: 2
+          minBranchValue: 0.05
+          stallScore: 0.2

@@ -1,0 +1,87 @@
+{
+  "part": "forced",
+  "plan": "CAAC",
+  "hintAbove": 40,
+  "summary": {
+    "A": {
+      "runs": 2,
+      "correct": 8,
+      "asked": 8,
+      "inputPerRun": 2483,
+      "cacheHit": "97.85%",
+      "hintLines": 0,
+      "finalContext": 9851
+    },
+    "C": {
+      "runs": 2,
+      "correct": 8,
+      "asked": 8,
+      "inputPerRun": 2351,
+      "cacheHit": "98.24%",
+      "hintLines": 20,
+      "finalContext": 11652
+    }
+  },
+  "runs": [
+    {
+      "position": 0,
+      "arm": "C",
+      "label": "plugin",
+      "sessionId": "session-62d8e058-f931-460e-80ac-a4c8f287e76e",
+      "correct": 4,
+      "asked": 4,
+      "input": 2372,
+      "cacheRead": 131456,
+      "cacheWrite": 0,
+      "hitRate": 98.23,
+      "hintLines": 10,
+      "finalContext": 11674,
+      "retrievals": 0
+    },
+    {
+      "position": 1,
+      "arm": "A",
+      "label": "no-plugin",
+      "sessionId": "session-e1151163-f31e-40ba-855d-744fbb5e203c",
+      "correct": 4,
+      "asked": 4,
+      "input": 2498,
+      "cacheRead": 110720,
+      "cacheWrite": 0,
+      "hitRate": 97.79,
+      "hintLines": 0,
+      "finalContext": 9624,
+      "retrievals": 0
+    },
+    {
+      "position": 2,
+      "arm": "A",
+      "label": "no-plugin",
+      "sessionId": "session-6fdd8583-3554-41ce-a8da-7f561912f880",
+      "correct": 4,
+      "asked": 4,
+      "input": 2468,
+      "cacheRead": 115072,
+      "cacheWrite": 0,
+      "hitRate": 97.9,
+      "hintLines": 0,
+      "finalContext": 10078,
+      "retrievals": 0
+    },
+    {
+      "position": 3,
+      "arm": "C",
+      "label": "plugin",
+      "sessionId": "session-dbc9bd5a-659b-444c-bf75-2d2919b5c563",
+      "correct": 4,
+      "asked": 4,
+      "input": 2330,
+      "cacheRead": 131072,
+      "cacheWrite": 0,
+      "hitRate": 98.25,
+      "hintLines": 10,
+      "finalContext": 11630,
+      "retrievals": 0
+    }
+  ]
+}

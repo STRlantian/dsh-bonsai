@@ -1,0 +1,9 @@
+# Enable basic compaction with a low budget, so a short conversation already has to
+# summarise its early turns. Used by the A/B that asks whether the tree can recover
+# facts the summary dropped.
+- id: compaction-basic
+  name: "@deepseek-ai/dsh-compaction-basic"
+  disabled: false
+  config:
+    maxTokens: 8000
+    thresholdRatio: 0.6

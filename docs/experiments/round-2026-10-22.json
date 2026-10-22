@@ -1,0 +1,279 @@
+{
+  "plan": "ABBAAB",
+  "factCount": 10,
+  "askCount": 5,
+  "summary": {
+    "A": {
+      "runs": 3,
+      "correct": 15,
+      "asked": 15,
+      "accuracy": "100%",
+      "input": 9170,
+      "cacheRead": 435072,
+      "inputPerRun": 3057,
+      "hitRate": "97.94%",
+      "injected": 3,
+      "retrieveCalls": 0
+    },
+    "B": {
+      "runs": 3,
+      "correct": 15,
+      "asked": 15,
+      "accuracy": "100%",
+      "input": 9593,
+      "cacheRead": 497792,
+      "inputPerRun": 3198,
+      "hitRate": "98.11%",
+      "injected": 3,
+      "retrieveCalls": 0
+    }
+  },
+  "runs": [
+    {
+      "position": 0,
+      "arm": "A",
+      "label": "base",
+      "sessionId": "session-90b628c2-9287-4be3-9c80-457a7e9c60b7",
+      "correct": 5,
+      "total": 5,
+      "input": 3263,
+      "cacheRead": 147328,
+      "cacheWrite": 0,
+      "output": 1185,
+      "injected": 1,
+      "retrieveCalls": 0,
+      "answers": [
+        {
+          "expect": "/srv/svc-1",
+          "answer": "`/srv/svc-1`",
+          "hit": true
+        },
+        {
+          "expect": "203",
+          "answer": "203",
+          "hit": true
+        },
+        {
+          "expect": "ops5@example.dev",
+          "answer": "ops5@example.dev",
+          "hit": true
+        },
+        {
+          "expect": "107",
+          "answer": "107",
+          "hit": true
+        },
+        {
+          "expect": "3009",
+          "answer": "3009",
+          "hit": true
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "arm": "B",
+      "label": "hint",
+      "sessionId": "session-95fe3c75-ea89-4f23-baea-4c395ca22a0a",
+      "correct": 5,
+      "total": 5,
+      "input": 3467,
+      "cacheRead": 165760,
+      "cacheWrite": 0,
+      "output": 911,
+      "injected": 1,
+      "retrieveCalls": 0,
+      "answers": [
+        {
+          "expect": "/srv/svc-1",
+          "answer": "/srv/svc-1",
+          "hit": true
+        },
+        {
+          "expect": "203",
+          "answer": "203",
+          "hit": true
+        },
+        {
+          "expect": "ops5@example.dev",
+          "answer": "ops5@example.dev",
+          "hit": true
+        },
+        {
+          "expect": "107",
+          "answer": "107",
+          "hit": true
+        },
+        {
+          "expect": "3009",
+          "answer": "3009",
+          "hit": true
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "arm": "B",
+      "label": "hint",
+      "sessionId": "session-b1435c93-ca14-426f-9846-b1ee58015462",
+      "correct": 5,
+      "total": 5,
+      "input": 3089,
+      "cacheRead": 169344,
+      "cacheWrite": 0,
+      "output": 1470,
+      "injected": 1,
+      "retrieveCalls": 0,
+      "answers": [
+        {
+          "expect": "/srv/svc-1",
+          "answer": "/srv/svc-1",
+          "hit": true
+        },
+        {
+          "expect": "203",
+          "answer": "203",
+          "hit": true
+        },
+        {
+          "expect": "ops5@example.dev",
+          "answer": "ops5@example.dev",
+          "hit": true
+        },
+        {
+          "expect": "107",
+          "answer": "107",
+          "hit": true
+        },
+        {
+          "expect": "3009",
+          "answer": "3009",
+          "hit": true
+        }
+      ]
+    },
+    {
+      "position": 3,
+      "arm": "A",
+      "label": "base",
+      "sessionId": "session-0212c77c-07e0-4497-af28-72c9ae1b2a42",
+      "correct": 5,
+      "total": 5,
+      "input": 3041,
+      "cacheRead": 144896,
+      "cacheWrite": 0,
+      "output": 970,
+      "injected": 1,
+      "retrieveCalls": 0,
+      "answers": [
+        {
+          "expect": "/srv/svc-1",
+          "answer": "/srv/svc-1",
+          "hit": true
+        },
+        {
+          "expect": "203",
+          "answer": "203",
+          "hit": true
+        },
+        {
+          "expect": "ops5@example.dev",
+          "answer": "ops5@example.dev",
+          "hit": true
+        },
+        {
+          "expect": "107",
+          "answer": "107",
+          "hit": true
+        },
+        {
+          "expect": "3009",
+          "answer": "3009",
+          "hit": true
+        }
+      ]
+    },
+    {
+      "position": 4,
+      "arm": "A",
+      "label": "base",
+      "sessionId": "session-b3bf50cb-deef-4493-a789-6f4c9e0f04e1",
+      "correct": 5,
+      "total": 5,
+      "input": 2866,
+      "cacheRead": 142848,
+      "cacheWrite": 0,
+      "output": 491,
+      "injected": 1,
+      "retrieveCalls": 0,
+      "answers": [
+        {
+          "expect": "/srv/svc-1",
+          "answer": "/srv/svc-1",
+          "hit": true
+        },
+        {
+          "expect": "203",
+          "answer": "203",
+          "hit": true
+        },
+        {
+          "expect": "ops5@example.dev",
+          "answer": "ops5@example.dev",
+          "hit": true
+        },
+        {
+          "expect": "107",
+          "answer": "107",
+          "hit": true
+        },
+        {
+          "expect": "3009",
+          "answer": "3009",
+          "hit": true
+        }
+      ]
+    },
+    {
+      "position": 5,
+      "arm": "B",
+      "label": "hint",
+      "sessionId": "session-e699560e-5be5-4192-80ea-3d2e264ab48b",
+      "correct": 5,
+      "total": 5,
+      "input": 3037,
+      "cacheRead": 162688,
+      "cacheWrite": 0,
+      "output": 659,
+      "injected": 1,
+      "retrieveCalls": 0,
+      "answers": [
+        {
+          "expect": "/srv/svc-1",
+          "answer": "`/srv/svc-1`",
+          "hit": true
+        },
+        {
+          "expect": "203",
+          "answer": "203",
+          "hit": true
+        },
+        {
+          "expect": "ops5@example.dev",
+          "answer": "ops5@example.dev",
+          "hit": true
+        },
+        {
+          "expect": "107",
+          "answer": "107",
+          "hit": true
+        },
+        {
+          "expect": "3009",
+          "answer": "3009",
+          "hit": true
+        }
+      ]
+    }
+  ]
+}

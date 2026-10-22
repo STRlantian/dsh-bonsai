@@ -1,0 +1,25 @@
+# Build outputs (published from the working tree by `prepublishOnly`)
+dist/
+lib/
+plugin/
+*.tgz
+*.tsbuildinfo
+
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Test homes and scratch directories
+.token-tree-data/
+.dsh-home/
+.dsh-rehearsal/
+.dsh-check/
+.dsh-safe/
+.dsh-probe2/
+.dsh-rescue/
+.dsh-verify/
+.dsh-webprobe/
+.dsh-ab/
+
+# Third-party vocabularies: large, and licensed by their model release
+*.zip

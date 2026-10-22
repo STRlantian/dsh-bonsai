@@ -1,0 +1,10 @@
+# Deliberately invalid configuration, used only to prove that the loader really
+# imports this plugin and runs its `Config` validation. Boot once with
+# `--patch cordis/token-tree.invalid.yml` and expect a validation error naming
+# `weights.lambda`; then boot without it.
+- insert:
+    - id: token-tree
+      name: ../dist/index.js
+      config:
+        weights:
+          lambda: fast

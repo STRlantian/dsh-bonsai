@@ -1,0 +1,7 @@
+# Point a headless profile at the same provider route the desktop app uses, so the
+# stored account credentials resolve instead of requiring DEEPSEEK_API_KEY.
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: deepseek-account
+    model: deepseek-flash

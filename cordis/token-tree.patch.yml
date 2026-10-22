@@ -1,0 +1,34 @@
+# EXAMPLE ONLY — this row turns on per-turn memory injection (autoInject: true),
+# which measured at +428 tokens every turn with no recall gain. The shipping default
+# is the one-line hint (see cordis/bundle.patch.yml). Use this file to try the
+# block-injection mode deliberately, not as a starting point.
+#
+# Mount this plugin with one patch row.
+#
+# `--patch <this file>` (or copying the row into a profile/home patch layer)
+# inserts the plugin beside the harness bundles. The relative path resolves
+# against this file, so the row keeps working wherever the checkout lives; the
+# loader converts it to a `file://` URL before importing.
+- insert:
+    - id: token-tree
+      name: ../dist/index.js
+      config:
+        # See ../../docs/mounting.md for every field.
+        # Deliberately on for this example; the package default is false.
+        autoInject: true
+        autoReflect: true
+        injectBudgetTokens: 600
+        maxNodesPerSession: 400
+        logEdgeUpdates: true
+        weights:
+          lambda: 0.5
+          alpha: 0.6
+          combine: linear
+          tokenBudget: 2000
+          topK: 12
+          threshold: 0.12
+        loop:
+          maxSteps: 12
+          maxReflections: 4
+          maxBacktracks: 3
+          timeoutMs: 120000
