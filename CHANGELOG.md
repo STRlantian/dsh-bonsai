@@ -33,8 +33,9 @@ with retrieval shipped off by default.
   identifiability check (three coefficients cannot be separated from collinear prompts).
 - **Runtime settings** (no restart): injection mode, hint thresholds, reflection, admission
   threshold, summary matching, tokenizer choice. Stored in `~/.dsh/token-tree/settings.json`.
-- **UI language** — follows the host: Chinese when `<html lang>` is `zh*`, English otherwise
-  (90+ phrases; unknown phrases fall back to the Chinese source).
+- **UI language** — selectable in Settings (`auto` / `zh` / `en`), stored with the other overrides;
+  `auto` follows the browser language. The host's `<html lang>` is a static template value and is
+  deliberately not used. 95+ phrases; unknown phrases fall back to the Chinese source.
 - **Theme awareness** — UI resolves the host's design tokens and follows light/dark, with
   `color-scheme` set so native controls match.
 - **Tests**: 101 backend cases (graph, retrieval, reflection, persistence, routes, tokenizer,

@@ -235,6 +235,33 @@ test('the settings tab offers the tokenizer dropdown from the payload', { timeou
   assert.equal(select.value, '4', 'shows the generation actually in use')
 })
 
+test('the settings panel can switch the interface language', { timeout: 30000 }, async t => {
+  const client = await mountClient('header', 'en')
+  t.after(client.cleanup)
+  await client.click('Bonsai')
+  await client.click('Settings')
+  const selects = [...client.document.querySelectorAll('select')]
+  const language = selects.find(select => [...select.options].some(option => option.value === 'zh'))
+  assert.ok(language !== undefined, 'language select rendered')
+  const values = [...language.options].map(option => option.value)
+  // The tokenizer dropdown's labels arrive in Chinese from the backend.
+  const tokenizer = selects.find(select => [...select.options].some(option => option.value === '4'))
+  assert.ok(tokenizer !== undefined, 'tokenizer select rendered')
+  const tokenLabels = [...tokenizer.options].map(option => option.textContent ?? '')
+  assert.ok(tokenLabels.some(label => label.includes('Auto')), 'tokenizer labels translated')
+  assert.ok(tokenLabels.some(label => label.includes('Learned')), 'learned option translated')
+  assert.deepEqual(values, ['auto', 'zh', 'en'], 'auto / Chinese / English')
+  // Saving sends the choice to the settings route.
+  await React.act(async () => {
+    language.value = 'zh'
+    language.dispatchEvent(new client.window.Event('change', { bubbles: true }))
+  })
+  await client.flush()
+  const saved = client.requests.find(entry => entry.url.includes('/api/token-tree/settings') && entry.method === 'POST')
+  assert.ok(saved !== undefined, 'settings POST issued')
+  assert.ok(String(saved.body).includes('locale'), 'locale persisted')
+})
+
 test('selecting a forked node lists its branches beside it', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)

@@ -27,6 +27,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "在左边选一个节点，然后点「从这里继续」。下一轮你输入的问题会成为它的子节点。": "Select a node on the left, then click \"Continue here\". The question you send next becomes its child.",
   "拖动一行到另一行可以改父节点（整棵子树一起移动）；删除只是隐藏，可撤销。": "Drag one row onto another to reparent it (the whole subtree moves). Delete only hides, and can be undone.",
   "节点": "nodes",
+  "界面语言": "Language",
+  "「自动」跟随浏览器/系统语言；选择后只影响这个插件，不影响宿主": "Auto follows the browser language; the choice only affects this plugin",
+  "自动": "Auto",
+  "中文": "Chinese",
+  "English": "English",
   "这个节点下有 {} 个分支：": "{} branches under this node:",
   "问": "Q",
   "答": "A",
@@ -118,24 +123,55 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     "盆栽：对话树的详细信息与设置": "Bonsai: details and settings for this conversation tree"
   }
 
+  // `auto` | `zh` | `en`, set from the saved setting or the host page.
+  var LOCALE_PREFERENCE = 'auto'
+  // Test hook and manual escape hatch; not used in normal operation.
+  var LOCALE_FORCED = null
+  // The dock and the editor both re-render when this changes.
+  var localeListeners = []
+
   /**
-   * Pick a locale: explicit override, then the host page, then the browser.
+   * Which language the interface should use right now.
+   *
+   * The host page's `<html lang>` is a static template value ("en") while the real UI
+   * language is switched at runtime, so it is only a last resort: the browser language is
+   * the honest default, and an explicit preference wins over both.
    * @returns {'en'|'zh'} Active locale.
    */
-  function detectLocale() {
+  function activeLocale() {
     try {
-      var forced = window.__BONSAI_LOCALE__
-      if (forced === 'en' || forced === 'zh') return forced
+      var hook = typeof window === 'undefined' ? undefined : window.__BONSAI_LOCALE__
+      if (hook === 'en' || hook === 'zh') return hook
+      if (LOCALE_FORCED === 'en' || LOCALE_FORCED === 'zh') return LOCALE_FORCED
+      if (LOCALE_PREFERENCE === 'zh' || LOCALE_PREFERENCE === 'en') return LOCALE_PREFERENCE
+      var nav = navigator && navigator.language ? navigator.language.toLowerCase() : ''
+      if (nav.length > 0) return nav.indexOf('zh') === 0 ? 'zh' : 'en'
       var html = document.documentElement && document.documentElement.lang
       if (typeof html === 'string' && html.length > 0) return html.toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en'
-      var nav = navigator && navigator.language ? navigator.language.toLowerCase() : ''
-      return nav.indexOf('zh') === 0 ? 'zh' : 'en'
+      return 'zh'
     } catch (error) {
       return 'zh'
     }
   }
 
-  var LOCALE = detectLocale()
+  /**
+   * Apply a language preference and re-render.
+   * @param {string} preference - `auto`, `zh` or `en`.
+   */
+  function setLocalePreference(preference) {
+    LOCALE_PREFERENCE = preference === 'zh' || preference === 'en' ? preference : 'auto'
+  }
+
+  /**
+   * Adopt the language stored in the settings payload.
+   * @param {object|null} payload - response from `GET /api/token-tree/settings`.
+   */
+  function applyLocale(payload) {
+    var value = payload && typeof payload.locale === 'string' ? payload.locale : 'auto'
+    if (value === LOCALE_PREFERENCE) return false
+    setLocalePreference(value)
+    return true
+  }
 
   /**
    * Translate a template with `{}` placeholders.
@@ -154,7 +190,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
    * @returns {string} The phrase in the active locale.
    */
   function t(text) {
-    if (LOCALE === 'zh') return text
+    if (activeLocale() === 'zh') return text
     var translated = PHRASES[text]
     return translated === undefined ? text : translated
   }
@@ -933,6 +969,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var mode = modeState[0]
     var setMode = modeState[1]
     // Runtime switches: fetched once, then re-read after every save.
+    // Bumped when the interface language changes, so the dock re-renders.
+    var localeTickState = React.useState(0)
+    var localeTick = localeTickState[0]
+    var setLocaleTick = localeTickState[1]
     var settingsState = React.useState(null)
     var settings = settingsState[0]
     var setSettings = settingsState[1]
@@ -956,12 +996,30 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
 
     React.useEffect(function () { load() }, [sessionId, mode])
 
+    // Language lives in the settings file; read it once so the dock matches the editor
+    // even when the editor has never been opened.
+    React.useEffect(function () {
+      var cancelled = false
+      settingsGet()
+        .then(function (payload) {
+          if (cancelled) return
+          if (applyLocale(payload)) setDockLocale(function (value) { return value + 1 })
+        })
+        .catch(function () {})
+      return function () { cancelled = true }
+    }, [])
+
     // The switches are host state, not tree state: fetch them once so the settings tab
     // can render what is actually in force (profile config plus overrides).
     React.useEffect(function () {
       var cancelled = false
       settingsGet()
-        .then(function (payload) { if (!cancelled) setSettings(payload) })
+        .then(function (payload) {
+          if (cancelled) return
+          setSettings(payload)
+          // Language can change here, and the whole dock has to re-render for it.
+          if (applyLocale(payload)) setLocaleTick(function (value) { return value + 1 })
+        })
         .catch(function (error) { if (!cancelled) setNote('读取设置失败：' + error.message) })
       return function () { cancelled = true }
     }, [])
@@ -1028,7 +1086,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       choices = [{ id: 'auto', label: t('自动（最新一代）') }, { id: 'off', label: t('自主学习（不用词表）') }]
     }
     return choices.map(function (choice) {
-      return h('option', { key: choice.id, value: choice.id }, choice.label)
+      return h('option', { key: choice.id, value: choice.id }, t(choice.label))
     })
   }
 
@@ -1236,6 +1294,24 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               + ' · 可用 ' + (settings.tokenizer.available.length === 0 ? '无' : settings.tokenizer.available.join(', ')))
           + ' · 预算折扣 ' + (settings.budget === undefined ? '-' : settings.budget.factor.toFixed(2))
           + ' · 账单拟合 ' + (settings.billing === undefined ? '-' : (settings.billing.active ? '生效' : '样本不足'))),
+        settingRow({
+          key: 'locale',
+          label: t('界面语言'),
+          hint: t('「自动」跟随浏览器/系统语言；选择后只影响这个插件，不影响宿主'),
+          control: h('select', {
+            defaultValue: (settings && typeof settings.locale === 'string') ? settings.locale : 'auto',
+            disabled: busy,
+            style: { width: '150px' },
+            onChange: function (event) {
+              var next = String(event.target.value || 'auto')
+              setLocalePreference(next)
+              saveSetting('locale', next === 'auto' ? null : next)
+            },
+          },
+            h('option', { value: 'auto' }, t('自动')),
+            h('option', { value: 'zh' }, t('中文')),
+            h('option', { value: 'en' }, t('English'))),
+        }),
         note === '' ? null : h('p', { className: 'twt-flash' }, note))
     } else {
       settingsPanel = h('div', { className: 'twt-settings' }, h('p', { className: 'twt-note' }, t('读取设置中…')), note === '' ? null : h('p', { className: 'twt-flash' }, note))
@@ -1875,6 +1951,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var viewState = React.useState({ loading: true, data: null, error: null })
     var view = viewState[0]
     var setView = viewState[1]
+    // Bumped when the interface language changes; the dock renders its own strings.
+    var dockLocaleState = React.useState(0)
+    var dockLocaleTick = dockLocaleState[0]
+    var setDockLocale = dockLocaleState[1]
     var pickState = React.useState(null)
     var picked = pickState[0]
     var setPicked = pickState[1]
@@ -2249,7 +2329,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     // (and therefore the tree button) off the screen. `.twt-dock-panel` is the piece
     // that becomes the overlay when expanded, so it can cover the composer stats
     // sitting on both sides of this row.
-    return h('div', { className: 'twt-dock', ref: rootRef },
+    return h('div', { className: 'twt-dock', ref: rootRef, 'data-locale-tick': String(dockLocaleTick) },
       h('div', { className: 'twt-dock-panel' }, bar, h(DockBoundary, null, body)))
   }
 

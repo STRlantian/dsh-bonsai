@@ -42,9 +42,13 @@ dsh plugin --profile desktop add "file:<仓库路径>/plugin"
 
 ## 界面语言
 
-界面跟随宿主：宿主的 `<html lang>` 是 `zh*` 就是中文，否则英文（回退到 `navigator.language`）。
-语言在**加载时**确定一次，切换系统语言后刷新页面生效；也可以用 `window.__BONSAI_LOCALE__ = 'zh' | 'en'` 强制。
-结构性文案（页签、按钮、设置项、对比视图）已双语，少数操作提示仍是中文。
+设置页签最后一行可以选：**自动 / 中文 / English**，存进 `~/.dsh/token-tree/settings.json`（键 `locale`）。
+
+`自动` 跟随 **浏览器/系统语言**（`navigator.language`）。**不读宿主的 `<html lang>`**：那是模板里写死的
+`en`，真正的中文是宿主在运行时改的，早期版本因此把中文界面显示成了英文。
+
+结构性文案（页签、按钮、设置项、tokenizer 下拉、分支列表）已双语；少数操作提示（"已置顶 n12"这类）
+仍是中文，避免碎片化翻译。
 
 ## 用起来是什么样
 
