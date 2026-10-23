@@ -60,6 +60,10 @@ interface AttachmentContext {
   idf: Map<string, number>
   /** Largest IDF among the question's features, used for normalization. */
   maxIdf: number
+  /** How many nodes contain each feature, for the specificity gate. */
+  documentFrequency: Map<string, number>
+  /** Number of nodes, the denominator of the gate. */
+  nodeCount: number
   /** Feature count of the node the question would otherwise extend, the penalty reference. */
   referenceFeatures: number
 }
@@ -779,12 +783,21 @@ export class TokenTreeService {
     const semantic = Math.max(0, cosine(input.embedding, node.embedding))
     const features = input.nodeFeatures.get(node.id) ?? contentFeatures(node.content)
     let best = 0
+    let bestFeature = ''
     for (const feature of input.questionFeatures) {
       if (!features.has(feature)) continue
       const weight = input.idf.get(feature) ?? 0
-      if (weight > best) best = weight
+      if (weight > best) {
+        best = weight
+        bestFeature = feature
+      }
     }
-    const lexical = input.maxIdf === 0 ? 0 : best / input.maxIdf
+    // A term in more than a third of the tree describes the conversation, not a topic: sharing
+    // it is no evidence that the question is about this node. Two-node trees are exempt (there
+    // is nothing to be common in).
+    const spread = bestFeature === '' ? 0 : (input.documentFrequency.get(bestFeature) ?? 0)
+    const specific = input.nodeCount <= 2 || spread <= Math.max(1, Math.floor(input.nodeCount / 3))
+    const lexical = input.maxIdf === 0 || !specific ? 0 : best / input.maxIdf
     // A 9k-token lecture shares *something* rare with almost any question, which is how an
     // unrelated question used to attach to whichever answer happened to be longest. Scale the
     // lexical half down by how much bigger the node is than a typical answer.
@@ -809,11 +822,15 @@ export class TokenTreeService {
     for (const node of state.tree.nodes.values()) {
       const features = contentFeatures(node.content)
       nodeFeatures.set(node.id, features)
+      // A question repeats the topic it asks about; counting it made "凸包" look common in the
+      // very tree where it was the subject. Frequency describes the nodes that can own a topic.
+      if (node.kind === 'question' || node.kind === 'note') continue
       nodeCount++
       for (const feature of features) {
         documentFrequency.set(feature, (documentFrequency.get(feature) ?? 0) + 1)
       }
     }
+    nodeCount = Math.max(1, nodeCount)
     const idfOf = (feature: string): number =>
       Math.log(1 + (nodeCount + 1) / (1 + (documentFrequency.get(feature) ?? 0)))
     const idf = new Map<string, number>()
@@ -824,7 +841,16 @@ export class TokenTreeService {
       if (weight > maxIdf) maxIdf = weight
     }
     const referenceFeatures = Math.max(1, nodeFeatures.get(state.tree.currentId)?.size ?? 1)
-    return { embedding, questionFeatures, nodeFeatures, idf, maxIdf, referenceFeatures }
+    return {
+      embedding,
+      questionFeatures,
+      nodeFeatures,
+      idf,
+      maxIdf,
+      documentFrequency,
+      nodeCount,
+      referenceFeatures,
+    }
   }
 
   /**
