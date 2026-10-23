@@ -24,6 +24,7 @@ function treePayload() {
     focusId: 'n4',
     anchoredId: null,
     stats: { nodes: 6, questions: 3, answers: 2, tools: 1, blocks: 3, branches: 2, tokens: 120 },
+    hidden: [{ id: 'n5', kind: 'question', preview: '分支 B：直接换哈希表呢？', parentId: 'n2', subtreeSize: 1, tokens: 14 }],
     nodes: [
       { id: 'n1', kind: 'note', preview: 'session root', detail: 'session root', parentId: null, tokens: 3, cost: 0, pathCost: 0, depth: 0, turn: 0 },
       { id: 'n2', kind: 'question', preview: '第一个问题：布隆过滤器的误判率由什么决定？', detail: '第一个问题', parentId: 'n1', tokens: 30, cost: 1, pathCost: 1, depth: 1, turn: 1 },
@@ -234,6 +235,24 @@ test('clicking a row selects it without jumping, double-click jumps', { timeout:
   await client.flush()
   assert.equal(rows[0].getAttribute('data-picked'), 'true', 'row selected')
   assert.ok(client.container.innerHTML.includes('twt-dock'), 'dock still mounted after a click')
+})
+
+test('the recycle bin lists hidden branches and restores them', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  await client.click('盆栽')
+  await client.click('回收站')
+  const rows = [...client.document.querySelectorAll('.twt-erow')]
+  assert.equal(rows.length, 1, 'one hidden branch listed')
+  assert.ok((rows[0].textContent ?? '').includes('直接换哈希表'), 'the row shows the original text')
+  const restore = [...rows[0].querySelectorAll('button')].find(button => (button.textContent ?? '').includes('恢复'))
+  assert.ok(restore !== undefined, 'restore button present')
+  await React.act(async () => { restore.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+  const call = client.requests.find(entry => entry.url.includes('/api/token-tree/edit') && entry.method === 'POST')
+  assert.ok(call !== undefined, 'restore posts to the edit route')
+  assert.ok(String(call.body).includes('"restore"'), 'using the restore action')
+  assert.ok(String(call.body).includes('n5'), 'for the hidden node')
 })
 
 test('the settings tab offers the tokenizer dropdown from the payload', { timeout: 30000 }, async t => {

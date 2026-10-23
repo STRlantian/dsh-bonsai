@@ -45,6 +45,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "单击选中；双击跳到对话中的这一轮": "Click to select; double-click to jump to that turn",
   "这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。": "That turn is outside the rendered transcript (virtualised list); see the detail panel instead.",
   "界面语言": "Language",
+  "回收站": "Recycle bin",
+  "回收站是空的：没有已隐藏的分支。": "The recycle bin is empty: no hidden branches.",
+  "恢复此分支": "Restore",
   "自动压缩阈值": "Auto-compact threshold",
   "当前会话 {} tok；压缩一次会读 {} tok，之后每轮约省 {} tok，约 {} 轮回本（缓存价约为输入价的 1/10，实际花费远低于这些数字）": "This conversation: {} tok. A compaction reads {} tok and saves about {} tok per turn, paying off after roughly {} turn(s). Cached reads cost about a tenth of fresh input, so the real spend is far below these numbers.",
   "对话 token 超过这个值就主动压缩（0 = 关闭）。这是唯一能真正减少 input 的手段，代价是丢失细节": "Compact once the conversation passes this many tokens (0 disables). The only lever that actually reduces input, at the cost of detail.",
@@ -389,6 +392,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-ekind[data-kind="reflection"]{color:#c792ea}',
     '.twt-ekind[data-kind="note"]{color:#e0a458}',
     '.twt-elist-graph{display:flex;overflow:hidden;padding:0}',
+    '.twt-erow .twt-action{margin-left:8px}',
   '.twt-compare{display:flex;flex-direction:column;gap:8px;padding:8px 10px;overflow:auto;height:100%}',
   '.twt-compare-cols{display:flex;gap:10px;align-items:stretch;overflow:auto}',
   '.twt-branch-col{flex:1 1 0;min-width:180px;max-width:320px;border:1px solid var(--twt-border);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;background:var(--twt-surface)}',
@@ -1687,6 +1691,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         })
       })
     }
+    // Hidden branch roots, newest first; the payload already filters inherited hides.
+    var hiddenRows = (data !== null && Array.isArray(data.hidden)) ? data.hidden : []
+
     var selected = picked === null ? null : (byId[picked] !== undefined ? byId[picked] : (nodeById[picked] !== undefined ? nodeById[picked] : null))
     var selectedKind = selected === null ? '' : (selected.kind !== undefined ? selected.kind : 'question')
 
@@ -1878,6 +1885,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           h('button', {
             className: 'twt-action',
             style: { padding: '3px 10px' },
+            'data-kind': mode === 'recycle' ? 'primary' : undefined,
+            onClick: function () { setMode('recycle'); setPicked(null) },
+          }, t('回收站') + (hiddenRows.length === 0 ? '' : ' ' + hiddenRows.length)),
+          h('button', {
+            className: 'twt-action',
+            style: { padding: '3px 10px' },
             'data-kind': mode === 'graph' ? 'primary' : undefined,
             onClick: function () { setMode('graph'); setPicked(null) },
           }, t('图形')),
@@ -1905,7 +1918,22 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               },
                 view.loading ? h('p', { className: 'twt-note' }, t('读取中…'))
                   : view.error ? h('p', { className: 'twt-note twt-err' }, view.error)
-                    : mode === 'graph'
+                    : mode === 'recycle'
+                      ? (hiddenRows.length === 0
+                        ? h('p', { className: 'twt-note' }, t('回收站是空的：没有已隐藏的分支。'))
+                        : h('div', { className: 'twt-elist' }, hiddenRows.map(function (row) {
+                          return h('div', { key: row.id, className: 'twt-erow', style: { cursor: 'default' } },
+                            h('span', { className: 'twt-ekind', 'data-kind': row.kind }, kindLabel(row.kind)),
+                            h('span', { className: 'twt-id' }, row.id),
+                            h('span', { className: 'twt-q' }, row.preview || t('（空）')),
+                            h('span', { className: 'twt-count' }, row.subtreeSize + ' ' + t('节点') + ' · ' + row.tokens + ' tok'),
+                            h('button', {
+                              className: 'twt-action',
+                              disabled: busy,
+                              onClick: function () { restoreBranch(row.id) },
+                            }, t('恢复此分支')))
+                        })))
+                      : mode === 'graph'
                       ? h(TreeGraph, {
                         nodes: graphNodes,
                         selectedId: picked,

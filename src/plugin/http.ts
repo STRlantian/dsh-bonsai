@@ -44,6 +44,7 @@ function emptyNodesPayload(): NodesPayload {
   return {
     sessionId: '',
     focusId: '',
+    hidden: [],
     stats: { nodes: 0, questions: 0, answers: 0, tools: 0, maxDepth: 0, branches: 0, tokens: 0 },
     constraints: [],
     nodes: [],

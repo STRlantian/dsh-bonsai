@@ -194,6 +194,7 @@ export function blocksOf(
     childCounts.set(key, (childCounts.get(key) ?? 0) + 1)
   }
   const branches = [...childCounts.values()].filter(count => count > 1).length
+
   return {
     sessionId: tree.sessionId,
     focusId,
@@ -260,6 +261,31 @@ export interface NodesPayload {
   constraints: { text: string; createdAt: number }[]
   /** Every node, parents before children. */
   nodes: NodeRow[]
+  /**
+   * Roots of hidden subtrees, newest first.
+   *
+   * Only nodes marked deleted themselves appear here: their descendants are hidden by
+   * inheritance, so listing them would offer "restore" on rows the user never hid.
+   */
+  hidden: HiddenRow[]
+}
+
+/** One hidden branch root, as listed in the recycle bin. */
+export interface HiddenRow {
+  /** Node id. */
+  id: NodeId
+  /** What it is. */
+  kind: string
+  /** One-line preview. */
+  preview: string
+  /** Where it used to hang. */
+  parentId: NodeId | null
+  /** Turn it belongs to. */
+  turn?: number
+  /** Nodes in the hidden subtree, including the root. */
+  subtreeSize: number
+  /** Tokens in the hidden subtree. */
+  tokens: number
 }
 
 /** Longest preview kept in the node view. */
@@ -330,6 +356,23 @@ export function nodesOf(
     if (node.children.length > 1) branches++
   }
 
+  const hidden: HiddenRow[] = []
+  for (const node of tree.nodes.values()) {
+    if (node.metadata.deleted !== true) continue
+    const subtree = tree.subtree(node.id)
+    hidden.push({
+      id: node.id,
+      kind: node.kind,
+      preview: (node.summary ?? node.content).replace(/\s+/g, ' ').slice(0, 80),
+      parentId: node.parentId,
+      ...(typeof node.metadata.turn === 'number' ? { turn: node.metadata.turn } : {}),
+      subtreeSize: subtree.length,
+      tokens: subtree.reduce((sum, id) => sum + (tree.nodes.get(id)?.tokens ?? 0), 0),
+    })
+  }
+  // Newest first: the last hidden branch is the one most likely to be wanted back.
+  hidden.sort((left, right) => Number(right.id.slice(1)) - Number(left.id.slice(1)))
+
   return {
     sessionId: tree.sessionId,
     focusId,
@@ -345,5 +388,6 @@ export function nodesOf(
     },
     constraints: (options.constraints ?? []).map(entry => ({ text: entry.text, createdAt: entry.createdAt })),
     nodes: rows,
+    hidden,
   }
 }
