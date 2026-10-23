@@ -334,7 +334,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
       if (attachThreshold < 0 || attachThreshold > 1) issue(issues, 'attachThreshold', 'must be within [0, 1]')
       const attachMargin = scalar(source, 'attachMargin', (input): input is number => typeof input === 'number' && Number.isFinite(input), issues, 'a finite number') ?? 0.08
       if (attachMargin < 0 || attachMargin > 1) issue(issues, 'attachMargin', 'must be within [0, 1]')
-      const newTopicBelow = scalar(source, 'newTopicBelow', (input): input is number => typeof input === 'number' && Number.isFinite(input), issues, 'a finite number') ?? 0.08
+      const newTopicBelow = scalar(source, 'newTopicBelow', (input): input is number => typeof input === 'number' && Number.isFinite(input), issues, 'a finite number') ?? 0.15
       if (newTopicBelow < 0 || newTopicBelow > 1) issue(issues, 'newTopicBelow', 'must be within [0, 1]')
 
       const resolved: ResolvedConfig = {

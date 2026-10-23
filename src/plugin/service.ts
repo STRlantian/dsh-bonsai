@@ -56,10 +56,12 @@ interface AttachmentContext {
   questionFeatures: Set<string>
   /** Content features of every node in the tree, computed once per decision. */
   nodeFeatures: Map<NodeId, Set<string>>
-  /** Inverse document frequency of each question feature. */
+  /** Inverse document frequency of each feature seen in the tree. */
   idf: Map<string, number>
   /** Largest IDF among the question's features, used for normalization. */
   maxIdf: number
+  /** Feature count of the node the question would otherwise extend, the penalty reference. */
+  referenceFeatures: number
 }
 
 /** Mutable per-session bookkeeping. */
@@ -783,7 +785,13 @@ export class TokenTreeService {
       if (weight > best) best = weight
     }
     const lexical = input.maxIdf === 0 ? 0 : best / input.maxIdf
-    return 0.45 * semantic + 0.55 * lexical
+    // A 9k-token lecture shares *something* rare with almost any question, which is how an
+    // unrelated question used to attach to whichever answer happened to be longest. Scale the
+    // lexical half down by how much bigger the node is than a typical answer.
+    const penalty = Math.min(1, Math.sqrt(input.referenceFeatures / Math.max(1, features.size)))
+    // Applied to the whole score: the semantic half is a bag-of-characters cosine that also
+    // rewards size, so scaling only the lexical half left long answers winning.
+    return (0.45 * semantic + 0.55 * lexical) * penalty
   }
 
   /**
@@ -803,19 +811,20 @@ export class TokenTreeService {
       nodeFeatures.set(node.id, features)
       nodeCount++
       for (const feature of features) {
-        if (!questionFeatures.has(feature)) continue
         documentFrequency.set(feature, (documentFrequency.get(feature) ?? 0) + 1)
       }
     }
+    const idfOf = (feature: string): number =>
+      Math.log(1 + (nodeCount + 1) / (1 + (documentFrequency.get(feature) ?? 0)))
     const idf = new Map<string, number>()
     let maxIdf = 0
     for (const feature of questionFeatures) {
-      const frequency = documentFrequency.get(feature) ?? 0
-      const weight = Math.log(1 + (nodeCount + 1) / (1 + frequency))
+      const weight = idfOf(feature)
       idf.set(feature, weight)
       if (weight > maxIdf) maxIdf = weight
     }
-    return { embedding, questionFeatures, nodeFeatures, idf, maxIdf }
+    const referenceFeatures = Math.max(1, nodeFeatures.get(state.tree.currentId)?.size ?? 1)
+    return { embedding, questionFeatures, nodeFeatures, idf, maxIdf, referenceFeatures }
   }
 
   /**

@@ -1,0 +1,32 @@
+{
+  "sessionId": "session-86aa4928-619b-4d1e-9bb7-6e6d867d6966",
+  "prompts": [
+    10456,
+    10676,
+    14308
+  ],
+  "questions": [
+    {
+      "id": "n2",
+      "text": "用三句话介绍凸包，不要调用工具。",
+      "parentId": "n1",
+      "parentKind": "note",
+      "parentPreview": "session root"
+    },
+    {
+      "id": "n6",
+      "text": "凸包的时间复杂度是多少？一句话，不要调用工具。",
+      "parentId": "n3",
+      "parentKind": "answer",
+      "parentPreview": "凸包是指包含给定点集的最小凸集，即所有包含这些点"
+    },
+    {
+      "id": "n4",
+      "text": "用三句话介绍 osu mania 的判定区间，不",
+      "parentId": "n1",
+      "parentKind": "note",
+      "parentPreview": "session root"
+    }
+  ],
+  "fold": null
+}

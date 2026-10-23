@@ -52,7 +52,8 @@ for (const line of text.split('\n')) {
 const logger = { info: () => {}, warn: () => {}, debug: () => {}, error: () => {} }
 const config = Config['~standard'].validate({ logEdgeUpdates: false }).value
 const service = new TokenTreeService({ config, logger })
-const session = { id: sessionId, snapshotEvents: () => events }
+const seen = []
+const session = { id: sessionId, snapshotEvents: () => seen.slice() }
 
 const textOf = content => (Array.isArray(content) ? content : [])
   .filter(block => block?.type === 'text')
@@ -87,5 +88,6 @@ for (const event of events) {
       console.log(`Q${questionIndex} "${question}" → (opens the tree)`)
     }
   }
+  seen.push(event)
   service.handleEvent(session, event)
 }

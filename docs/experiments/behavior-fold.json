@@ -1,0 +1,40 @@
+{
+  "sessionId": "session-5584e2fe-75d3-4108-9212-c96bb360c00a",
+  "prompts": [
+    10456,
+    10613,
+    11440
+  ],
+  "questions": [
+    {
+      "id": "n2",
+      "text": "用三句话介绍凸包，不要调用工具。",
+      "parentId": "n1",
+      "parentKind": "note",
+      "parentPreview": "session root"
+    },
+    {
+      "id": "n6",
+      "text": "凸包的时间复杂度是多少？一句话，不要调用工具。",
+      "parentId": "n3",
+      "parentKind": "answer",
+      "parentPreview": "凸包（convex hull）是包含给定点集的最"
+    },
+    {
+      "id": "n4",
+      "text": "用三句话介绍 osu mania 的判定区间，不",
+      "parentId": "n1",
+      "parentKind": "note",
+      "parentPreview": "session root"
+    }
+  ],
+  "fold": {
+    "sessionId": "session-5584e2fe-75d3-4108-9212-c96bb360c00a",
+    "folded": 1,
+    "tokens": 351,
+    "threshold": 150,
+    "planned": 1,
+    "visible": 10,
+    "at": 1792767227198
+  }
+}
