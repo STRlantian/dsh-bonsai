@@ -37,10 +37,12 @@ function treePayload() {
 }
 
 /** Settings payload as the host serves it, including the dropdown choices. */
-function settingsPayload() {
+function settingsPayload(preset = null) {
+  const aggressive = preset === 'aggressive'
+  const balanced = preset === 'balanced'
   return {
     path: 'C:/tmp/settings.json',
-    overrides: {},
+    overrides: aggressive ? { toolDeny: ['workflow'], foldAboveTokens: 20000 } : {},
     base: { autoInject: false, retrievalHint: true, autoReflect: true, hintMinNodes: 40, hintAboveTokens: 12000, admitRelevance: 0.3, summaryMatch: true },
     effective: {
       autoInject: false,
@@ -51,6 +53,11 @@ function settingsPayload() {
       admitRelevance: 0.3,
       summaryMatch: true,
       tokenizerVersion: 'auto',
+      ...(aggressive
+        ? { foldAboveTokens: 20000, foldKeepTurns: 2, foldScope: 'turns' }
+        : balanced
+          ? { foldAboveTokens: 40000, foldKeepTurns: 3, foldScope: 'turns' }
+          : {}),
     },
     tokenizer: {
       path: null,
@@ -119,11 +126,17 @@ async function mountClient(which, locale = 'zh') {
   window.sessionStorage.setItem('twt-dock-open:session-1', '1')
 
   const requests = []
+  let activePreset = null
   const stubFetch = (url, options = {}) => {
     const target = String(url)
     requests.push({ url: target, method: options.method ?? 'GET', body: options.body })
-    const payload = target.includes('/settings')
-      ? settingsPayload()
+    if (target.includes('/preset') && options.body) {
+      try { activePreset = JSON.parse(String(options.body)).preset ?? null } catch {}
+    }
+    const payload = target.includes('/preset')
+      ? { ok: true, preset: activePreset }
+      : target.includes('/settings')
+      ? settingsPayload(activePreset)
       : target.includes('/focus') || target.includes('/edit')
         ? { ok: true, anchored: { nodeId: 'n4', kind: 'question' }, tree: treePayload() }
         : treePayload()
@@ -322,6 +335,8 @@ test('the preset picker sits beside the mode chip', { timeout: 30000 }, async t 
   const posted = client.requests.find(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST')
   assert.ok(posted !== undefined, 'the picker posts to the preset route')
   assert.ok(String(posted.body).includes('aggressive'), 'with the chosen preset')
+  await client.flush()
+  assert.equal(picker.value, 'aggressive', 'and the select settles on 激进 instead of 自定义')
 })
 
 test('the tool-result toggle sits on the right and only where it applies', { timeout: 30000 }, async t => {

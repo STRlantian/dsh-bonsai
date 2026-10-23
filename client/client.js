@@ -2924,10 +2924,19 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     { id: 'aggressive', label: '激进' },
   ]
 
-  /** Which preset (if any) the effective settings currently match. */
-  function currentPreset(effective) {
-    if (effective === undefined || effective === null) return 'custom'
-    var hidden = Array.isArray(effective.toolDeny) ? effective.toolDeny.length : 0
+  /**
+   * Which preset (if any) the settings currently match.
+   *
+   * Hidden tools are stored as an override and never appear in `effective`, so both bags are
+   * consulted; reading only the effective one made 激进 look like a custom setup.
+   */
+  function currentPreset(settings) {
+    if (settings === undefined || settings === null) return 'custom'
+    var effective = settings.effective || {}
+    var overrides = settings.overrides || {}
+    var fromOverrides = Array.isArray(overrides.toolDeny) ? overrides.toolDeny.length : 0
+    var fromEffective = Array.isArray(effective.toolDeny) ? effective.toolDeny.length : 0
+    var hidden = fromOverrides > 0 ? fromOverrides : fromEffective
     if (effective.foldAboveTokens === 60000 && effective.foldKeepTurns === 4 && hidden === 0) return 'conservative'
     if (effective.foldAboveTokens === 40000 && effective.foldKeepTurns === 3 && hidden === 0) return 'balanced'
     if (effective.foldAboveTokens === 20000 && effective.foldKeepTurns === 2 && hidden > 0) return 'aggressive'
@@ -3139,7 +3148,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         if (value === 'custom') {
           openCustomSettings(function () {
             readSettings().then(function (settings) {
-              select.value = currentPreset(settings && settings.effective)
+              select.value = currentPreset(settings)
             }).catch(function () {})
           })
           return
@@ -3148,7 +3157,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         writePreset(value).then(function () {
           return readSettings()
         }).then(function (settings) {
-          select.value = currentPreset(settings && settings.effective)
+          select.value = currentPreset(settings)
         }).catch(function () {}).then(function () { select.disabled = false })
       })
       wrap.appendChild(select)
@@ -3159,7 +3168,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     /** Point the select at whatever the settings currently match. */
     function refresh(select) {
       readSettings().then(function (settings) {
-        select.value = currentPreset(settings && settings.effective)
+        select.value = currentPreset(settings)
       }).catch(function () {})
     }
 
@@ -3202,7 +3211,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var setPreset = state[1]
     React.useEffect(function () {
       readSettings().then(function (settings) {
-        setPreset(currentPreset(settings && settings.effective))
+        setPreset(currentPreset(settings))
       }).catch(function () {})
     }, [])
     return h('select', {
