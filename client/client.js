@@ -475,6 +475,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-mode-select:hover{opacity:1}',
     '.twt-qrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px}',
     '.twt-qname{opacity:.75}',
+    '.twt-preset-chip{position:fixed;right:14px;bottom:14px;z-index:70;width:34px;height:34px;border-radius:50%;border:1px solid var(--twt-border);background:var(--twt-surface);color:inherit;font-size:15px;line-height:1;cursor:pointer;opacity:.72;box-shadow:0 6px 18px rgba(0,0,0,.25)}',
+    '.twt-preset-chip:hover{opacity:1}',
     '.twt-togglerow .twt-hint{margin-left:4px;opacity:.55}',
     '.twt-select{font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--twt-border);background:var(--twt-surface);color:var(--twt-text);color-scheme:light dark}',
     '.twt-select:focus{outline:2px solid var(--twt-accent);outline-offset:1px}',
@@ -3144,9 +3146,43 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       return wrap
     }
 
+    /** The labels the host uses for its two composer modes. */
+    var MODE_LABELS = ['标准模式', '创造模式', 'Standard mode', 'Creative mode']
+
+    /**
+     * Find the composer mode row by its labels.
+     *
+     * Class names are hashed and version-specific, the words are not. A row is the smallest
+     * element that contains at least two of the labels.
+     * @returns The row element, or null while the composer is not on screen.
+     */
+    function findModeRow() {
+      var candidates = document.querySelectorAll('button, [role="tab"], [role="radio"], [role="option"], span, div')
+      for (var index = 0; index < candidates.length; index++) {
+        var node = candidates[index]
+        if (node.closest !== undefined && node.closest('.twt-mode-preset') !== null) continue
+        if (node.closest !== undefined && node.closest('.twt-modal-backdrop') !== null) continue
+        var text = (node.textContent || '').trim()
+        var aria = (node.getAttribute && node.getAttribute('aria-label')) || ''
+        if (MODE_LABELS.indexOf(text) === -1 && MODE_LABELS.every(function (label) { return aria.indexOf(label) === -1 })) continue
+        var parent = node.parentElement
+        if (parent === null) continue
+        // A native <select> carries both labels in its textContent; anchor beside it instead.
+        if (parent.tagName === 'SELECT' && parent.parentElement !== null) parent = parent.parentElement
+        var parentText = (parent.textContent || '')
+        var matches = MODE_LABELS.filter(function (label) { return parentText.indexOf(label) >= 0 }).length
+        if (matches >= 2) return parent
+      }
+      return null
+    }
+
     function attach() {
-      var host = document.querySelector('[class*="modeControls"]')
-      if (host === null) return false
+      var host = findModeRow()
+      if (host === null) {
+        showChip()
+        return false
+      }
+      hideChip()
       if (host.querySelector('.twt-mode-preset') !== null) {
         attached = host
         return true
@@ -3156,6 +3192,24 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       attached = host
       refresh()
       return true
+    }
+
+    /** Last resort: a small fixed chip so the dialog is reachable without an anchor. */
+    function showChip() {
+      if (document.getElementById('twt-preset-chip') !== null) return
+      ensureStyles()
+      var chip = document.createElement('button')
+      chip.id = 'twt-preset-chip'
+      chip.className = 'twt-preset-chip'
+      chip.textContent = '🌳'
+      chip.title = t('盆栽 · 预设与折叠')
+      chip.addEventListener('click', function () { openCustomSettings(refresh) })
+      document.body.appendChild(chip)
+    }
+
+    function hideChip() {
+      var chip = document.getElementById('twt-preset-chip')
+      if (chip !== null) chip.remove()
     }
 
     if (attach()) return
