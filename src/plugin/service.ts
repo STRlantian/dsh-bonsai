@@ -105,6 +105,13 @@ export interface SessionState {
     hasService: boolean
     fired: boolean
     at: number
+    /** What the compaction would read, and how many turns it takes to pay off. */
+    estimate?: {
+      readTokens: number
+      summaryTokens: number
+      savedPerTurn: number
+      turnsToBreakEven: number
+    } | null
   }
   /** Shape of the last `decision.messages` we were given, for diagnosing the hook. */
   probe?: { count: number; chars: number; kinds: string[] }
@@ -1396,6 +1403,35 @@ export class TokenTreeService {
    */
   noteAutoCompactProbe(sessionId: string, probe: NonNullable<SessionState['autoCompactProbe']>): void {
     this.stateOf(sessionId).autoCompactProbe = probe
+  }
+
+  /**
+   * What a compaction would cost right now, and how long it takes to pay for itself.
+   *
+   * The call reads the whole conversation once; each later turn then carries the summary
+   * instead of the history. Comparing token counts (not money) keeps this honest: almost all
+   * of both sides is cache-hit, so the real gain is context headroom and latency.
+   * @param sessionId - session identity.
+   * @param summaryTokens - assumed size of the summary checkpoint.
+   * @returns The estimate, or `null` when there is nothing to compact.
+   */
+  compactionEstimate(sessionId: string, summaryTokens = 400): {
+    conversationTokens: number
+    readTokens: number
+    summaryTokens: number
+    savedPerTurn: number
+    turnsToBreakEven: number
+  } | null {
+    const conversationTokens = this.conversationTokens(sessionId)
+    if (conversationTokens <= summaryTokens) return null
+    const savedPerTurn = conversationTokens - summaryTokens
+    return {
+      conversationTokens,
+      readTokens: conversationTokens,
+      summaryTokens,
+      savedPerTurn,
+      turnsToBreakEven: Math.max(1, Math.ceil(conversationTokens / savedPerTurn)),
+    }
   }
 
   /**

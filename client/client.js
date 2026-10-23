@@ -46,6 +46,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。": "That turn is outside the rendered transcript (virtualised list); see the detail panel instead.",
   "界面语言": "Language",
   "自动压缩阈值": "Auto-compact threshold",
+  "当前会话 {} tok；压缩一次会读 {} tok，之后每轮约省 {} tok，约 {} 轮回本（缓存价约为输入价的 1/10，实际花费远低于这些数字）": "This conversation: {} tok. A compaction reads {} tok and saves about {} tok per turn, paying off after roughly {} turn(s). Cached reads cost about a tenth of fresh input, so the real spend is far below these numbers.",
   "对话 token 超过这个值就主动压缩（0 = 关闭）。这是唯一能真正减少 input 的手段，代价是丢失细节": "Compact once the conversation passes this many tokens (0 disables). The only lever that actually reduces input, at the cost of detail.",
   "「自动」跟随浏览器/系统语言；选择后只影响这个插件，不影响宿主": "Auto follows the browser language; the choice only affects this plugin",
   "自动": "Auto",
@@ -1318,6 +1319,14 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               : settings.tokenizer.available.join(', '),
             settings.budget === undefined ? '-' : settings.budget.factor.toFixed(2),
             settings.billing === undefined ? '-' : (settings.billing.active ? t(t('生效')) : t(t('样本不足'))))),
+        settings && settings.autoCompact && settings.autoCompact.estimate !== undefined && settings.autoCompact.estimate !== null
+          ? h('p', { className: 'twt-hint' },
+            tf('当前会话 {} tok；压缩一次会读 {} tok，之后每轮约省 {} tok，约 {} 轮回本（缓存价约为输入价的 1/10，实际花费远低于这些数字）',
+              settings.autoCompact.tokens,
+              settings.autoCompact.estimate.readTokens,
+              settings.autoCompact.estimate.savedPerTurn,
+              settings.autoCompact.estimate.turnsToBreakEven))
+          : null,
         settingRow({
           key: 'autoCompactAboveTokens',
           label: t('自动压缩阈值'),

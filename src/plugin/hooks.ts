@@ -172,6 +172,7 @@ function maybeCompact(ctx: ContextLike, service: TokenTreeService, agent: AgentL
   const hasService = typeof compactNow === 'function'
   const tokens = service.conversationTokens(sessionId)
   const threshold = service.effective().autoCompactAboveTokens
+  const estimate = service.compactionEstimate(sessionId)
   // Recorded even when nothing happens, so the settings route can explain why.
   service.noteAutoCompactProbe(sessionId, {
     tokens,
@@ -180,6 +181,14 @@ function maybeCompact(ctx: ContextLike, service: TokenTreeService, agent: AgentL
     hasService,
     fired: false,
     at: Date.now(),
+    estimate: estimate === null
+      ? null
+      : {
+        readTokens: estimate.readTokens,
+        summaryTokens: estimate.summaryTokens,
+        savedPerTurn: estimate.savedPerTurn,
+        turnsToBreakEven: estimate.turnsToBreakEven,
+      },
   })
   if (due === null) return
   if (!hasService) {
@@ -187,7 +196,27 @@ function maybeCompact(ctx: ContextLike, service: TokenTreeService, agent: AgentL
     return
   }
   service.noteCompacted(sessionId)
-  service.noteAutoCompactProbe(sessionId, { tokens, threshold, due: true, hasService: true, fired: true, at: Date.now() })
+  service.noteAutoCompactProbe(sessionId, {
+    tokens,
+    threshold,
+    due: true,
+    hasService: true,
+    fired: true,
+    at: Date.now(),
+    estimate: estimate === null
+      ? null
+      : {
+        readTokens: estimate.readTokens,
+        summaryTokens: estimate.summaryTokens,
+        savedPerTurn: estimate.savedPerTurn,
+        turnsToBreakEven: estimate.turnsToBreakEven,
+      },
+  })
+  if (estimate !== null) {
+    ctx.logger.info(
+      `token-tree: compaction will read ${estimate.readTokens} tokens and save ${estimate.savedPerTurn}/turn, paying off after ${estimate.turnsToBreakEven} turn(s)`,
+    )
+  }
   ctx.logger.info(
     `token-tree: auto-compacting session ${sessionId} (${due.tokens} tokens over the ${due.threshold} threshold)`,
   )
