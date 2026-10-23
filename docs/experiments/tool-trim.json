@@ -1,0 +1,62 @@
+{
+  "deny": [
+    "workflow",
+    "schedule_create",
+    "schedule_update",
+    "schedule_delete",
+    "schedule_list",
+    "subagent_fork",
+    "ask_user_question",
+    "update_goal",
+    "get_goal"
+  ],
+  "baseline": {
+    "tools": {
+      "count": 37,
+      "chars": 34271
+    },
+    "promptTokens": 10453,
+    "restriction": {
+      "agentId": "session-c2a5cbb5-ca1f-46af-a944-f6cc448d2c1a",
+      "deny": [
+        "workflow",
+        "schedule_create",
+        "schedule_update",
+        "schedule_delete",
+        "schedule_list",
+        "subagent",
+        "subagent_fork",
+        "ask_user_question",
+        "update_goal",
+        "get_goal"
+      ],
+      "applied": false,
+      "shape": "ctx=object tools=object ctxKeys=[] toolKeys=[\"ctx\",\"name\",\"deferredContexts\",\"concludingExecutions\",\"cancellationStates\",\"contentFinalizers\",\"contentProjectors\",\"layers\",\"defaultMode\",\"maxParallelSubCalls\",\"ptcTransport\",\"ptcContext\",\"canonicalResults\"] error=tools.restrict() names unknown global tool \"subagent\"; known global tools: ask_user_question, create_goal, edit, exit_plan_mode, get_goal, glob, grep, interrupt_agent, job_kill, job_list, job_output, list_agents, present, pwsh, read, read_image, retrieve_context, schedule_create, schedule_delete, schedule_list, schedule_update, send_message, skill, subagent_fork, todo_write, tree_backtrack, tree_focus, tree_mark, tree_query, tree_reflect, update_goal, web_fetch, web_search, workflow, working_directory, write",
+      "at": 1792723762315
+    }
+  },
+  "trimmed": {
+    "tools": {
+      "count": 28,
+      "chars": 21224
+    },
+    "promptTokens": 7076,
+    "restriction": {
+      "agentId": "session-f1d28d30-45d2-4dc6-bcfc-b584efd29a42",
+      "deny": [
+        "workflow",
+        "schedule_create",
+        "schedule_update",
+        "schedule_delete",
+        "schedule_list",
+        "subagent_fork",
+        "ask_user_question",
+        "update_goal",
+        "get_goal"
+      ],
+      "applied": true,
+      "shape": "ctx=object tools=object ctxKeys=[] toolKeys=[\"ctx\",\"name\",\"deferredContexts\",\"concludingExecutions\",\"cancellationStates\",\"contentFinalizers\",\"contentProjectors\",\"layers\",\"defaultMode\",\"maxParallelSubCalls\",\"ptcTransport\",\"ptcContext\",\"canonicalResults\"]",
+      "at": 1792723771492
+    }
+  }
+}

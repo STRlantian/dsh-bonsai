@@ -45,6 +45,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "单击选中；双击跳到对话中的这一轮": "Click to select; double-click to jump to that turn",
   "这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。": "That turn is outside the rendered transcript (virtualised list); see the detail panel instead.",
   "界面语言": "Language",
+  "隐藏工具": "Hide tools",
+  "逗号分隔。工具 schema 是 prompt 的大头：实测隐藏 9 个工具可省 3,377 token/轮（−32%），且每轮都省。名字必须存在，否则整批被拒": "Comma separated. Tool schemas dominate the prompt: hiding nine tools saved 3,377 tokens per turn (-32%) in measurement. Names must exist, otherwise the whole filter is rejected.",
+  "上次隐藏失败：": "Last hide attempt failed: ",
   "回收站": "Recycle bin",
   "回收站是空的：没有已隐藏的分支。": "The recycle bin is empty: no hidden branches.",
   "恢复此分支": "Restore",
@@ -1352,6 +1355,28 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             },
           }),
         }),
+        settingRow({
+          key: 'toolDeny',
+          label: t('隐藏工具'),
+          hint: t('逗号分隔。工具 schema 是 prompt 的大头：实测隐藏 9 个工具可省 3,377 token/轮（−32%），且每轮都省。名字必须存在，否则整批被拒'),
+          control: h('input', {
+            type: 'text',
+            defaultValue: ((settings && settings.overrides && Array.isArray(settings.overrides.toolDeny))
+              ? settings.overrides.toolDeny.join(', ')
+              : ''),
+            disabled: busy,
+            placeholder: 'workflow, schedule_create, ...',
+            style: { width: '260px' },
+            onBlur: function (event) {
+              var raw = String(event.target.value || '')
+              var names = raw.split(',').map(function (entry) { return entry.trim() }).filter(function (entry) { return entry !== '' })
+              saveSetting('toolDeny', names.length === 0 ? null : names)
+            },
+          }),
+        }),
+        settings && settings.toolRestriction && settings.toolRestriction.applied === false && settings.toolRestriction.error
+          ? h('p', { className: 'twt-hint twt-err' }, t('上次隐藏失败：') + settings.toolRestriction.error)
+          : null,
         settingRow({
           key: 'locale',
           label: t('界面语言'),

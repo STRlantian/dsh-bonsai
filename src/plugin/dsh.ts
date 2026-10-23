@@ -73,6 +73,9 @@ export interface SessionLike {
 
 /** The live agent handle the plugin uses to queue context. */
 export interface AgentLike {
+  /** Agent-scoped context: the place to restrict that agent's tools. */
+  readonly ctx?: ContextLike
+
   /** Agent identity. */
   readonly id: string
   /** Backing session. */
@@ -121,6 +124,15 @@ export interface ToolDefinitionLike {
 export interface ToolRegistryLike {
   /** Add a tool; the returned disposer removes it. */
   register(definition: ToolDefinitionLike): () => void
+  /**
+   * Remove tools from this context's scope.
+   *
+   * The weakest mechanism the host offers for hiding a tool, and the only one that keeps the
+   * schema, the name lookup and the execution path aligned.
+   * @param filter - allow/deny masks by tool name.
+   * @returns A disposer, or nothing.
+   */
+  restrict?(filter: { allow?: readonly string[]; deny?: readonly string[] }): unknown
 }
 
 /** One durable session event envelope. */
@@ -257,6 +269,11 @@ export interface ContextLike {
   on(
     event: 'agent/turn-stopping',
     listener: (payload: TurnStoppingPayloadLike) => void | Promise<void>,
+  ): () => void
+  /** Register a per-agent creation listener; `agent.ctx` is that agent's scope. */
+  on(
+    event: 'agent/created',
+    listener: (payload: { agent: AgentLike }) => void,
   ): () => void
   /** Register a system-prompt assembly listener; it must call `next()`. */
   on(

@@ -95,12 +95,15 @@ export interface SessionState {
   lastHint?: { counted: number | undefined; above: number; fast: number; fired: boolean; reason: string }
   /** When the last automatic compaction ran, for the cooldown. */
   lastCompactAt?: number
+  /** Last tool restriction applied to an agent, for diagnostics. */
+  toolRestriction?: { agentId: string; deny: string[]; applied: boolean; shape?: string; error?: string; at: number }
   /** Last system-prompt assembly, recorded for diagnostics. */
   assembly?: {
     keys: string[]
     sections: { name: string; chars: number }[]
     totalChars: number
     parts: { name: string; items: number; chars: number }[]
+    tools: { name: string; chars: number }[]
     at: number
   }
   /** Whether the post-compaction index was already injected. */
@@ -319,7 +322,7 @@ export class TokenTreeService {
    */
   updateSettings(patch: Record<string, unknown>): {
     effective: ReturnType<TokenTreeService['effective']>
-    overrides: Record<string, boolean | number | string>
+    overrides: Record<string, boolean | number | string | string[]>
   } {
     const overrides = this.settings === undefined ? {} : this.settings.apply(patch)
     this.logger.info(`token-tree: settings updated ${JSON.stringify(overrides)}`)
@@ -355,7 +358,7 @@ export class TokenTreeService {
   /** The override file in use, for the settings panel to show. */
   settingsInfo(): {
     path: string | null
-    overrides: Record<string, boolean | number | string>
+    overrides: Record<string, boolean | number | string | string[]>
     base: ReturnType<TokenTreeService['effective']> & { hintAboveTokens: number; tokenizerPath: string | null }
     tokenizer: {
       path: string | null
@@ -373,13 +376,14 @@ export class TokenTreeService {
     lastPrompt: SessionState['probe'] | null
     lastDecision: SessionState['decisionShape'] | null
     lastAssembly: SessionState['assembly'] | null
+    toolRestriction: NonNullable<SessionState['toolRestriction']> | null
     autoCompact: SessionState['autoCompactProbe'] | null
     drift: { samples: number; ratio: number | null }
     lastHint: SessionState['lastHint'] | null
   } {
     return {
       path: this.settings === undefined ? null : this.settings.path,
-      overrides: { ...(this.settings?.all() ?? {}) } as Record<string, boolean | number | string>,
+      overrides: { ...(this.settings?.all() ?? {}) } as Record<string, boolean | number | string | string[]>,
       base: {
         autoInject: this.config.autoInject,
         retrievalHint: this.config.retrievalHint,
@@ -411,6 +415,7 @@ export class TokenTreeService {
       lastPrompt: this.lastPromptInfo(),
       lastDecision: this.lastDecisionInfo(),
       lastAssembly: this.assemblyInfo(),
+      toolRestriction: this.stateOf('assembly').toolRestriction ?? null,
       autoCompact: this.autoCompactInfo(),
       drift: this.driftInfo(),
       lastHint: this.lastHintInfo(),
@@ -1364,6 +1369,29 @@ export class TokenTreeService {
     return latest ?? null
   }
 
+  /**
+   * Record a tool restriction attempt.
+   * @param agentId - agent the restriction was applied to.
+   * @param deny - tool names that were hidden.
+   * @param applied - whether the host accepted the call.
+   */
+  noteToolRestriction(agentId: string, deny: readonly string[], applied: boolean, shape?: string, error?: string): void {
+    this.stateOf('assembly').toolRestriction = {
+      agentId,
+      deny: [...deny],
+      applied,
+      ...(shape === undefined ? {} : { shape }),
+      ...(error === undefined ? {} : { error }),
+      at: Date.now(),
+    }
+  }
+
+  /** The tool names the user asked to hide. */
+  toolDeny(): string[] {
+    const override = this.settings?.all().toolDeny
+    return override ?? []
+  }
+
   /** Shape of the last assembled system prompt. */
   private assemblyInfo(): SessionState['assembly'] | null {
     return this.stateOf('assembly').assembly ?? null
@@ -1551,8 +1579,28 @@ export class TokenTreeService {
         parts.push({ name: key, items, chars })
       }
     }
+    // Per-tool schema sizes: the tools are ~83% of the prompt by volume, so knowing which
+    // ones are expensive is what makes an allow/deny decision possible.
+    const toolSizes: { name: string; chars: number }[] = []
+    if (assembly !== null && typeof assembly === 'object') {
+      const list = (assembly as Record<string, unknown>).tools
+      if (Array.isArray(list)) {
+        for (const entry of list) {
+          if (entry === null || typeof entry !== 'object') continue
+          const tool = entry as Record<string, unknown>
+          const name = typeof tool.name === 'string' ? tool.name : '?'
+          let chars = 0
+          try {
+            chars = JSON.stringify(entry)?.length ?? 0
+          } catch {
+            chars = -1
+          }
+          toolSizes.push({ name, chars })
+        }
+      }
+    }
     const sessionId = 'assembly'
-    this.stateOf(sessionId).assembly = { keys, sections, totalChars: total, parts, at: Date.now() }
+    this.stateOf(sessionId).assembly = { keys, sections, totalChars: total, parts, tools: toolSizes, at: Date.now() }
   }
 
   /** Current learned ratio, for the settings panel and the logs. */

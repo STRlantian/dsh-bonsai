@@ -108,6 +108,39 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     }
   })
 
+  // Hide tools the user listed. Done on the agent's own scope, which is the weakest
+  // mechanism the host offers for this (it keeps schema, lookup and execution aligned).
+  try {
+    ctx.on('agent/created', (payload) => {
+      const agent = payload?.agent
+      if (agent === undefined) return
+      const deny = service.toolDeny()
+      if (deny.length === 0) return
+      const scoped = agent.ctx
+      const registry = scoped?.tools
+      const restrict = registry?.restrict
+      const shape = `ctx=${typeof scoped} tools=${typeof registry} ctxKeys=${JSON.stringify(Object.keys(scoped ?? {}).slice(0, 14))} toolKeys=${JSON.stringify(Object.keys(registry ?? {}))}`
+      if (typeof restrict !== 'function') {
+        ctx.logger.warn(
+          `token-tree: no tools.restrict on the agent context (ctx=${typeof scoped}, tools=${typeof registry}, keys=${JSON.stringify(Object.keys(registry ?? {}))}, ctxKeys=${JSON.stringify(Object.keys(scoped ?? {}))})`,
+        )
+        service.noteToolRestriction(String(agent.id ?? 'agent'), deny, false)
+        ctx.logger.warn('token-tree: toolDeny is configured but this host exposes no tools.restrict()')
+        return
+      }
+      try {
+        restrict.call(agent.ctx?.tools, { deny })
+        service.noteToolRestriction(String(agent.id ?? 'agent'), deny, true, shape)
+        ctx.logger.info(`token-tree: hid ${deny.length} tool(s) from agent ${agent.id}: ${deny.join(', ')}`)
+      } catch (error) {
+        service.noteToolRestriction(String(agent.id ?? 'agent'), deny, false, shape, describe(error))
+        ctx.logger.warn(`token-tree: could not hide tools (${describe(error)})`)
+      }
+    })
+  } catch (error) {
+    ctx.logger.debug(`token-tree: agent/created not available (${describe(error)})`)
+  }
+
   // Read-only observation of the prompt the host is about to assemble.
   try {
     ctx.on('system-prompt/assemble', (assembly, _context, next) => {

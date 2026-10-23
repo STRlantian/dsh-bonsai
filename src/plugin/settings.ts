@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** Keys the settings surface may override. */
-const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'autoCompactAboveTokens', 'compactionIndex', 'admitRelevance', 'summaryMatch'] as const
+const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'autoCompactAboveTokens', 'compactionIndex', 'toolDeny', 'admitRelevance', 'summaryMatch'] as const
 
 export interface SettingsOverrides {
   /** Push a memory block every turn instead of the one-line hint. */
@@ -37,6 +37,8 @@ export interface SettingsOverrides {
   autoCompactAboveTokens?: number
   /** Whether the first hint after a compaction lists the folded nodes. */
   compactionIndex?: boolean
+  /** Tool names to hide from the agent; the schemas are a large part of every prompt. */
+  toolDeny?: string[]
   /**
    * Raw-relevance floor for admitting a node into the retrieval buffer (0–1).
    * Ranking still uses the blended score; this only decides who is allowed in.
@@ -76,7 +78,12 @@ export function defaultSettingsPath(): string {
  * @param value - candidate value.
  * @returns The value when it has the right type, otherwise `undefined`.
  */
-function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number | string | undefined {
+function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number | string | string[] | undefined {
+  if (key === 'toolDeny') {
+    if (!Array.isArray(value)) return undefined
+    const names = value.filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '').map(entry => entry.trim())
+    return names.length === 0 ? undefined : [...new Set(names)]
+  }
   if (key === 'compactionIndex') {
     if (typeof value !== 'boolean') return undefined
     return value
@@ -160,7 +167,7 @@ export class SettingsStore {
     for (const key of SETTING_KEYS) {
       if (!(key in source)) continue
       const value = coerce(key, source[key])
-      if (value !== undefined) (out as Record<string, boolean | number | string>)[key] = value
+      if (value !== undefined) (out as Record<string, boolean | number | string | string[]>)[key] = value
     }
     return out
   }
@@ -187,7 +194,7 @@ export class SettingsStore {
         continue
       }
       const value = coerce(key, raw)
-      if (value !== undefined) (next as Record<string, boolean | number | string>)[key] = value
+      if (value !== undefined) (next as Record<string, boolean | number | string | string[]>)[key] = value
     }
     this.current = next
     this.persist()
