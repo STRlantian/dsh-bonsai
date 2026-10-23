@@ -389,6 +389,7 @@ export class TokenTreeService {
     toolRestriction: NonNullable<SessionState['toolRestriction']> | null
     fold: NonNullable<SessionState['fold']> | null
     sessionCapability: SessionState['sessionCapability'] | null
+    availableTools: { name: string; chars: number }[]
     autoCompact: SessionState['autoCompactProbe'] | null
     drift: { samples: number; ratio: number | null }
     lastHint: SessionState['lastHint'] | null
@@ -433,6 +434,7 @@ export class TokenTreeService {
       toolRestriction: this.stateOf('assembly').toolRestriction ?? null,
       fold: this.stateOf('assembly').fold ?? null,
       sessionCapability: this.stateOf('assembly').sessionCapability ?? null,
+      availableTools: this.availableTools(),
       autoCompact: this.autoCompactInfo(),
       drift: this.driftInfo(),
       lastHint: this.lastHintInfo(),
@@ -1442,6 +1444,20 @@ export class TokenTreeService {
     extra: { planned?: number; visible?: number; range?: string; error?: string } = {},
   ): void {
     this.stateOf('assembly').fold = { sessionId, folded, tokens, threshold, ...extra, at: Date.now() }
+  }
+
+  /**
+   * Tools the last assembled prompt carried, heaviest first.
+   *
+   * The client uses this to draw a checkbox list, which is the only way to pick names that
+   * `tools.restrict()` will accept: it validates them, and one unknown name rejects the filter.
+   * @returns Tool names with their schema size in characters; empty before any assembly.
+   */
+  private availableTools(): { name: string; chars: number }[] {
+    const tools = this.stateOf('assembly').assembly?.tools ?? []
+    return [...tools]
+      .filter(tool => typeof tool.name === 'string' && tool.name !== '?')
+      .sort((left, right) => right.chars - left.chars)
   }
 
   /** Shape of the last assembled system prompt. */

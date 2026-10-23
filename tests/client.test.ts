@@ -71,6 +71,12 @@ function settingsPayload() {
     budget: { factor: 0.85, conservative: 0.85 },
     drift: { samples: 0, ratio: null },
     lastHint: null,
+    availableTools: [
+      { name: 'pwsh', chars: 3495 },
+      { name: 'workflow', chars: 3389 },
+      { name: 'schedule_create', chars: 3143 },
+    ],
+    toolRestriction: null,
   }
 }
 
@@ -283,6 +289,35 @@ test('the settings tab offers the tokenizer dropdown from the payload', { timeou
   const options = [...select.querySelectorAll('option')].map(option => `${option.value}:${option.textContent}`)
   assert.deepEqual(options, ['auto:自动（最新一代）', '3:DeepSeek v3', '4:DeepSeek v4', 'off:自主学习（不用词表）'])
   assert.equal(select.value, '4', 'shows the generation actually in use')
+})
+
+test('tools are hidden through a checklist, not a name field', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  await client.click('盆栽')
+  await client.click('设置')
+  const open = [...client.document.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('选择工具'))
+  assert.ok(open !== undefined, 'the settings row offers the picker')
+  await React.act(async () => { open.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+  const rows = [...client.document.querySelectorAll('.twt-tool-row')]
+  assert.equal(rows.length, 3, 'every tool the host reported is listed')
+  assert.ok((rows[0].textContent ?? '').includes('pwsh'), 'heaviest tool first')
+  const workflow = rows.find(row => (row.textContent ?? '').includes('workflow'))
+  assert.ok(workflow !== undefined, 'workflow is listed')
+  const box = workflow.querySelector('input[type="checkbox"]')
+  await React.act(async () => { box.click() })
+  await client.flush()
+  const checked = [...client.document.querySelectorAll('.twt-tool-row input:checked')]
+  assert.equal(checked.length, 1, 'the row reacts to the click')
+  const apply = [...client.document.querySelectorAll('.twt-modal-foot button')].find(button => (button.textContent ?? '').includes('应用'))
+  assert.ok(apply !== undefined, 'apply is offered')
+  await React.act(async () => { apply.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+  const saved = client.requests.find(entry => entry.url.includes('/api/token-tree/settings') && entry.method === 'POST')
+  assert.ok(saved !== undefined, 'settings POST issued')
+  assert.ok(String(saved.body).includes('toolDeny'), 'the chosen names are persisted')
+  assert.ok(String(saved.body).includes('workflow'), 'and it is the checked tool')
 })
 
 test('the settings panel can switch the interface language', { timeout: 30000 }, async t => {

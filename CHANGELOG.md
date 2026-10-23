@@ -7,8 +7,10 @@ history can now leave the model's view without a model call.
 
 ### Added
 
-- **Tool trimming** (`toolDeny`) — hides named tools per agent through the host's own
-  `ctx.tools.restrict()`. Measured: 37 tools → 28 and 10,453 → 7,076 prompt tokens, **−3,377
+- **Tool trimming** (`toolDeny`) — pick tools from a checklist built from the host's last
+  assembly, not from memory: the settings row opens a modal with a search field, the schema
+  size of every tool, and the tokens the current selection saves. Hides them per agent through
+  the host's own `ctx.tools.restrict()`. Measured: 37 tools → 28 and 10,453 → 7,076 prompt tokens, **−3,377
   tokens on every turn**. Off by default; the settings panel shows the host's rejection reason
   (it validates names, and one unknown name rejects the whole filter).
 - **History folding** (`foldAboveTokens`, `foldKeepTurns`, `foldScope`) — appends a

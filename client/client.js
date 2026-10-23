@@ -46,6 +46,18 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。": "That turn is outside the rendered transcript (virtualised list); see the detail panel instead.",
   "界面语言": "Language",
   "隐藏工具": "Hide tools",
+  "工具 schema 是 prompt 的大头：实测隐藏 9 个可省 3,377 token/轮（−32%）。默认一个都不藏": "Tool schemas dominate the prompt: hiding nine of them saved 3,377 tokens per turn (-32%) in measurement. Nothing is hidden by default.",
+  "已隐藏 {} 个": "{} hidden",
+  "选择工具…": "Choose tools…",
+  "暂无工具清单": "No tool list yet",
+  "先打开一个会话，宿主装配过提示词后才有工具清单": "Open a session first; the list appears once the host has assembled a prompt.",
+  "选择要隐藏的工具": "Choose tools to hide",
+  "共 {} 个 · 已选 {} 个 · 预计每轮省约 {} token": "{} available · {} selected · about {} tokens saved per turn",
+  "搜索工具名…": "Search tools…",
+  "没有匹配的工具。": "No matching tools.",
+  "全部显示": "Show all",
+  "应用": "Apply",
+  "{} 字符": "{} chars",
   "折叠历史阈值": "Fold history above",
   "超过这个 token 数就把旧的工具输出从模型视野里折叠掉（0 = 关闭）。用 surfaceOp replace，不调模型；原文留在日志与树里": "Above this many tokens, old tool output is folded out of the model view (0 disables). Uses surfaceOp replace with no model call; the original stays in the log and the tree.",
   "保留最近轮数": "Keep recent turns",
@@ -416,6 +428,16 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-basket-list{border-right:none}',
     '.twt-basket-row{display:grid;grid-template-columns:18px 48px minmax(0,1fr) auto auto;gap:8px;align-items:center}',
     '.twt-basket-row .twt-q{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.twt-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:80}',
+    '.twt-modal{width:min(560px,92vw);max-height:78vh;display:flex;flex-direction:column;gap:10px;padding:16px;background:var(--twt-surface);color:var(--twt-text);border:1px solid var(--twt-border);border-radius:12px;box-shadow:0 18px 48px rgba(0,0,0,.35)}',
+    '.twt-modal-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap}',
+    '.twt-modal-search{width:100%;padding:6px 10px;border-radius:8px;border:1px solid var(--twt-border);background:transparent;color:inherit;font-size:12px}',
+    '.twt-modal-list{flex:1;overflow:auto;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:2px 12px;min-height:120px}',
+    '.twt-tool-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 4px;border-radius:6px;cursor:pointer}',
+    '.twt-tool-row:hover{background:var(--twt-hover)}',
+    '.twt-tool-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Consolas,monospace}',
+    '.twt-tool-size{font-size:10px;opacity:.6}',
+    '.twt-modal-foot{display:flex;align-items:center;gap:8px}',
   '.twt-compare{display:flex;flex-direction:column;gap:8px;padding:8px 10px;overflow:auto;height:100%}',
   '.twt-compare-cols{display:flex;gap:10px;align-items:stretch;overflow:auto}',
   '.twt-branch-col{flex:1 1 0;min-width:180px;max-width:320px;border:1px solid var(--twt-border);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;background:var(--twt-surface)}',
@@ -1031,6 +1053,22 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var hideState = React.useState(false)
     var hideTools = hideState[0]
     var setHideTools = hideState[1]
+    var toolPickState = React.useState(false)
+    var toolPickerOpen = toolPickState[0]
+    var setToolPickerOpen = toolPickState[1]
+    var toolQueryState = React.useState('')
+    var toolQuery = toolQueryState[0]
+    var setToolQuery = toolQueryState[1]
+    var toolDraftState = React.useState([])
+    var toolDraft = toolDraftState[0]
+    var setToolDraft = toolDraftState[1]
+
+    // Tools the last assembly carried, and the ones the user hides. Defined before the
+    // settings panel is built, because that panel reads them.
+    var availableTools = (settings !== null && Array.isArray(settings.availableTools)) ? settings.availableTools : []
+    var deniedTools = (settings !== null && settings.overrides && Array.isArray(settings.overrides.toolDeny))
+      ? settings.overrides.toolDeny
+      : []
 
     function load() {
       var params = []
@@ -1378,21 +1416,20 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'toolDeny',
           label: t('隐藏工具'),
-          hint: t('逗号分隔。工具 schema 是 prompt 的大头：实测隐藏 9 个工具可省 3,377 token/轮（−32%），且每轮都省。名字必须存在，否则整批被拒'),
-          control: h('input', {
-            type: 'text',
-            defaultValue: ((settings && settings.overrides && Array.isArray(settings.overrides.toolDeny))
-              ? settings.overrides.toolDeny.join(', ')
-              : ''),
-            disabled: busy,
-            placeholder: 'workflow, schedule_create, ...',
-            style: { width: '260px' },
-            onBlur: function (event) {
-              var raw = String(event.target.value || '')
-              var names = raw.split(',').map(function (entry) { return entry.trim() }).filter(function (entry) { return entry !== '' })
-              saveSetting('toolDeny', names.length === 0 ? null : names)
-            },
-          }),
+          hint: t('工具 schema 是 prompt 的大头：实测隐藏 9 个可省 3,377 token/轮（−32%）。默认一个都不藏'),
+          control: h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+            h('span', { className: 'twt-hint', 'data-testid': 'tool-deny-count' },
+              tf('已隐藏 {} 个', deniedTools.length)),
+            h('button', {
+              className: 'twt-action',
+              disabled: busy || availableTools.length === 0,
+              title: availableTools.length === 0 ? t('先打开一个会话，宿主装配过提示词后才有工具清单') : undefined,
+              onClick: function () {
+                setToolDraft(deniedTools.slice())
+                setToolQuery('')
+                setToolPickerOpen(true)
+              },
+            }, availableTools.length === 0 ? t('暂无工具清单') : t('选择工具…'))),
         }),
         settings && settings.toolRestriction && settings.toolRestriction.applied === false && settings.toolRestriction.error
           ? h('p', { className: 'twt-hint twt-err' }, t('上次隐藏失败：') + settings.toolRestriction.error)
@@ -1644,6 +1681,72 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         })
         .catch(function (error) { setNote(tf('恢复失败：{}', error.message)) })
         .finally(function () { setBusy(false) })
+    }
+
+    /** Schema characters of the tools selected in the picker, and a rough token equivalent. */
+    function draftWeight() {
+      var chars = 0
+      availableTools.forEach(function (tool) {
+        if (toolDraft.indexOf(tool.name) >= 0) chars += tool.chars
+      })
+      return { chars: chars, tokens: Math.round(chars / 3.5) }
+    }
+
+    /** Toggle one tool in the draft selection. */
+    function toggleTool(name) {
+      setToolDraft(function (previous) {
+        return previous.indexOf(name) >= 0
+          ? previous.filter(function (entry) { return entry !== name })
+          : previous.concat([name])
+      })
+    }
+
+    /** The modal: search, checkboxes, and the measured saving. */
+    function renderToolPicker() {
+      if (!toolPickerOpen) return null
+      var needle = toolQuery.trim().toLowerCase()
+      var listed = availableTools.filter(function (tool) {
+        return needle === '' || tool.name.toLowerCase().indexOf(needle) >= 0
+      })
+      var weight = draftWeight()
+      var rows = listed.map(function (tool) {
+        var checked = toolDraft.indexOf(tool.name) >= 0
+        return h('label', { key: tool.name, className: 'twt-tool-row' },
+          h('input', {
+            type: 'checkbox',
+            checked: checked,
+            onChange: function () { toggleTool(tool.name) },
+          }),
+          h('span', { className: 'twt-tool-name' }, tool.name),
+          h('span', { className: 'twt-tool-size' }, tf('{} 字符', tool.chars)))
+      })
+      return h('div', { className: 'twt-modal-backdrop', onClick: function () { setToolPickerOpen(false) } },
+        h('div', { className: 'twt-modal', onClick: function (event) { event.stopPropagation() } },
+          h('div', { className: 'twt-modal-head' },
+            h('span', { className: 'twt-dtitle' }, t('选择要隐藏的工具')),
+            h('span', { className: 'twt-hint' }, tf('共 {} 个 · 已选 {} 个 · 预计每轮省约 {} token', availableTools.length, toolDraft.length, weight.tokens))),
+          h('input', {
+            className: 'twt-modal-search',
+            type: 'search',
+            placeholder: t('搜索工具名…'),
+            value: toolQuery,
+            onChange: function (event) { setToolQuery(event.target.value) },
+          }),
+          h('div', { className: 'twt-modal-list' },
+            listed.length === 0 ? h('p', { className: 'twt-note' }, t('没有匹配的工具。')) : rows),
+          h('div', { className: 'twt-modal-foot' },
+            h('button', { className: 'twt-action', onClick: function () { setToolDraft([]) } }, t('全部显示')),
+            h('span', { style: { flex: '1' } }),
+            h('button', { className: 'twt-action', onClick: function () { setToolPickerOpen(false) } }, t('取消')),
+            h('button', {
+              className: 'twt-action',
+              'data-kind': 'primary',
+              disabled: busy,
+              onClick: function () {
+                saveSetting('toolDeny', toolDraft.length === 0 ? null : toolDraft)
+                setToolPickerOpen(false)
+              },
+            }, t('应用')))))
     }
 
     /** The recycle bin: every hidden branch root, with a restore action. */
@@ -2072,7 +2175,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           h('button', { className: 'twt-close', onClick: onClose, title: t('关闭') }, '✕')),
         h('div', { className: 'twt-editor-body' },
           mode === 'settings'
-            ? settingsPanel
+            ? h(React.Fragment, null, settingsPanel, renderToolPicker())
             : h(React.Fragment, null,
               h('div', {
                 className: mode === 'graph' ? 'twt-elist twt-elist-graph' : 'twt-elist',
