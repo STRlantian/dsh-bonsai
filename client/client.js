@@ -75,6 +75,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "从清单里挑不需要的工具，模型就看不到它们。工具定义占 prompt 的大头，隐藏几个用得少的能明显省钱；默认一个都不藏": "Pick tools you do not need and the model stops seeing them. Tool definitions dominate the prompt, so hiding a few rarely used ones saves real tokens; nothing is hidden by default.",
   "对话超过这个 token 数就调用一次模型，把旧历史压成摘要（0 = 关闭）。会产生一次全量历史的费用；想更便宜就用下面的「折叠历史」": "Above this many tokens, one model call condenses old history into a summary (0 disables). It costs one pass over the whole history; the fold setting below is cheaper.",
   "隐藏工具": "Hide tools",
+  "其中推理": "of which reasoning",
   "工具 schema 是 prompt 的大头：实测隐藏 9 个可省 3,377 token/轮（−32%）。默认一个都不藏": "Tool schemas dominate the prompt: hiding nine of them saved 3,377 tokens per turn (-32%) in measurement. Nothing is hidden by default.",
   "已隐藏 {} 个": "{} hidden",
   "选择工具…": "Choose tools…",
@@ -2114,6 +2115,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           h('span', null, h('b', null, t('距当前')), String(selected.pathCost)),
           h('span', null, h('b', null, t('深度')), String(selected.depth)),
           h('span', null, h('b', null, 'tokens'), String(selected.tokens)),
+          selected.reasoningTokens === undefined
+            ? null
+            : h('span', null, h('b', null, t('其中推理')), String(selected.reasoningTokens)),
           h('span', null, h('b', null, t('父节点')), selected.parentId === null ? t('根') : String(selected.parentId)),
           h('span', null, h('b', null, t('状态')), selected.ignored === true ? t('已忽略') : (selected.pinned === true ? t('已置顶') : t('普通')))),
         h('div', { className: 'twt-actions' },

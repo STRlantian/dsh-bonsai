@@ -35,7 +35,7 @@ import type { ResolvedConfig } from './config.ts'
 import type { AgentLike, LoggerLike, SessionEventLike, SessionLike } from './dsh.ts'
 import type { EditOp, EditStore } from './store.ts'
 import type { SettingsStore } from './settings.ts'
-import { asMessage, buildInjectedMessage, isInjected, supervisorMessage, textOfContent } from './messages.ts'
+import { asMessage, buildInjectedMessage, isInjected, reasoningOfContent, supervisorMessage, textOfContent } from './messages.ts'
 import type { Classification, Constraint } from './requirements.ts'
 import { activeConstraints, applyConstraint, classifyTurn } from './requirements.ts'
 
@@ -901,12 +901,21 @@ export class TokenTreeService {
       return
     }
     const summary = summarize(text)
+    // The reasoning is measured and dropped: it costs tokens in every later request, but it is
+    // neither what the user asked nor what the answer says. Storing the count keeps the
+    // thresholds honest without keeping the text.
+    const reasoning = reasoningOfContent(message.content)
+    const reasoningTokens = reasoning.length === 0 ? 0 : this.countTokens(reasoning)
     state.tree.addNode({
       kind: 'answer',
       content: text,
-      tokens: this.countTokens(text),
+      tokens: this.countTokens(text) + reasoningTokens,
       timestamp: at,
-      metadata: { step: numberField(data.step) ?? state.step, turn: numberField(data.turn) ?? state.turn },
+      metadata: {
+        step: numberField(data.step) ?? state.step,
+        turn: numberField(data.turn) ?? state.turn,
+        ...(reasoningTokens === 0 ? {} : { reasoningTokens }),
+      },
       ...(summary === undefined ? {} : { summary }),
     })
     this.prune(state)

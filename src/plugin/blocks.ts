@@ -227,8 +227,10 @@ export interface NodeRow {
    * body, so a Q/A pair reads as a single unit instead of two chained boxes.
    */
   detail?: string
-  /** Token estimate of the node. */
+  /** Token estimate of the node, reasoning included. */
   tokens: number
+  /** Share of `tokens` spent on reasoning, when the model reported any. */
+  reasoningTokens?: number
   /** Cost of the edge into this node. */
   cost: number
   /** Cheapest-path cost from the focus, `0` when unreachable. */
@@ -328,6 +330,9 @@ export function nodesOf(
         ? { detail: truncateToTokens(answerOf(tree, node)!.content, MAX_PREVIEW_TOKENS) }
         : {}),
       tokens: node.tokens,
+      ...(typeof node.metadata.reasoningTokens === 'number' && node.metadata.reasoningTokens > 0
+        ? { reasoningTokens: node.metadata.reasoningTokens }
+        : {}),
       cost: Number((node.parentId === null ? 0 : (tree.edge(node.parentId, id)?.cost ?? 0)).toFixed(3)),
       pathCost: Number.isFinite(distance.get(id) ?? Number.POSITIVE_INFINITY) ? Number((distance.get(id) ?? 0).toFixed(3)) : 0,
       depth,

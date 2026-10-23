@@ -24,6 +24,36 @@ let messageCounter = 0
  * @param content - message content, of unknown shape.
  * @returns Concatenated text blocks, trimmed.
  */
+/**
+ * Whether a content block is a reasoning block.
+ * @param block - candidate block.
+ * @returns True for reasoning.
+ */
+function isReasoningBlock(block: unknown): block is Record<string, unknown> {
+  return typeof block === 'object'
+    && block !== null
+    && (block as Record<string, unknown>).type === 'reasoning'
+    && typeof (block as Record<string, unknown>).text === 'string'
+}
+
+/**
+ * Reasoning text of a message, joined block by block.
+ *
+ * Callers measure it and throw it away: the tree keeps only the count, because the reasoning is
+ * not part of what the user asked or the model said.
+ * @param content - message content blocks.
+ * @returns Concatenated reasoning text, empty when there is none.
+ */
+export function reasoningOfContent(content: unknown): string {
+  if (!Array.isArray(content)) return ''
+  const parts: string[] = []
+  for (const block of content) {
+    if (!isReasoningBlock(block)) continue
+    parts.push(block.text as string)
+  }
+  return parts.join('\n')
+}
+
 export function textOfContent(content: unknown): string {
   if (!Array.isArray(content)) return ''
   const parts: string[] = []
