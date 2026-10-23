@@ -31,9 +31,9 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "node scripts/build.mjs --noEmit",
-    "test": "node --test --test-isolation=none \"tests/*.test.ts\"",
-    "check": "node scripts/build.mjs --noEmit && node --test --test-isolation=none \"tests/*.test.ts\"",
-    "prepublishOnly": "node scripts/build.mjs && node scripts/stage.mjs && node --test --test-isolation=none \"tests/*.test.ts\"",
+    "test": "node --test \"tests/*.test.ts\"",
+    "check": "node scripts/build.mjs --noEmit && node --test \"tests/*.test.ts\"",
+    "prepublishOnly": "node scripts/build.mjs && node scripts/stage.mjs && node --test \"tests/*.test.ts\"",
     "version:test": "node scripts/bump-test-version.mjs"
   },
   "devDependencies": {
@@ -44,7 +44,7 @@
     "typescript": "^6.0.3"
   },
   "engines": {
-    "node": "^22.19 || >=24"
+    "node": ">=24"
   },
   "dsh": {
     "bundle": {
