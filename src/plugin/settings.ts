@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** Keys the settings surface may override. */
-const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'autoCompactAboveTokens', 'admitRelevance', 'summaryMatch'] as const
+const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'autoCompactAboveTokens', 'compactionIndex', 'admitRelevance', 'summaryMatch'] as const
 
 export interface SettingsOverrides {
   /** Push a memory block every turn instead of the one-line hint. */
@@ -35,6 +35,8 @@ export interface SettingsOverrides {
   locale?: string
   /** Conversation tokens that trigger an automatic compaction; `0` disables it. */
   autoCompactAboveTokens?: number
+  /** Whether the first hint after a compaction lists the folded nodes. */
+  compactionIndex?: boolean
   /**
    * Raw-relevance floor for admitting a node into the retrieval buffer (0–1).
    * Ranking still uses the blended score; this only decides who is allowed in.
@@ -75,6 +77,10 @@ export function defaultSettingsPath(): string {
  * @returns The value when it has the right type, otherwise `undefined`.
  */
 function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number | string | undefined {
+  if (key === 'compactionIndex') {
+    if (typeof value !== 'boolean') return undefined
+    return value
+  }
   if (key === 'autoCompactAboveTokens') {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined
     return value

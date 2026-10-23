@@ -289,6 +289,7 @@ export class TokenTreeService {
     admitRelevance: number
     summaryMatch: boolean
     autoCompactAboveTokens: number
+    compactionIndex: boolean
   } {
     const overrides = this.settings?.all() ?? {}
     return {
@@ -299,6 +300,7 @@ export class TokenTreeService {
       admitRelevance: overrides.admitRelevance ?? this.config.weights.admitRelevance,
       summaryMatch: overrides.summaryMatch ?? this.config.weights.summaryMatch,
       autoCompactAboveTokens: overrides.autoCompactAboveTokens ?? this.config.autoCompactAboveTokens,
+      compactionIndex: overrides.compactionIndex ?? this.config.compactionIndex,
     }
   }
 
@@ -377,6 +379,7 @@ export class TokenTreeService {
         admitRelevance: this.config.weights.admitRelevance,
         summaryMatch: this.config.weights.summaryMatch,
         autoCompactAboveTokens: this.config.autoCompactAboveTokens,
+        compactionIndex: this.config.compactionIndex,
         hintAboveTokens: this.config.hintAboveTokens,
         tokenizerPath: this.config.tokenizerPath ?? null,
       },
@@ -1455,6 +1458,7 @@ export class TokenTreeService {
    */
   compactionIndex(sessionId: string, limit = 8, maxChars = 1_200): string | undefined {
     const state = this.stateOf(sessionId)
+    if (this.effective().compactionIndex === false) return undefined
     if (state.indexInjected === true) return undefined
     const nodes = [...state.tree.nodes.values()].filter(node => node.kind !== 'note')
     if (nodes.length === 0) return undefined

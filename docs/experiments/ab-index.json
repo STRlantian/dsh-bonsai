@@ -1,0 +1,209 @@
+{
+  "plan": "ACCA",
+  "summary": {
+    "A": {
+      "runs": 2,
+      "correct": 8,
+      "asked": 8,
+      "toolCalls": 97,
+      "retrieveCalls": 10,
+      "hints": 12,
+      "inputPerRun": 6749
+    },
+    "C": {
+      "runs": 2,
+      "correct": 8,
+      "asked": 8,
+      "toolCalls": 95,
+      "retrieveCalls": 3,
+      "hints": 9,
+      "inputPerRun": 7342
+    }
+  },
+  "runs": [
+    {
+      "position": 0,
+      "arm": "A",
+      "label": "bare",
+      "sessionId": "session-3c547ca1-ac13-48f7-8927-ed0eb93e4523",
+      "compacted": "{\"commandId\":\"cmd-d7e2af5e-1\",\"result\":{\"kind\":\"success\",\"text\":\"Compacted 42 history items (~2922 tokens).\",\"sourceEven",
+      "correct": 4,
+      "asked": 4,
+      "details": [
+        {
+          "expect": "1733",
+          "answer": "1733",
+          "hit": true,
+          "calls": 1,
+          "total": 11
+        },
+        {
+          "expect": "9f2c41ab77de",
+          "answer": "9f2c41ab77de\n\n一点说明：构建校验记录里只有 `artifact 9f2c41ab77de05`（14 位十六进制），没有标注为 sha256（sha256 应为 64 位）。上面给的是该",
+          "hit": true,
+          "calls": 2,
+          "total": 12
+        },
+        {
+          "expect": "rbx-2291",
+          "answer": "rbx-2291",
+          "hit": true,
+          "calls": 3,
+          "total": 13
+        },
+        {
+          "expect": "0.42",
+          "answer": "0.42",
+          "hit": true,
+          "calls": 4,
+          "total": 13
+        }
+      ],
+      "toolCalls": 49,
+      "retrieveCalls": 10,
+      "hints": 8,
+      "input": 6833,
+      "cacheRead": 330368,
+      "cacheWrite": 0,
+      "hitRate": 97.97
+    },
+    {
+      "position": 1,
+      "arm": "C",
+      "label": "index",
+      "sessionId": "session-0ee43219-a741-4fcc-9a7f-80b140e86df0",
+      "compacted": "{\"commandId\":\"cmd-d7e2af5e-2\",\"result\":{\"kind\":\"success\",\"text\":\"Compacted 42 history items (~3734 tokens).\",\"sourceEven",
+      "correct": 4,
+      "asked": 4,
+      "details": [
+        {
+          "expect": "1733",
+          "answer": "1733",
+          "hit": true,
+          "calls": 0,
+          "total": 11
+        },
+        {
+          "expect": "9f2c41ab77de",
+          "answer": "9f2c41ab77de",
+          "hit": true,
+          "calls": 0,
+          "total": 12
+        },
+        {
+          "expect": "rbx-2291",
+          "answer": "rbx-2291",
+          "hit": true,
+          "calls": 0,
+          "total": 13
+        },
+        {
+          "expect": "0.42",
+          "answer": "0.42",
+          "hit": true,
+          "calls": 0,
+          "total": 14
+        }
+      ],
+      "toolCalls": 50,
+      "retrieveCalls": 0,
+      "hints": 4,
+      "input": 7556,
+      "cacheRead": 358528,
+      "cacheWrite": 0,
+      "hitRate": 97.94
+    },
+    {
+      "position": 2,
+      "arm": "C",
+      "label": "index",
+      "sessionId": "session-87f15e80-efad-42be-9341-7f89ad1f05a6",
+      "compacted": "{\"commandId\":\"cmd-d7e2af5e-3\",\"result\":{\"kind\":\"success\",\"text\":\"Compacted 38 history items (~2774 tokens).\",\"sourceEven",
+      "correct": 4,
+      "asked": 4,
+      "details": [
+        {
+          "expect": "1733",
+          "answer": "1733",
+          "hit": true,
+          "calls": 0,
+          "total": 9
+        },
+        {
+          "expect": "9f2c41ab77de",
+          "answer": "9f2c41ab77de\n\n（说明：只取到一条 14 位十六进制的 `artifact` 标识 `9f2c41ab77de05`，记录里没有完整 sha256，所以这是该标识的前 12 位。）",
+          "hit": true,
+          "calls": 1,
+          "total": 11
+        },
+        {
+          "expect": "rbx-2291",
+          "answer": "rbx-2291",
+          "hit": true,
+          "calls": 1,
+          "total": 12
+        },
+        {
+          "expect": "0.42",
+          "answer": "0.42",
+          "hit": true,
+          "calls": 1,
+          "total": 13
+        }
+      ],
+      "toolCalls": 45,
+      "retrieveCalls": 3,
+      "hints": 5,
+      "input": 7128,
+      "cacheRead": 311936,
+      "cacheWrite": 0,
+      "hitRate": 97.77
+    },
+    {
+      "position": 3,
+      "arm": "A",
+      "label": "bare",
+      "sessionId": "session-580d4d6d-a673-4f5b-af88-a45afb308da7",
+      "compacted": "{\"commandId\":\"cmd-d7e2af5e-4\",\"result\":{\"kind\":\"success\",\"text\":\"Compacted 46 history items (~3951 tokens).\",\"sourceEven",
+      "correct": 4,
+      "asked": 4,
+      "details": [
+        {
+          "expect": "1733",
+          "answer": "1733",
+          "hit": true,
+          "calls": 0,
+          "total": 12
+        },
+        {
+          "expect": "9f2c41ab77de",
+          "answer": "9f2c41ab77de",
+          "hit": true,
+          "calls": 0,
+          "total": 12
+        },
+        {
+          "expect": "rbx-2291",
+          "answer": "rbx-2291",
+          "hit": true,
+          "calls": 0,
+          "total": 12
+        },
+        {
+          "expect": "0.42",
+          "answer": "0.42",
+          "hit": true,
+          "calls": 0,
+          "total": 12
+        }
+      ],
+      "toolCalls": 48,
+      "retrieveCalls": 0,
+      "hints": 4,
+      "input": 6664,
+      "cacheRead": 330624,
+      "cacheWrite": 0,
+      "hitRate": 98.02
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "sessionId": "session-44345f4d-529a-4250-b002-ba8f7ce1c26d",
+  "correct": 4,
+  "asked": [
+    {
+      "expect": "1733",
+      "answer": "1733 毫秒。",
+      "hit": true,
+      "tools": 0
+    },
+    {
+      "expect": "9f2c41ab77de",
+      "answer": "9f2c41ab77de",
+      "hit": true,
+      "tools": 0
+    },
+    {
+      "expect": "rbx-2291",
+      "answer": "rbx-2291",
+      "hit": true,
+      "tools": 0
+    },
+    {
+      "expect": "0.42",
+      "answer": "错误率超过 0.42% 即回滚。",
+      "hit": true,
+      "tools": 0
+    }
+  ],
+  "details": [
+    {
+      "expect": "1733",
+      "answer": "1733 毫秒。",
+      "hit": true,
+      "tools": 0
+    },
+    {
+      "expect": "9f2c41ab77de",
+      "answer": "9f2c41ab77de",
+      "hit": true,
+      "tools": 0
+    },
+    {
+      "expect": "rbx-2291",
+      "answer": "rbx-2291",
+      "hit": true,
+      "tools": 0
+    },
+    {
+      "expect": "0.42",
+      "answer": "错误率超过 0.42% 即回滚。",
+      "hit": true,
+      "tools": 0
+    }
+  ]
+}

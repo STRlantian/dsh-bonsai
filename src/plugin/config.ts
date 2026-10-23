@@ -135,6 +135,8 @@ export interface ResolvedConfig {
   autoCompactAboveTokens: number
   /** Minimum gap between automatic compactions. */
   autoCompactCooldownMs: number
+  /** Whether the first hint after a compaction lists the folded nodes. */
+  compactionIndex: boolean
   /** Whether to supervise failures. */
   autoReflect: boolean
   /** Whether subagent sessions are tracked. */
@@ -355,6 +357,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         conservativeBudgetRatio: scalar(source, 'conservativeBudgetRatio', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input > 0 && input <= 1, issues, 'a number within (0, 1]') ?? 0.85,
         autoCompactAboveTokens: scalar(source, 'autoCompactAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
         autoCompactCooldownMs: scalar(source, 'autoCompactCooldownMs', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 600000,
+        compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
         tokenizerVersion: typeof source.tokenizerVersion === 'string' && source.tokenizerVersion.trim() !== ''
           ? source.tokenizerVersion.trim()
           : typeof source.tokenizerVersion === 'number'
