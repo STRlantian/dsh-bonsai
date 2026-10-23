@@ -475,8 +475,6 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-mode-select:hover{opacity:1}',
     '.twt-qrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px}',
     '.twt-qname{opacity:.75}',
-    '.twt-preset-chip{position:fixed;right:14px;bottom:14px;z-index:70;width:34px;height:34px;border-radius:50%;border:1px solid var(--twt-border);background:var(--twt-surface);color:inherit;font-size:15px;line-height:1;cursor:pointer;opacity:.72;box-shadow:0 6px 18px rgba(0,0,0,.25)}',
-    '.twt-preset-chip:hover{opacity:1}',
     '.twt-togglerow .twt-hint{margin-left:4px;opacity:.55}',
     '.twt-select{font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--twt-border);background:var(--twt-surface);color:var(--twt-text);color-scheme:light dark}',
     '.twt-select:focus{outline:2px solid var(--twt-accent);outline-offset:1px}',
@@ -2920,7 +2918,6 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   // exact `/api` route with the page's own cookie, so no RPC service is involved.
   // A throwing apply here must never take the shell down.
   // --- composer preset picker ---------------------------------------------
-  // Anchored to the host's mode controls, because that row exists before any session does.
   var MODE_PRESETS = [
     { id: 'conservative', label: '保守' },
     { id: 'balanced', label: '均衡' },
@@ -2937,12 +2934,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     return 'custom'
   }
 
-  /** Read the settings the panel and the picker both use. */
   function readSettings() {
     return fetch('/api/token-tree/settings').then(function (response) { return response.json() })
   }
 
-  /** Write one settings patch. */
   function writeSettings(patch) {
     return fetch('/api/token-tree/settings', {
       method: 'POST',
@@ -2951,7 +2946,6 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     }).then(function (response) { return response.json() })
   }
 
-  /** Apply one preset id. */
   function writePreset(name) {
     return fetch('/api/token-tree/preset', {
       method: 'POST',
@@ -2960,19 +2954,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     }).then(function (response) { return response.json() })
   }
 
-  /** A labelled row inside the custom dialog. */
-  function field(labelText, control) {
-    var row = document.createElement('label')
-    row.className = 'twt-qrow'
-    var name = document.createElement('span')
-    name.className = 'twt-qname'
-    name.textContent = labelText
-    row.appendChild(name)
-    row.appendChild(control)
-    return row
-  }
-
-  /** The custom dialog: the four knobs, written on save. */
+  /** The custom dialog: the four knobs, written on save. Plain DOM, so it works anywhere. */
   function openCustomSettings(onSaved) {
     ensureStyles()
     readSettings().then(function (settings) {
@@ -2995,6 +2977,17 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       head.appendChild(title)
       head.appendChild(close)
       panel.appendChild(head)
+
+      function field(labelText, control) {
+        var row = document.createElement('label')
+        row.className = 'twt-qrow'
+        var name = document.createElement('span')
+        name.className = 'twt-qname'
+        name.textContent = labelText
+        row.appendChild(name)
+        row.appendChild(control)
+        return row
+      }
 
       var threshold = document.createElement('input')
       threshold.type = 'number'
@@ -3024,7 +3017,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       panel.appendChild(field(t('折叠范围'), scope))
 
       var tools = (settings && Array.isArray(settings.availableTools)) ? settings.availableTools : []
-      var hidden = new Set(Array.isArray(effective.toolDeny) ? effective.toolDeny : [])
+      var hidden = []
+      ;(Array.isArray(effective.toolDeny) ? effective.toolDeny : []).forEach(function (name) { hidden.push(name) })
       if (tools.length > 0) {
         var caption = document.createElement('p')
         caption.className = 'twt-hint'
@@ -3037,10 +3031,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           row.className = 'twt-tool-row'
           var box = document.createElement('input')
           box.type = 'checkbox'
-          box.checked = hidden.has(tool.name)
+          box.checked = hidden.indexOf(tool.name) >= 0
           box.addEventListener('change', function () {
-            if (box.checked) hidden.add(tool.name)
-            else hidden.delete(tool.name)
+            var at = hidden.indexOf(tool.name)
+            if (box.checked && at < 0) hidden.push(tool.name)
+            if (!box.checked && at >= 0) hidden.splice(at, 1)
           })
           var name = document.createElement('span')
           name.className = 'twt-tool-name'
@@ -3064,10 +3059,6 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       var spacer = document.createElement('span')
       spacer.style.flex = '1'
       foot.appendChild(spacer)
-      var presets = document.createElement('span')
-      presets.className = 'twt-hint'
-      presets.textContent = t('预设：') + MODE_PRESETS.map(function (preset) { return t(preset.label) }).join(' / ')
-      foot.appendChild(presets)
       var save = document.createElement('button')
       save.className = 'twt-action'
       save.dataset.kind = 'primary'
@@ -3079,12 +3070,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           foldAboveTokens: Math.max(0, Math.round(Number(threshold.value) || 0)),
           foldKeepTurns: Math.max(0, Math.round(Number(keep.value) || 0)),
           foldScope: scope.value,
-          toolDeny: hidden.size === 0 ? null : Array.from(hidden),
+          toolDeny: hidden.length === 0 ? null : hidden.slice(),
         }).then(function (payload) {
           if (payload && payload.ok === false) throw new Error(payload.error || 'failed')
           status.textContent = t('已保存')
           if (typeof onSaved === 'function') onSaved()
-          back.remove()
+          setTimeout(function () { back.remove() }, 400)
         }).catch(function (error) {
           save.disabled = false
           status.textContent = tf('保存失败：{}', error && error.message ? error.message : error)
@@ -3098,29 +3089,39 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   }
 
   /**
-   * Mount the picker on the host's mode controls.
+   * Insert the preset select right after the host mode chip.
    *
-   * The row can appear late (and be replaced on a route change), so this attaches on a
-   * mutation observer plus a short retry window, and never throws into the shell.
+   * The chip shows the current mode only, so it is found by its own text, and the control
+   * goes in as its next sibling. The host re-renders that row on route changes, so this
+   * re-runs on a mutation observer and a short retry window.
    */
-  function mountModePreset() {
+  function mountModeChip() {
     if (typeof document === 'undefined') return
-    var attached = null
-    var select = null
+    var MODE_TEXT = ['标准模式', '创造模式', 'Standard mode', 'Creative mode']
+    var attachedTo = null
 
-    function refresh() {
-      if (select === null) return
-      readSettings().then(function (settings) {
-        var effective = (settings && settings.effective) || {}
-        select.value = currentPreset(effective)
-        select.title = t('盆栽预设') + ' · ' + select.options[select.selectedIndex].textContent
-      }).catch(function () {})
+    /** Find the chip: an element whose own text is one mode label. */
+    function findChip() {
+      var nodes = document.querySelectorAll('button, [role="button"], span')
+      for (var index = 0; index < nodes.length; index++) {
+        var node = nodes[index]
+        if (node.closest !== undefined && node.closest('.twt-mode-preset') !== null) continue
+        if (node.closest !== undefined && node.closest('.twt-modal-backdrop') !== null) continue
+        var text = (node.textContent || '').trim()
+        if (text.length > 16) continue
+        for (var label = 0; label < MODE_TEXT.length; label++) {
+          if (text.indexOf(MODE_TEXT[label]) === -1) continue
+          return node
+        }
+      }
+      return null
     }
 
+    /** Build the select that sits beside the chip. */
     function build() {
       var wrap = document.createElement('span')
       wrap.className = 'twt-mode-preset'
-      select = document.createElement('select')
+      var select = document.createElement('select')
       select.className = 'twt-mode-select'
       select.setAttribute('aria-label', t('盆栽预设'))
       MODE_PRESETS.forEach(function (preset) {
@@ -3136,85 +3137,51 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       select.addEventListener('change', function () {
         var value = select.value
         if (value === 'custom') {
-          openCustomSettings(refresh)
+          openCustomSettings(function () {
+            readSettings().then(function (settings) {
+              select.value = currentPreset(settings && settings.effective)
+            }).catch(function () {})
+          })
           return
         }
         select.disabled = true
-        writePreset(value).then(function () { refresh() }).catch(function () {}).then(function () { select.disabled = false })
+        writePreset(value).then(function () {
+          return readSettings()
+        }).then(function (settings) {
+          select.value = currentPreset(settings && settings.effective)
+        }).catch(function () {}).then(function () { select.disabled = false })
       })
       wrap.appendChild(select)
+      refresh(select)
       return wrap
     }
 
-    /** The labels the host uses for its two composer modes. */
-    var MODE_LABELS = ['标准模式', '创造模式', 'Standard mode', 'Creative mode']
-
-    /**
-     * Find the composer mode row by its labels.
-     *
-     * Class names are hashed and version-specific, the words are not. A row is the smallest
-     * element that contains at least two of the labels.
-     * @returns The row element, or null while the composer is not on screen.
-     */
-    function findModeRow() {
-      var candidates = document.querySelectorAll('button, [role="tab"], [role="radio"], [role="option"], span, div')
-      for (var index = 0; index < candidates.length; index++) {
-        var node = candidates[index]
-        if (node.closest !== undefined && node.closest('.twt-mode-preset') !== null) continue
-        if (node.closest !== undefined && node.closest('.twt-modal-backdrop') !== null) continue
-        var text = (node.textContent || '').trim()
-        var aria = (node.getAttribute && node.getAttribute('aria-label')) || ''
-        if (MODE_LABELS.indexOf(text) === -1 && MODE_LABELS.every(function (label) { return aria.indexOf(label) === -1 })) continue
-        var parent = node.parentElement
-        if (parent === null) continue
-        // A native <select> carries both labels in its textContent; anchor beside it instead.
-        if (parent.tagName === 'SELECT' && parent.parentElement !== null) parent = parent.parentElement
-        var parentText = (parent.textContent || '')
-        var matches = MODE_LABELS.filter(function (label) { return parentText.indexOf(label) >= 0 }).length
-        if (matches >= 2) return parent
-      }
-      return null
+    /** Point the select at whatever the settings currently match. */
+    function refresh(select) {
+      readSettings().then(function (settings) {
+        select.value = currentPreset(settings && settings.effective)
+      }).catch(function () {})
     }
 
     function attach() {
-      var host = findModeRow()
-      if (host === null) {
-        showChip()
-        return false
-      }
-      hideChip()
-      if (host.querySelector('.twt-mode-preset') !== null) {
-        attached = host
+      var chip = findChip()
+      if (chip === null) return false
+      if (chip.parentElement !== null && chip.parentElement.querySelector('.twt-mode-preset') !== null) {
+        attachedTo = chip
         return true
       }
       ensureStyles()
-      host.appendChild(build())
-      attached = host
-      refresh()
+      var wrap = build()
+      if (chip.parentElement !== null) {
+        chip.parentElement.insertBefore(wrap, chip.nextSibling)
+      } else {
+        document.body.appendChild(wrap)
+      }
+      attachedTo = chip
       return true
     }
 
-    /** Last resort: a small fixed chip so the dialog is reachable without an anchor. */
-    function showChip() {
-      if (document.getElementById('twt-preset-chip') !== null) return
-      ensureStyles()
-      var chip = document.createElement('button')
-      chip.id = 'twt-preset-chip'
-      chip.className = 'twt-preset-chip'
-      chip.textContent = '🌳'
-      chip.title = t('盆栽 · 预设与折叠')
-      chip.addEventListener('click', function () { openCustomSettings(refresh) })
-      document.body.appendChild(chip)
-    }
-
-    function hideChip() {
-      var chip = document.getElementById('twt-preset-chip')
-      if (chip !== null) chip.remove()
-    }
-
     if (attach()) return
-    // The host replaces this row on route changes, so keep watching: attach() is a no-op when
-    // the picker is already there and rebuilds it when the host wiped it.
     if (typeof MutationObserver === 'function') {
       var observer = new MutationObserver(function () { attach() })
       observer.observe(document.documentElement, { childList: true, subtree: true })
@@ -3227,6 +3194,33 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     }, 500)
   }
 
+  /** Kept for the dock: the same control, rendered as a plain component. */
+  function ComposerPreset() {
+    ensureStyles()
+    var state = React.useState('custom')
+    var preset = state[0]
+    var setPreset = state[1]
+    React.useEffect(function () {
+      readSettings().then(function (settings) {
+        setPreset(currentPreset(settings && settings.effective))
+      }).catch(function () {})
+    }, [])
+    return h('select', {
+      className: 'twt-mode-select',
+      'aria-label': t('盆栽预设'),
+      value: preset,
+      onChange: function (event) {
+        var value = event.target.value
+        if (value === 'custom') { openCustomSettings(function () {}); return }
+        setPreset(value)
+        writePreset(value).catch(function () {})
+      },
+    },
+      MODE_PRESETS.map(function (item) {
+        return h('option', { key: item.id, value: item.id }, t(item.label))
+      }),
+      h('option', { value: 'custom' }, t('自定义…')))
+  }
   exports.inject = ['slots']
   exports.apply = function apply(ctx) {
     try {
@@ -3263,12 +3257,14 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       }
     }
 
-    // The picker anchors to host DOM, so it must never take the shell down.
+    // The hero row (new conversation) offers no free list slot, so the picker is inserted
+    // beside the mode chip instead. Every failure is swallowed: a renamed chip costs the
+    // picker, never the shell.
     try {
-      mountModePreset()
+      mountModeChip()
     } catch (error) {
       if (typeof console !== 'undefined' && console.warn) {
-        console.warn('[dsh-token-tree] preset picker skipped:', error && error.message ? error.message : error)
+        console.warn('[dsh-token-tree] preset chip skipped:', error && error.message ? error.message : error)
       }
     }
   }

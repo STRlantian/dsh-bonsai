@@ -155,7 +155,9 @@ async function mountClient(which, locale = 'zh') {
 
   const Component = which === 'dock'
     ? components['conversation.composer.dock']
-    : components['conversation.session.header.actions']
+    : which === 'bar'
+      ? components['conversation.composer.bar']
+      : components['conversation.session.header.actions']
   assert.ok(Component !== undefined, `${which} component registered`)
 
   const container = window.document.getElementById('root')
@@ -165,7 +167,9 @@ async function mountClient(which, locale = 'zh') {
   }
   const props = which === 'dock'
     ? { sessionId: 'session-1', input: { text: '' }, variant: 'composer' }
-    : { sessionId: 'session-1' }
+    : which === 'bar'
+      ? {}
+      : { sessionId: 'session-1' }
   await React.act(async () => { root.render(React.createElement(Component, props)) })
   await flush()
 
@@ -291,20 +295,24 @@ test('the settings tab offers the tokenizer dropdown from the payload', { timeou
   assert.equal(select.value, '4', 'shows the generation actually in use')
 })
 
-test('the preset picker anchors to the host mode row', { timeout: 30000 }, async t => {
+test('the preset picker sits beside the mode chip', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)
-  // The host renders its mode selector late; the observer must still catch it.
+  // The hero row renders just the current mode, not a pair of options.
   const row = client.window.document.createElement('div')
   row.className = 'composer-row'
-  row.innerHTML = '<button type="button">标准模式</button><button type="button">创造模式</button>'
+  const chip = client.window.document.createElement('button')
+  chip.type = 'button'
+  chip.textContent = '标准模式'
+  row.appendChild(chip)
   client.window.document.body.appendChild(row)
-  await new Promise(resolve => setTimeout(resolve, 400))
+
+  await new Promise(resolve => setTimeout(resolve, 700))
   await client.flush()
 
   const picker = row.querySelector('.twt-mode-preset select')
-  assert.ok(picker !== null, 'the picker attached to the mode row')
-  assert.equal(client.window.document.getElementById('twt-preset-chip'), null, 'the fallback chip stepped aside')
+  assert.ok(picker !== null, 'the picker attached beside the chip')
+  assert.equal(chip.nextElementSibling, picker.parentElement, 'it sits immediately to the right of the chip')
   const values = [...picker.options].map(option => option.value)
   assert.deepEqual(values, ['conservative', 'balanced', 'aggressive', 'custom'], 'three presets plus custom')
 
