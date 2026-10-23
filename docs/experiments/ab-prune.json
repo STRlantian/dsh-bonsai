@@ -1,0 +1,99 @@
+{
+  "plan": "AC",
+  "runs": [
+    {
+      "position": 0,
+      "arm": "A",
+      "label": "bare",
+      "sessionId": "session-941a6feb-83ee-488d-ac26-d1311331b1d1",
+      "compacted": "{\"commandId\":\"cmd-9f2c5439-1\",\"result\":{\"kind\":\"success\",\"text\":\"Compacted 30 history items (~1270 tokens).\",\"sourceEventSeq\":138}}",
+      "pruneEvents": 0,
+      "shadowedTokens": 0,
+      "correct": 4,
+      "asked": 4,
+      "details": [
+        {
+          "expect": "1733",
+          "answer": "1733",
+          "hit": true,
+          "calls": 1,
+          "others": 4
+        },
+        {
+          "expect": "9f2c41ab77de",
+          "answer": "9f2c41ab77de",
+          "hit": true,
+          "calls": 2,
+          "others": 4
+        },
+        {
+          "expect": "rbx-2291",
+          "answer": "rbx-2291",
+          "hit": true,
+          "calls": 3,
+          "others": 4
+        },
+        {
+          "expect": "0.42",
+          "answer": "0.42",
+          "hit": true,
+          "calls": 4,
+          "others": 4
+        }
+      ],
+      "retrieveCalls": 10,
+      "otherTools": 16,
+      "input": 6223,
+      "cacheRead": 245504,
+      "cacheWrite": 0,
+      "hitRate": 97.53
+    },
+    {
+      "position": 1,
+      "arm": "C",
+      "label": "index",
+      "sessionId": "session-6146be39-04be-408b-a62c-f4079d2488c7",
+      "compacted": "{\"commandId\":\"cmd-9f2c5439-2\",\"result\":{\"kind\":\"success\",\"text\":\"Compacted 30 history items (~2449 tokens).\",\"sourceEventSeq\":138}}",
+      "pruneEvents": 0,
+      "shadowedTokens": 0,
+      "correct": 4,
+      "asked": 4,
+      "details": [
+        {
+          "expect": "1733",
+          "answer": "1733",
+          "hit": true,
+          "calls": 2,
+          "others": 4
+        },
+        {
+          "expect": "9f2c41ab77de",
+          "answer": "9f2c41ab77de",
+          "hit": true,
+          "calls": 3,
+          "others": 4
+        },
+        {
+          "expect": "rbx-2291",
+          "answer": "rbx-2291",
+          "hit": true,
+          "calls": 4,
+          "others": 4
+        },
+        {
+          "expect": "0.42",
+          "answer": "0.42",
+          "hit": true,
+          "calls": 5,
+          "others": 4
+        }
+      ],
+      "retrieveCalls": 14,
+      "otherTools": 16,
+      "input": 6618,
+      "cacheRead": 269056,
+      "cacheWrite": 0,
+      "hitRate": 97.6
+    }
+  ]
+}
