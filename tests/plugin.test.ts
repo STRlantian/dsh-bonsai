@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import { apply, blocksOf, Config, inject, name } from '../src/index.ts'
 import type { ContextLike, SessionEventLike, UserMessageLike } from '../src/plugin/dsh.ts'
 import type { ResolvedConfig } from '../src/plugin/config.ts'
+import { SettingsStore } from '../src/plugin/settings.ts'
 import type { TokenTreeService } from '../src/plugin/service.ts'
 
 /** Resolve the default configuration the way the loader would. */
@@ -144,7 +145,16 @@ function tell(harness: FakeHarness, text: string): void {
 /** Mount the plugin against the fake harness. */
 function mount(config: ResolvedConfig = defaults()): { harness: FakeHarness; service: TokenTreeService } {
   const harness = new FakeHarness()
-  apply(harness.ctx, config)
+  // In-memory stores: the suite must never read or write the user's real settings file.
+  const files = new Map<string, string>()
+  const io = {
+    readFile: (path: string) => files.get(path) ?? '{}',
+    writeFile: (path: string, text: string) => { files.set(path, text) },
+    exists: (path: string) => files.has(path),
+    makeDir: () => {},
+  }
+  const settings = new SettingsStore({ path: 'mem://settings.json', io, onError: () => {} })
+  apply(harness.ctx, config, { settings })
   return { harness, service: harness.service }
 }
 

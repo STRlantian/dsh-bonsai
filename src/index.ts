@@ -49,17 +49,22 @@ export const inject = ['tools']
  * Mount the plugin.
  * @param ctx - plugin context carrying the tool registry and event bus.
  * @param config - configuration resolved by {@link Config}.
+ * @param deps - optional stores; tests pass in-memory ones so they never read the user's files.
  */
-export function apply(ctx: ContextLike, config: ResolvedConfig): void {
+export function apply(
+  ctx: ContextLike,
+  config: ResolvedConfig,
+  deps: { store?: EditStore; settings?: SettingsStore } = {},
+): void {
   // Manual edits are not in the session log, so they get their own append-only file
   // and are replayed on top of the rebuilt tree. A broken file costs the overrides,
   // never the plugin: the store is fail-soft by construction.
-  const store = new EditStore({
+  const store = deps.store ?? new EditStore({
     onError: message => ctx.logger.warn(message),
   })
   // Runtime switches live next to the edit log; they override the profile config so a
   // checkbox in the UI takes effect on the next turn instead of at the next restart.
-  const settings = new SettingsStore({ onError: message => ctx.logger.warn(message) })
+  const settings = deps.settings ?? new SettingsStore({ onError: message => ctx.logger.warn(message) })
   const service = new TokenTreeService({ config, logger: ctx.logger, store, settings })
 
   /**
