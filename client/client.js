@@ -126,6 +126,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     "刷新": "Refresh",
     "关闭": "Close",
     "隐藏工具结果": "Hide tool results",
+  "只看对话与回答，工具结果不显示": "Conversation and answers only; tool results stay hidden",
     "跟随配置": "Follow config",
     "读取中…": "Loading…",
     "读取设置中…": "Loading settings…",
@@ -458,6 +459,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-tool-size{font-size:10px;opacity:.6}',
     '.twt-modal-foot{display:flex;align-items:center;gap:8px}',
     '.twt-presets{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--twt-border);border-radius:10px;background:var(--twt-hover)}',
+    '.twt-togglerow{display:flex;align-items:center;gap:6px;cursor:pointer;padding:2px 0 6px;border-bottom:1px solid var(--twt-border);margin-bottom:2px}',
+    '.twt-togglerow .twt-hint{margin-left:4px;opacity:.55}',
     '.twt-select{font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--twt-border);background:var(--twt-surface);color:var(--twt-text);color-scheme:light dark}',
     '.twt-select:focus{outline:2px solid var(--twt-accent);outline-offset:1px}',
     '.twt-modal-search{color-scheme:light dark}',
@@ -2233,12 +2236,6 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             'data-kind': mode === 'settings' ? 'primary' : undefined,
             onClick: function () { setMode('settings'); setPicked(null) },
           }, t('设置')),
-          mode !== 'blocks' ? h('label', { className: 'twt-hint', style: { display: 'flex', alignItems: 'center', gap: '4px' } },
-            h('input', {
-              type: 'checkbox',
-              checked: hideTools,
-              onChange: function (event) { setHideTools(event.target.checked) },
-            }), t('隐藏工具结果')) : null,
           h('button', { className: 'twt-action', style: { padding: '3px 10px' }, onClick: load }, t('刷新')),
           h('button', { className: 'twt-close', onClick: onClose, title: t('关闭') }, '✕')),
         h('div', { className: 'twt-editor-body' },
@@ -2266,6 +2263,16 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
                       : entries.length === 0 ? h('p', { className: 'twt-note' }, mode === 'nodes' ? t('这个会话还没有节点。') : t('这个会话还没有对话块。'))
                         : list),
               h('div', { className: 'twt-edetail' },
+                (mode === 'nodes' || mode === 'graph')
+                  ? h('label', { className: 'twt-hint twt-togglerow' },
+                    h('input', {
+                      type: 'checkbox',
+                      checked: hideTools,
+                      onChange: function (event) { setHideTools(event.target.checked) },
+                    }),
+                    t('隐藏工具结果'),
+                    h('span', { className: 'twt-hint' }, t('只看对话与回答，工具结果不显示')))
+                  : null,
                 detail,
                 h(BranchList, {
                   nodes: data === null ? [] : data.nodes,

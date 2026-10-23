@@ -291,6 +291,23 @@ test('the settings tab offers the tokenizer dropdown from the payload', { timeou
   assert.equal(select.value, '4', 'shows the generation actually in use')
 })
 
+test('the tool-result toggle sits on the right and only where it applies', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  await client.click('盆栽')
+
+  const byLabel = () => [...client.document.querySelectorAll('label')].find(label => (label.textContent ?? '').includes('隐藏工具结果'))
+  // Tree mode: present, inside the right-hand column.
+  await client.click('完整树')
+  const toggle = byLabel()
+  assert.ok(toggle !== undefined, 'tree mode offers the toggle')
+  assert.ok(toggle.closest('.twt-edetail') !== null, 'it lives in the detail column, not the tab bar')
+
+  // Settings mode: gone, because it controls nothing there.
+  await client.click('设置')
+  assert.equal(byLabel(), undefined, 'the settings panel does not show it')
+})
+
 test('the settings panel offers the three presets', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)
