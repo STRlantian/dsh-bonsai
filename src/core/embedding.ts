@@ -63,6 +63,14 @@ const STOPWORDS = new Set([
   'these', 'those', 'what', 'which', 'who', 'how', 'why', 'when', 'where', 'with', 'as', 'from',
   'you', 'your', 'we', 'our', 'i', 'me', 'my', 'he', 'she', 'they', 'them', 'not', 'no', 'yes',
   '的', '了', '是', '吗', '呢', '吧', '我', '你', '他', '她', '它', '们',
+  // Chinese function words that were letting unrelated questions meet: "锅包肉可以烧牛肉吗"
+  // matched a Dijkstra answer purely through 可以.
+  '可以', '一下', '什么', '怎么', '如何', '为什么', '这个', '那个',
+  '这些', '那些', '需要', '是否', '以及', '因此', '所以', '但是',
+  '而且', '一个', '时候', '现在', '已经', '没有', '不要', '不用',
+  '只能', '就是', '还是', '或者', '然后', '因为', '如果', '通过',
+  '介绍', '详细', '说明', '问题', '方法', '基本', '内容', '部分',
+  '然后', '这里', '那里', '并且', '但是', '另外', '其实',
 ])
 
 /**

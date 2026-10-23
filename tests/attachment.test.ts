@@ -40,6 +40,19 @@ test('an unrelated question starts its own branch even under a short answer', ()
   assert.notEqual(second.parentId, first.id)
 })
 
+test('a cooking question does not hang under an algorithm answer', () => {
+  const run = conversation()
+  run.ask('详细介绍算法竞赛中图论基本知识，从简单到困难。')
+  run.tell('图论里最短路包括 Dijkstra、Bellman-Ford、SPFA 与 Floyd。Dijkstra 可以用小根堆做到 O(m log n)，但不能处理负权。深度优先搜索可以求连通块，拓扑排序可以判断有向无环图。')
+  run.ask('锅包肉可以烧牛肉吗？')
+
+  const [first, second] = run.questions()
+  const tree = run.service.stateOf('s').tree
+  assert.equal(second.parentId, tree.rootId, 'a different domain starts its own branch')
+  assert.equal(second.metadata.attached, 'topic')
+  assert.notEqual(second.parentId, first.id)
+})
+
 test('a follow-up still returns to the answer that introduced the topic', () => {
   const run = conversation()
   run.ask('用三句话介绍凸包，不要调用工具。')
