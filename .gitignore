@@ -23,3 +23,7 @@ node_modules/
 
 # Third-party vocabularies: large, and licensed by their model release
 *.zip
+
+npm_token.txt
+.npmrc
+

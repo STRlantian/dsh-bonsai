@@ -1,0 +1,128 @@
+{
+  "folded": {
+    "arm": "fold",
+    "sessionId": "session-68cc70d8-bb19-4259-8eaf-698f30e55c57",
+    "rows": [
+      {
+        "input": 227,
+        "cacheRead": 10240,
+        "cacheWrite": 0,
+        "total": 10467,
+        "hitRate": 97.8
+      },
+      {
+        "input": 1297,
+        "cacheRead": 10496,
+        "cacheWrite": 0,
+        "total": 11793,
+        "hitRate": 89
+      },
+      {
+        "input": 150,
+        "cacheRead": 12672,
+        "cacheWrite": 0,
+        "total": 12822,
+        "hitRate": 98.8
+      },
+      {
+        "input": 1322,
+        "cacheRead": 12800,
+        "cacheWrite": 0,
+        "total": 14122,
+        "hitRate": 90.6
+      },
+      {
+        "input": 173,
+        "cacheRead": 14976,
+        "cacheWrite": 0,
+        "total": 15149,
+        "hitRate": 98.9
+      },
+      {
+        "input": 234,
+        "cacheRead": 12672,
+        "cacheWrite": 0,
+        "total": 12906,
+        "hitRate": 98.2
+      }
+    ],
+    "answers": [
+      "line 200 payload",
+      "本次会话中没有第 2 次命令输出；目前只有一次 pwsh 执行，也就是那 200"
+    ],
+    "fold": {
+      "sessionId": "session-68cc70d8-bb19-4259-8eaf-698f30e55c57",
+      "folded": 1,
+      "tokens": 4089,
+      "threshold": 500,
+      "planned": 1,
+      "visible": 13,
+      "at": 1792774162342
+    },
+    "baseAverage": 12301,
+    "afterAverage": 14028
+  },
+  "plain": {
+    "arm": "off",
+    "sessionId": "session-034ae066-d699-484a-9a2a-40f76565f734",
+    "rows": [
+      {
+        "input": 227,
+        "cacheRead": 10240,
+        "cacheWrite": 0,
+        "total": 10467,
+        "hitRate": 97.8
+      },
+      {
+        "input": 1298,
+        "cacheRead": 10624,
+        "cacheWrite": 0,
+        "total": 11922,
+        "hitRate": 89.1
+      },
+      {
+        "input": 151,
+        "cacheRead": 12800,
+        "cacheWrite": 0,
+        "total": 12951,
+        "hitRate": 98.8
+      },
+      {
+        "input": 1322,
+        "cacheRead": 12928,
+        "cacheWrite": 0,
+        "total": 14250,
+        "hitRate": 90.7
+      },
+      {
+        "input": 173,
+        "cacheRead": 15104,
+        "cacheWrite": 0,
+        "total": 15277,
+        "hitRate": 98.9
+      },
+      {
+        "input": 237,
+        "cacheRead": 15104,
+        "cacheWrite": 0,
+        "total": 15341,
+        "hitRate": 98.5
+      }
+    ],
+    "answers": [
+      "line 200 payload",
+      "line 200 payload"
+    ],
+    "fold": {
+      "sessionId": "session-68cc70d8-bb19-4259-8eaf-698f30e55c57",
+      "folded": 1,
+      "tokens": 4089,
+      "threshold": 500,
+      "planned": 1,
+      "visible": 13,
+      "at": 1792774162342
+    },
+    "baseAverage": 12398,
+    "afterAverage": 15309
+  }
+}
