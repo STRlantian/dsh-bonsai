@@ -364,11 +364,11 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         autoCompactAboveTokens: scalar(source, 'autoCompactAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
         autoCompactCooldownMs: scalar(source, 'autoCompactCooldownMs', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 600000,
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
-        foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
-        foldKeepTurns: scalar(source, 'foldKeepTurns', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 2,
+        foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 60000,
+        foldKeepTurns: scalar(source, 'foldKeepTurns', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 3,
         foldScope: (() => {
           const scope = scalar(source, 'foldScope', (input): input is string => typeof input === 'string', issues, 'a string')
-          return scope === 'turns' ? 'turns' : 'tools'
+          return scope === 'tools' ? 'tools' : 'turns'
         })(),
         tokenizerVersion: typeof source.tokenizerVersion === 'string' && source.tokenizerVersion.trim() !== ''
           ? source.tokenizerVersion.trim()

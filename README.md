@@ -472,3 +472,18 @@ devDependencies 里的 `react`、`react-dom`、`jsdom` 只用于这组测试，�
 ## 卸载
 
 删除 `~/.dsh/cordis.patch.yml` 中的 `token-tree` 行（或整个文件），Harness 会热重载移除插件；也可在 profile 的 `cordis.patch.yml` 里加 `- id: token-tree \n  disabled: true`。
+
+## 真正能省 token 的两个开关
+
+实测（详见 `docs/experiment-context-cache.md` 实验 13–15）：
+
+| 开关 | 做法 | 实测 |
+|---|---|---|
+| **隐藏工具** | `ctx.tools.restrict()` 按 agent 移除工具 schema | 37→28 个工具，10,453→7,076 tok，**每轮 −32%** |
+| **折叠历史** | `surfaceOp: replace` 把旧工具输出/整轮移出模型视野 | 工具输出折叠 −14.3%，**零模型调用** |
+
+折叠默认开启但很保守：**超过 60,000 token 才折叠，且保留最近 3 轮**；短会话完全不受影响。
+设定 `foldAboveTokens: 0` 可关闭。开场轮永远不折叠（第一个 surface 节点是系统提示词）。
+
+折叠之后事实真的从上下文消失了 —— 实测中模型会主动调用 `retrieve_context` 取回原文并答对，
+而不是瞎猜。

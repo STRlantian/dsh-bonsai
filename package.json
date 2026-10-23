@@ -1,6 +1,6 @@
 {
   "name": "dsh-bonsai",
-  "version": "0.1.1-test.0",
+  "version": "0.1.2-test.0",
   "description": "Bonsai (閻╁棙鐗?: weighted conversation-tree memory, branch editing and reflection backtracking for DeepSeek Harness",
   "type": "module",
   "main": "dist/index.js",

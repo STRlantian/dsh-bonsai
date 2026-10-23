@@ -1,5 +1,35 @@
 # Changelog
 
+## [Unreleased]
+
+The first changes that actually move the token bill: tool schemas dominate the prompt, and
+history can now leave the model's view without a model call.
+
+### Added
+
+- **Tool trimming** (`toolDeny`) — hides named tools per agent through the host's own
+  `ctx.tools.restrict()`. Measured: 37 tools → 28 and 10,453 → 7,076 prompt tokens, **−3,377
+  tokens on every turn**. Off by default; the settings panel shows the host's rejection reason
+  (it validates names, and one unknown name rejects the whole filter).
+- **History folding** (`foldAboveTokens`, `foldKeepTurns`, `foldScope`) — appends a
+  `surfaceOp: { op: 'replace' }` event so old tool output (or whole turns) stops entering
+  `deriveMessages()`. The log stays append-only and the original stays in the tree.
+  Measured: −14.3% prompt with tool-result folding, **no model call**, and after a whole turn
+  was folded the model called `retrieve_context` and answered correctly.
+- **Recycle bin tab** — every hidden branch root, with preview, subtree size, token count, a
+  restore button per row and "restore all".
+- Read-only assembly diagnostics (`lastAssembly`, `lastDecision`, `fold`,
+  `toolRestriction`) exposed on the settings route.
+
+### Changed
+
+- Folding defaults to **whole turns, above 60,000 tokens, keeping the last 3 turns**: long
+  sessions stop re-sending history, short ones are untouched. Set `foldAboveTokens: 0` to
+  disable.
+- The opening turn is never folded: its first surface node is the system prompt, which only a
+  `system/message` may rewrite.
+
+
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [semantic versioning](https://semver.org/).

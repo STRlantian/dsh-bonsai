@@ -255,6 +255,24 @@ test('the recycle bin lists hidden branches and restores them', { timeout: 30000
   assert.ok(String(call.body).includes('n5'), 'for the hidden node')
 })
 
+test('the recycle bin shows how much is hidden and can restore it all', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  await client.click('盆栽')
+  await client.click('回收站')
+  const head = client.document.querySelector('.twt-basket-head')
+  assert.ok(head !== null, 'the bin has a header')
+  assert.ok((head.textContent ?? '').includes('1 个已隐藏分支'), 'the header counts the hidden branches')
+  const restoreAll = [...head.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('全部恢复'))
+  assert.ok(restoreAll !== undefined, 'restore-all is offered')
+  await React.act(async () => { restoreAll.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+  const call = client.requests.find(entry => entry.url.includes('/api/token-tree/edit') && entry.method === 'POST')
+  assert.ok(call !== undefined, 'restore-all posts to the edit route')
+  assert.ok(String(call.body).includes('"restore"'), 'using the restore action')
+  assert.ok(String(call.body).includes('n5'), 'for the hidden node')
+})
+
 test('the settings tab offers the tokenizer dropdown from the payload', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)

@@ -55,6 +55,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "整轮对话": "Whole turns",
   "最近这么多轮的工具输出不折叠，保证正在用的上下文完整": "Tool output from this many recent turns is left unfolded, so the context in use stays complete.",
   "上次折叠：{} 条工具输出（会话 {} tok，阈值 {}）": "Last fold: {} tool result(s) (session {} tok, threshold {})",
+  "上次折叠：{} 轮对话（会话 {} tok，阈值 {}）": "Last fold: {} turn(s) (session {} tok, threshold {})",
+  "上次折叠被拒：{}": "Last fold was rejected: {}",
+  "{} 个已隐藏分支 · 恢复后回到原位置": "{} hidden branch(es) · restored in place",
+  "全部恢复": "Restore all",
+  "已恢复 {} 个分支。": "Restored {} branch(es).",
+  "{} 节点 · {} tok": "{} node(s) · {} tok",
   "逗号分隔。工具 schema 是 prompt 的大头：实测隐藏 9 个工具可省 3,377 token/轮（−32%），且每轮都省。名字必须存在，否则整批被拒": "Comma separated. Tool schemas dominate the prompt: hiding nine tools saved 3,377 tokens per turn (-32%) in measurement. Names must exist, otherwise the whole filter is rejected.",
   "上次隐藏失败：": "Last hide attempt failed: ",
   "回收站": "Recycle bin",
@@ -405,6 +411,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-ekind[data-kind="note"]{color:#e0a458}',
     '.twt-elist-graph{display:flex;overflow:hidden;padding:0}',
     '.twt-erow .twt-action{margin-left:8px}',
+    '.twt-basket{display:flex;flex-direction:column;flex:1;overflow:hidden}',
+    '.twt-basket-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px 8px}',
+    '.twt-basket-list{border-right:none}',
+    '.twt-basket-row{display:grid;grid-template-columns:18px 48px minmax(0,1fr) auto auto;gap:8px;align-items:center}',
+    '.twt-basket-row .twt-q{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
   '.twt-compare{display:flex;flex-direction:column;gap:8px;padding:8px 10px;overflow:auto;height:100%}',
   '.twt-compare-cols{display:flex;gap:10px;align-items:stretch;overflow:auto}',
   '.twt-branch-col{flex:1 1 0;min-width:180px;max-width:320px;border:1px solid var(--twt-border);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;background:var(--twt-surface)}',
@@ -1443,7 +1454,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settings && settings.fold && settings.fold.folded > 0
           ? h('p', { className: 'twt-hint' },
-            tf('上次折叠：{} 条工具输出（会话 {} tok，阈值 {}）', settings.fold.folded, settings.fold.tokens, settings.fold.threshold))
+            settings.foldScope === 'tools'
+              ? tf('上次折叠：{} 条工具输出（会话 {} tok，阈值 {}）', settings.fold.folded, settings.fold.tokens, settings.fold.threshold)
+              : tf('上次折叠：{} 轮对话（会话 {} tok，阈值 {}）', settings.fold.folded, settings.fold.tokens, settings.fold.threshold))
+          : null,
+        settings && settings.fold && settings.fold.error
+          ? h('p', { className: 'twt-hint twt-err' }, tf('上次折叠被拒：{}', settings.fold.error))
           : null,
         settingRow({
           key: 'locale',
@@ -1605,6 +1621,58 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         })
         .catch(function (error) { setNote('恢复失败：' + error.message) })
         .finally(function () { setBusy(false) })
+    }
+
+    /** Restore every hidden branch in the bin, one at a time. */
+    function restoreAll() {
+      var ids = hiddenRows.map(function (row) { return row.id })
+      if (ids.length === 0) return
+      setBusy(true)
+      setNote('')
+      var chain = Promise.resolve()
+      ids.forEach(function (id) {
+        chain = chain.then(function () {
+          return editRequest(sessionId, { action: 'restore', nodeId: id })
+        })
+      })
+      chain
+        .then(function () {
+          setNote(tf('已恢复 {} 个分支。', ids.length))
+          setRemoved(null)
+          load()
+          if (typeof onChanged === 'function') onChanged()
+        })
+        .catch(function (error) { setNote(tf('恢复失败：{}', error.message)) })
+        .finally(function () { setBusy(false) })
+    }
+
+    /** The recycle bin: every hidden branch root, with a restore action. */
+    function renderBasket() {
+      if (hiddenRows.length === 0) {
+        return h('p', { className: 'twt-note' }, t('回收站是空的：没有已隐藏的分支。'))
+      }
+      var rows = hiddenRows.map(function (row) {
+        return h('div', { key: row.id, className: 'twt-erow twt-basket-row', title: row.preview },
+          h('span', { className: 'twt-ekind', 'data-kind': row.kind }, kindLabel(row.kind)),
+          h('span', { className: 'twt-id' }, row.id),
+          h('span', { className: 'twt-q' }, row.preview || t('（空）')),
+          h('span', { className: 'twt-count' }, tf('{} 节点 · {} tok', row.subtreeSize, row.tokens)),
+          h('button', {
+            className: 'twt-action',
+            disabled: busy,
+            onClick: function () { restoreBranch(row.id) },
+          }, t('恢复此分支')))
+      })
+      var head = h('div', { className: 'twt-basket-head' },
+        h('span', { className: 'twt-hint' }, tf('{} 个已隐藏分支 · 恢复后回到原位置', hiddenRows.length)),
+        h('button', {
+          className: 'twt-action',
+          disabled: busy,
+          onClick: function () { restoreAll() },
+        }, t('全部恢复')))
+      return h('div', { className: 'twt-basket' },
+        head,
+        h('div', { className: 'twt-elist twt-basket-list' }, rows))
     }
 
     /** Toggle a pin on one node. */
@@ -2012,20 +2080,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
                 view.loading ? h('p', { className: 'twt-note' }, t('读取中…'))
                   : view.error ? h('p', { className: 'twt-note twt-err' }, view.error)
                     : mode === 'recycle'
-                      ? (hiddenRows.length === 0
-                        ? h('p', { className: 'twt-note' }, t('回收站是空的：没有已隐藏的分支。'))
-                        : h('div', { className: 'twt-elist' }, hiddenRows.map(function (row) {
-                          return h('div', { key: row.id, className: 'twt-erow', style: { cursor: 'default' } },
-                            h('span', { className: 'twt-ekind', 'data-kind': row.kind }, kindLabel(row.kind)),
-                            h('span', { className: 'twt-id' }, row.id),
-                            h('span', { className: 'twt-q' }, row.preview || t('（空）')),
-                            h('span', { className: 'twt-count' }, row.subtreeSize + ' ' + t('节点') + ' · ' + row.tokens + ' tok'),
-                            h('button', {
-                              className: 'twt-action',
-                              disabled: busy,
-                              onClick: function () { restoreBranch(row.id) },
-                            }, t('恢复此分支')))
-                        })))
+                      ? renderBasket()
                       : mode === 'graph'
                       ? h(TreeGraph, {
                         nodes: graphNodes,
