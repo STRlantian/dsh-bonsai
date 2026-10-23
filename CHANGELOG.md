@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.2] — 2026-10-24
 
 The first changes that actually move the token bill: tool schemas dominate the prompt, and
 history can now leave the model's view without a model call.
@@ -27,6 +27,16 @@ history can now leave the model's view without a model call.
   `toolRestriction`) exposed on the settings route.
 
 ### Changed
+
+- Attachment now refuses generic evidence: a shared term counts only when it appears in at most a
+  third of the nodes that can own a topic. Measured on two real sessions, a cooking question and
+  two unrelated questions stopped hanging under algorithm answers (0.319 → 0.044), while genuine
+  follow-ups kept their place.
+- Reasoning blocks count towards a node's tokens without being stored: one answer measured 9,454
+  output tokens against 369 characters of visible text, so totals had been badly low.
+- Folding measures the whole history instead of the current branch: on a real session the path
+  read 9,431 tokens while the history held 97,208, which is why a 40,000 threshold never fired.
+- The detail panel shows "of which reasoning" for answers that carried one.
 
 - Folding defaults to **whole turns, above 40,000 tokens, keeping the last 3 turns**: long
   sessions stop re-sending history, short ones are untouched. Set `foldAboveTokens: 0` to
