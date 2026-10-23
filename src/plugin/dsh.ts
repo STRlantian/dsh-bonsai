@@ -58,6 +58,22 @@ export interface UserMessageLike {
 
 /** The durable session log head the plugin reads ids from. */
 export interface SessionLike {
+  /** Ordered message seqs currently visible to the model, plus generation counters. */
+  readonly surface?: {
+    readonly nodes?: readonly number[]
+    readonly replaceGeneration?: number
+  }
+  /**
+   * Append one durable event.
+   * @param type - event type, e.g. `tool/result`.
+   * @param data - event payload, unchanged except for the text being folded.
+   * @param intent - surface operation and the seqs it shadows.
+   */
+  append?(
+    type: string,
+    data: Record<string, unknown>,
+    intent?: { surfaceOp?: SurfaceOpLike; sourceEventSeqs?: number[] },
+  ): unknown
   /** Session identity; also the tree key. */
   readonly id: string
   /**
@@ -136,6 +152,9 @@ export interface ToolRegistryLike {
 }
 
 /** One durable session event envelope. */
+/** One surface operation: append, or replace a range of message seqs. */
+export type SurfaceOpLike = 'append' | { op: 'replace'; startSeq: number; endSeq: number }
+
 export interface SessionEventLike {
   /** Event discriminator. */
   readonly type: string

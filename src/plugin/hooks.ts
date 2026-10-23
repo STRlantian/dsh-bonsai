@@ -18,9 +18,10 @@
  */
 
 import type { ResolvedConfig } from './config.ts'
-import type { AgentLike, ContextLike } from './dsh.ts'
+import type { AgentLike, ContextLike, SessionLike } from './dsh.ts'
 import { agentRegistryOf } from './dsh.ts'
 import { buildInjectedMessage, isInjected, textOfContent } from './messages.ts'
+import { planFold } from './fold.ts'
 import type { TokenTreeService } from './service.ts'
 
 /** Longest query text taken from a user message. */
@@ -69,6 +70,7 @@ function queryOf(messages: readonly unknown[]): string | undefined {
 export function installHooks(ctx: ContextLike, service: TokenTreeService, config: ResolvedConfig): void {
   ctx.on('session/event', (session, event) => {
     try {
+      service.noteSessionCapability(session)
       service.handleEvent(session, event)
     } catch (error) {
       ctx.logger.warn(`token-tree: failed to fold ${event.type} for session ${session.id}: ${describe(error)}`)
@@ -141,6 +143,25 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     ctx.logger.debug(`token-tree: agent/created not available (${describe(error)})`)
   }
 
+  // Fold old tool results out of the model view at turn end. Append-only: the log keeps
+  // every original, the surface just stops showing it.
+  const foldScheduled = new Set<string>()
+  ctx.on('session/event', (session, event) => {
+    if (event.type !== 'turn/end') return
+    if (foldScheduled.has(session.id)) return
+    foldScheduled.add(session.id)
+    // The event is still being published: appending now re-enters the publish and the host
+    // rejects it. Defer to the next macrotask, after the log write has settled.
+    setTimeout(() => {
+      foldScheduled.delete(session.id)
+      try {
+        maybeFold(session, service, ctx)
+      } catch (error) {
+        ctx.logger.warn(`token-tree: fold failed for session ${session.id}: ${describe(error)}`)
+      }
+    }, 0)
+  })
+
   // Read-only observation of the prompt the host is about to assemble.
   try {
     ctx.on('system-prompt/assemble', (assembly, _context, next) => {
@@ -193,6 +214,56 @@ export function installCompactionHook(ctx: ContextLike, service: TokenTreeServic
     }
   })
   ctx.logger.info('token-tree: auto-compaction listener mounted')
+}
+
+
+/**
+ * Fold old tool results out of the model-visible surface.
+ *
+ * Runs at `turn/end`, so no turn is in flight. Only `tool/result` entries are touched, and
+ * only their `message.content`: turn, step, callId and error fields stay, which is what keeps
+ * the call/result pairs well formed. The replacement is a `surfaceOp: replace` event, so the
+ * originals remain in the log and in the tree.
+ * @param session - session that just finished a turn.
+ * @param service - tree service, for the measured size and the diagnostics.
+ * @param ctx - plugin context, for logging.
+ */
+function maybeFold(session: SessionLike, service: TokenTreeService, ctx: ContextLike): void {
+  const settings = service.effective()
+  const threshold = settings.foldAboveTokens
+  if (threshold <= 0) return
+  if (typeof session.append !== 'function') return
+  const tokens = service.conversationTokens(session.id)
+  if (tokens < threshold) return
+  const events = (session.snapshotEvents?.() ?? []).map(event => ({
+    type: event.type,
+    seq: event.seq,
+    data: event.data as Record<string, unknown> | undefined,
+  }))
+  const visible = Array.isArray(session.surface?.nodes) && session.surface.nodes.length > 0
+    ? [...session.surface.nodes]
+    : events.map(event => event.seq)
+  const plan = planFold(events, visible, settings.foldKeepTurns)
+  if (plan.length === 0) {
+    service.noteFold(session.id, 0, tokens, threshold, { planned: 0, visible: visible.length })
+    return
+  }
+  let folded = 0
+  for (const replacement of plan) {
+    try {
+      session.append(replacement.type, replacement.data, {
+        surfaceOp: { op: 'replace', startSeq: replacement.seq, endSeq: replacement.seq },
+        sourceEventSeqs: [replacement.seq],
+      })
+      folded++
+    } catch (error) {
+      ctx.logger.warn(`token-tree: could not fold seq ${replacement.seq} (${describe(error)})`)
+      service.noteFold(session.id, folded, tokens, threshold, { planned: plan.length, visible: visible.length, error: describe(error) })
+      return
+    }
+  }
+  service.noteFold(session.id, folded, tokens, threshold, { planned: plan.length, visible: visible.length })
+  ctx.logger.info(`token-tree: folded ${folded} tool result(s) at ${tokens} tokens (threshold ${threshold})`)
 }
 
 /**

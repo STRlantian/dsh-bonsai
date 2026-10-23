@@ -95,6 +95,10 @@ export interface SessionState {
   lastHint?: { counted: number | undefined; above: number; fast: number; fired: boolean; reason: string }
   /** When the last automatic compaction ran, for the cooldown. */
   lastCompactAt?: number
+  /** Last fold applied to a session, for diagnostics. */
+  fold?: { sessionId: string; folded: number; tokens: number; threshold: number; planned?: number; visible?: number; error?: string; at: number }
+  /** What the session object handed to `session/event` actually exposes. */
+  sessionCapability?: { keys: string[]; hasAppend: boolean; hasSurface: boolean; nodes?: number; at: number }
   /** Last tool restriction applied to an agent, for diagnostics. */
   toolRestriction?: { agentId: string; deny: string[]; applied: boolean; shape?: string; error?: string; at: number }
   /** Last system-prompt assembly, recorded for diagnostics. */
@@ -301,6 +305,8 @@ export class TokenTreeService {
     summaryMatch: boolean
     autoCompactAboveTokens: number
     compactionIndex: boolean
+    foldAboveTokens: number
+    foldKeepTurns: number
   } {
     const overrides = this.settings?.all() ?? {}
     return {
@@ -312,6 +318,8 @@ export class TokenTreeService {
       summaryMatch: overrides.summaryMatch ?? this.config.weights.summaryMatch,
       autoCompactAboveTokens: overrides.autoCompactAboveTokens ?? this.config.autoCompactAboveTokens,
       compactionIndex: overrides.compactionIndex ?? this.config.compactionIndex,
+      foldAboveTokens: overrides.foldAboveTokens ?? this.config.foldAboveTokens,
+      foldKeepTurns: overrides.foldKeepTurns ?? this.config.foldKeepTurns,
     }
   }
 
@@ -377,6 +385,8 @@ export class TokenTreeService {
     lastDecision: SessionState['decisionShape'] | null
     lastAssembly: SessionState['assembly'] | null
     toolRestriction: NonNullable<SessionState['toolRestriction']> | null
+    fold: NonNullable<SessionState['fold']> | null
+    sessionCapability: SessionState['sessionCapability'] | null
     autoCompact: SessionState['autoCompactProbe'] | null
     drift: { samples: number; ratio: number | null }
     lastHint: SessionState['lastHint'] | null
@@ -393,6 +403,8 @@ export class TokenTreeService {
         summaryMatch: this.config.weights.summaryMatch,
         autoCompactAboveTokens: this.config.autoCompactAboveTokens,
         compactionIndex: this.config.compactionIndex,
+        foldAboveTokens: this.config.foldAboveTokens,
+        foldKeepTurns: this.config.foldKeepTurns,
         hintAboveTokens: this.config.hintAboveTokens,
         tokenizerPath: this.config.tokenizerPath ?? null,
       },
@@ -416,6 +428,8 @@ export class TokenTreeService {
       lastDecision: this.lastDecisionInfo(),
       lastAssembly: this.assemblyInfo(),
       toolRestriction: this.stateOf('assembly').toolRestriction ?? null,
+      fold: this.stateOf('assembly').fold ?? null,
+      sessionCapability: this.stateOf('assembly').sessionCapability ?? null,
       autoCompact: this.autoCompactInfo(),
       drift: this.driftInfo(),
       lastHint: this.lastHintInfo(),
@@ -1390,6 +1404,41 @@ export class TokenTreeService {
   toolDeny(): string[] {
     const override = this.settings?.all().toolDeny
     return override ?? []
+  }
+
+  /**
+   * Record what the session object exposes, once per session.
+   * @param session - the object handed to `session/event`.
+   */
+  noteSessionCapability(session: unknown): void {
+    const state = this.stateOf('assembly')
+    if (state.sessionCapability !== undefined) return
+    const record = (session ?? {}) as Record<string, unknown>
+    const surface = record.surface as { nodes?: readonly unknown[] } | undefined
+    state.sessionCapability = {
+      keys: Object.keys(record).slice(0, 20),
+      hasAppend: typeof record.append === 'function',
+      hasSurface: surface !== undefined && surface !== null,
+      ...(Array.isArray(surface?.nodes) ? { nodes: surface.nodes.length } : {}),
+      at: Date.now(),
+    }
+  }
+
+  /**
+   * Record a fold.
+   * @param sessionId - session that was folded.
+   * @param folded - number of replacements appended.
+   * @param tokens - measured conversation size when it happened.
+   * @param threshold - configured threshold.
+   */
+  noteFold(
+    sessionId: string,
+    folded: number,
+    tokens: number,
+    threshold: number,
+    extra: { planned?: number; visible?: number; error?: string } = {},
+  ): void {
+    this.stateOf('assembly').fold = { sessionId, folded, tokens, threshold, ...extra, at: Date.now() }
   }
 
   /** Shape of the last assembled system prompt. */

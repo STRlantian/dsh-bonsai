@@ -46,6 +46,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。": "That turn is outside the rendered transcript (virtualised list); see the detail panel instead.",
   "界面语言": "Language",
   "隐藏工具": "Hide tools",
+  "折叠历史阈值": "Fold history above",
+  "超过这个 token 数就把旧的工具输出从模型视野里折叠掉（0 = 关闭）。用 surfaceOp replace，不调模型；原文留在日志与树里": "Above this many tokens, old tool output is folded out of the model view (0 disables). Uses surfaceOp replace with no model call; the original stays in the log and the tree.",
+  "保留最近轮数": "Keep recent turns",
+  "最近这么多轮的工具输出不折叠，保证正在用的上下文完整": "Tool output from this many recent turns is left unfolded, so the context in use stays complete.",
+  "上次折叠：{} 条工具输出（会话 {} tok，阈值 {}）": "Last fold: {} tool result(s) (session {} tok, threshold {})",
   "逗号分隔。工具 schema 是 prompt 的大头：实测隐藏 9 个工具可省 3,377 token/轮（−32%），且每轮都省。名字必须存在，否则整批被拒": "Comma separated. Tool schemas dominate the prompt: hiding nine tools saved 3,377 tokens per turn (-32%) in measurement. Names must exist, otherwise the whole filter is rejected.",
   "上次隐藏失败：": "Last hide attempt failed: ",
   "回收站": "Recycle bin",
@@ -1376,6 +1381,52 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settings && settings.toolRestriction && settings.toolRestriction.applied === false && settings.toolRestriction.error
           ? h('p', { className: 'twt-hint twt-err' }, t('上次隐藏失败：') + settings.toolRestriction.error)
+          : null,
+        settingRow({
+          key: 'foldAboveTokens',
+          label: t('折叠历史阈值'),
+          hint: t('超过这个 token 数就把旧的工具输出从模型视野里折叠掉（0 = 关闭）。用 surfaceOp replace，不调模型；原文留在日志与树里'),
+          control: h('input', {
+            type: 'number',
+            min: 0,
+            step: 1000,
+            defaultValue: String(effective.foldAboveTokens === undefined ? 0 : effective.foldAboveTokens),
+            disabled: busy,
+            style: { width: '92px' },
+            onBlur: function (event) {
+              var next = Number(event.target.value)
+              if (!Number.isFinite(next) || next < 0) {
+                event.target.value = String(effective.foldAboveTokens === undefined ? 0 : effective.foldAboveTokens)
+                return
+              }
+              saveSetting('foldAboveTokens', Math.round(next))
+            },
+          }),
+        }),
+        settingRow({
+          key: 'foldKeepTurns',
+          label: t('保留最近轮数'),
+          hint: t('最近这么多轮的工具输出不折叠，保证正在用的上下文完整'),
+          control: h('input', {
+            type: 'number',
+            min: 0,
+            step: 1,
+            defaultValue: String(effective.foldKeepTurns === undefined ? 2 : effective.foldKeepTurns),
+            disabled: busy,
+            style: { width: '76px' },
+            onBlur: function (event) {
+              var next = Number(event.target.value)
+              if (!Number.isFinite(next) || next < 0) {
+                event.target.value = String(effective.foldKeepTurns === undefined ? 2 : effective.foldKeepTurns)
+                return
+              }
+              saveSetting('foldKeepTurns', Math.round(next))
+            },
+          }),
+        }),
+        settings && settings.fold && settings.fold.folded > 0
+          ? h('p', { className: 'twt-hint' },
+            tf('上次折叠：{} 条工具输出（会话 {} tok，阈值 {}）', settings.fold.folded, settings.fold.tokens, settings.fold.threshold))
           : null,
         settingRow({
           key: 'locale',

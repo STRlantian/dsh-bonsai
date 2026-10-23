@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** Keys the settings surface may override. */
-const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'autoCompactAboveTokens', 'compactionIndex', 'toolDeny', 'admitRelevance', 'summaryMatch'] as const
+const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'autoCompactAboveTokens', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'admitRelevance', 'summaryMatch'] as const
 
 export interface SettingsOverrides {
   /** Push a memory block every turn instead of the one-line hint. */
@@ -39,6 +39,10 @@ export interface SettingsOverrides {
   compactionIndex?: boolean
   /** Tool names to hide from the agent; the schemas are a large part of every prompt. */
   toolDeny?: string[]
+  /** Conversation tokens above which old tool results are folded out of the model view; 0 = off. */
+  foldAboveTokens?: number
+  /** How many recent turns to keep unfolded. */
+  foldKeepTurns?: number
   /**
    * Raw-relevance floor for admitting a node into the retrieval buffer (0–1).
    * Ranking still uses the blended score; this only decides who is allowed in.
@@ -79,6 +83,14 @@ export function defaultSettingsPath(): string {
  * @returns The value when it has the right type, otherwise `undefined`.
  */
 function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number | string | string[] | undefined {
+  if (key === 'foldAboveTokens') {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined
+    return value
+  }
+  if (key === 'foldKeepTurns') {
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined
+    return value
+  }
   if (key === 'toolDeny') {
     if (!Array.isArray(value)) return undefined
     const names = value.filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '').map(entry => entry.trim())

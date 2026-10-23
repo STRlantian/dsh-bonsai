@@ -137,6 +137,10 @@ export interface ResolvedConfig {
   autoCompactCooldownMs: number
   /** Whether the first hint after a compaction lists the folded nodes. */
   compactionIndex: boolean
+  /** Conversation tokens above which old tool results are folded; `0` disables it. */
+  foldAboveTokens: number
+  /** Recent turns left unfolded. */
+  foldKeepTurns: number
   /** Whether to supervise failures. */
   autoReflect: boolean
   /** Whether subagent sessions are tracked. */
@@ -358,6 +362,8 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         autoCompactAboveTokens: scalar(source, 'autoCompactAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
         autoCompactCooldownMs: scalar(source, 'autoCompactCooldownMs', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 600000,
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
+        foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
+        foldKeepTurns: scalar(source, 'foldKeepTurns', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 2,
         tokenizerVersion: typeof source.tokenizerVersion === 'string' && source.tokenizerVersion.trim() !== ''
           ? source.tokenizerVersion.trim()
           : typeof source.tokenizerVersion === 'number'

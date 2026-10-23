@@ -1,0 +1,18 @@
+{
+  "prompts": [
+    13193,
+    18486,
+    20510
+  ],
+  "fold": {
+    "sessionId": "session-afebc0a3-07f4-4464-89aa-25a4ee05f487",
+    "folded": 1,
+    "tokens": 53,
+    "threshold": 50,
+    "planned": 1,
+    "visible": 14,
+    "at": 1792724694271
+  },
+  "placeholders": 0,
+  "sessionId": "session-dd544e5f-39ba-4054-96f6-785f29e76c15"
+}
