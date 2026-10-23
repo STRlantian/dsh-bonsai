@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.3] — 2026-10-24
+
+Documentation only: the README now leads with the measurements and states the limits plainly,
+and the npm description lost a mojibake prefix.
+
+### Changed
+
+- README rewritten around what is proven: tool trimming (-32% per turn), history folding (-16%
+  in a controlled run, cache hit rate unchanged at 98.2%), and an explicit list of what is not
+  proven (retrieval gains) and what folding costs (the model stops seeing folded content and
+  does not always reach for retrieve_context).
+- package.json description and keywords rewritten; the old one carried a corrupted string.
+
 ## [0.1.2] — 2026-10-24
 
 The first changes that actually move the token bill: tool schemas dominate the prompt, and
