@@ -853,3 +853,32 @@ lastHint: {"counted":90,"above":300,"fired":false,"reason":"conversation under t
 - 唯一能真正减少 input 的杠杆是**按实测 token 提前触发 `/compact`**。
 - 诊断字段：`settings.lastPrompt = {count, chars, kinds}`、`settings.lastDecision = {keys, sizes}`，
   日后可随时复核这两条结论。
+
+## 压缩本身要花多少（2026-10-23，真实会话日志）
+
+压缩不是免费的：`compaction/summary` 前面必然有一次带 `usage` 的 assistant 消息。
+扫了 120 个会话、69 个 compaction 事件、12 次 summary，全部有账单：
+
+| 会话 | prompt token | 输出 | 其中命中缓存 |
+|---|---|---|---|
+| 38b5a580 | 11,453 | 58 | 11,264（98.3%） |
+| 56272a95 | 81,084 | 1,054 | 80,640（99.5%） |
+| 37bfb65c | 726,962 | 760 | 726,784（99.98%） |
+| d5bdaca3 | 15,130 | 4 | 14,976 |
+| fa42cc54 | 11,046 | 2 | 10,880 |
+
+平均 prompt **196,886 token**，就是整段历史；两次事件间隔约 2 秒。
+
+两种机制要分清：
+
+- `compaction/prune`：**不调模型**，机械丢弃（工具输出等），事件里带 `shadowedTokenCount`。
+- `compaction/summary`：**调模型**，读全量历史写 checkpoint（`## Primary Request and Intent ...`）。
+  `/compact` 与 `compactNow` 走这条（通常先 prune 再 summary）。
+
+推论：
+
+1. 自动压缩每次触发 = 一次全历史调用。钱不多（99% 是缓存读），但是真实开销与一次往返延迟。
+2. 它省下的也主要是**便宜的缓存 token**（会话命中率 97–99%），所以"省钱"的边际收益很小；
+   压缩真正的价值是**别撞上下文上限**、降低延迟。
+3. 因此默认冷却定为 **10 分钟**，且默认关闭（阈值 0）。压得太勤只是反复付调用费。
+4. 细节不丢：树里存原文，压缩后的第一条提示带"折叠节点索引"指路。
