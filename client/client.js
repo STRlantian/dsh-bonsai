@@ -46,6 +46,16 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。": "That turn is outside the rendered transcript (virtualised list); see the detail panel instead.",
   "界面语言": "Language",
   "预设": "Presets",
+  "盆栽 · 预设与折叠": "Bonsai · presets and folding",
+  "盆栽预设": "Bonsai preset",
+  "折叠历史阈值": "Fold history above",
+  "隐藏工具（勾选后模型看不到这些能力）": "Hidden tools (the model stops seeing these capabilities)",
+  "预设：": "Presets: ",
+  "保存中…": "Saving…",
+  "已保存": "Saved",
+  "保存失败：{}": "Could not save: {}",
+  "保存": "Save",
+  "自定义…": "Custom…",
   "保守": "Conservative",
   "均衡": "Balanced",
   "激进": "Aggressive",
@@ -460,6 +470,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-modal-foot{display:flex;align-items:center;gap:8px}',
     '.twt-presets{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--twt-border);border-radius:10px;background:var(--twt-hover)}',
     '.twt-togglerow{display:flex;align-items:center;gap:6px;cursor:pointer;padding:2px 0 6px;border-bottom:1px solid var(--twt-border);margin-bottom:2px}',
+    '.twt-mode-preset{display:inline-flex;align-items:center;margin-left:4px;vertical-align:middle}',
+    '.twt-mode-select{font:inherit;font-size:11px;padding:1px 4px;border:1px solid var(--twt-border);border-radius:6px;background:var(--twt-surface);color:var(--twt-text);color-scheme:light dark;cursor:pointer;opacity:.85}',
+    '.twt-mode-select:hover{opacity:1}',
+    '.twt-qrow{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px}',
+    '.twt-qname{opacity:.75}',
     '.twt-togglerow .twt-hint{margin-left:4px;opacity:.55}',
     '.twt-select{font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--twt-border);background:var(--twt-surface);color:var(--twt-text);color-scheme:light dark}',
     '.twt-select:focus{outline:2px solid var(--twt-accent);outline-offset:1px}',
@@ -2902,6 +2917,262 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   // Only the slot registry is required: the panel reads the tree from the plugin's
   // exact `/api` route with the page's own cookie, so no RPC service is involved.
   // A throwing apply here must never take the shell down.
+  // --- composer preset picker ---------------------------------------------
+  // Anchored to the host's mode controls, because that row exists before any session does.
+  var MODE_PRESETS = [
+    { id: 'conservative', label: '保守' },
+    { id: 'balanced', label: '均衡' },
+    { id: 'aggressive', label: '激进' },
+  ]
+
+  /** Which preset (if any) the effective settings currently match. */
+  function currentPreset(effective) {
+    if (effective === undefined || effective === null) return 'custom'
+    var hidden = Array.isArray(effective.toolDeny) ? effective.toolDeny.length : 0
+    if (effective.foldAboveTokens === 60000 && effective.foldKeepTurns === 4 && hidden === 0) return 'conservative'
+    if (effective.foldAboveTokens === 40000 && effective.foldKeepTurns === 3 && hidden === 0) return 'balanced'
+    if (effective.foldAboveTokens === 20000 && effective.foldKeepTurns === 2 && hidden > 0) return 'aggressive'
+    return 'custom'
+  }
+
+  /** Read the settings the panel and the picker both use. */
+  function readSettings() {
+    return fetch('/api/token-tree/settings').then(function (response) { return response.json() })
+  }
+
+  /** Write one settings patch. */
+  function writeSettings(patch) {
+    return fetch('/api/token-tree/settings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
+    }).then(function (response) { return response.json() })
+  }
+
+  /** Apply one preset id. */
+  function writePreset(name) {
+    return fetch('/api/token-tree/preset', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ preset: name }),
+    }).then(function (response) { return response.json() })
+  }
+
+  /** A labelled row inside the custom dialog. */
+  function field(labelText, control) {
+    var row = document.createElement('label')
+    row.className = 'twt-qrow'
+    var name = document.createElement('span')
+    name.className = 'twt-qname'
+    name.textContent = labelText
+    row.appendChild(name)
+    row.appendChild(control)
+    return row
+  }
+
+  /** The custom dialog: the four knobs, written on save. */
+  function openCustomSettings(onSaved) {
+    ensureStyles()
+    readSettings().then(function (settings) {
+      var effective = (settings && settings.effective) || {}
+      var back = document.createElement('div')
+      back.className = 'twt-modal-backdrop'
+      var panel = document.createElement('div')
+      panel.className = 'twt-modal'
+      back.appendChild(panel)
+
+      var head = document.createElement('div')
+      head.className = 'twt-modal-head'
+      var title = document.createElement('span')
+      title.className = 'twt-dtitle'
+      title.textContent = t('盆栽 · 预设与折叠')
+      var close = document.createElement('button')
+      close.className = 'twt-action'
+      close.textContent = t('关闭')
+      close.addEventListener('click', function () { back.remove() })
+      head.appendChild(title)
+      head.appendChild(close)
+      panel.appendChild(head)
+
+      var threshold = document.createElement('input')
+      threshold.type = 'number'
+      threshold.min = '0'
+      threshold.step = '5000'
+      threshold.className = 'twt-select'
+      threshold.value = String(effective.foldAboveTokens === undefined ? 40000 : effective.foldAboveTokens)
+      panel.appendChild(field(t('折叠历史阈值'), threshold))
+
+      var keep = document.createElement('input')
+      keep.type = 'number'
+      keep.min = '0'
+      keep.step = '1'
+      keep.className = 'twt-select'
+      keep.value = String(effective.foldKeepTurns === undefined ? 3 : effective.foldKeepTurns)
+      panel.appendChild(field(t('保留最近轮数'), keep))
+
+      var scope = document.createElement('select')
+      scope.className = 'twt-select'
+      ;[['turns', t('整轮对话')], ['tools', t('工具输出')]].forEach(function (pair) {
+        var option = document.createElement('option')
+        option.value = pair[0]
+        option.textContent = pair[1]
+        scope.appendChild(option)
+      })
+      scope.value = effective.foldScope === 'tools' ? 'tools' : 'turns'
+      panel.appendChild(field(t('折叠范围'), scope))
+
+      var tools = (settings && Array.isArray(settings.availableTools)) ? settings.availableTools : []
+      var hidden = new Set(Array.isArray(effective.toolDeny) ? effective.toolDeny : [])
+      if (tools.length > 0) {
+        var caption = document.createElement('p')
+        caption.className = 'twt-hint'
+        caption.textContent = t('隐藏工具（勾选后模型看不到这些能力）')
+        panel.appendChild(caption)
+        var list = document.createElement('div')
+        list.className = 'twt-modal-list'
+        tools.forEach(function (tool) {
+          var row = document.createElement('label')
+          row.className = 'twt-tool-row'
+          var box = document.createElement('input')
+          box.type = 'checkbox'
+          box.checked = hidden.has(tool.name)
+          box.addEventListener('change', function () {
+            if (box.checked) hidden.add(tool.name)
+            else hidden.delete(tool.name)
+          })
+          var name = document.createElement('span')
+          name.className = 'twt-tool-name'
+          name.textContent = tool.name
+          var size = document.createElement('span')
+          size.className = 'twt-tool-size'
+          size.textContent = tf('{} 字符', tool.chars)
+          row.appendChild(box)
+          row.appendChild(name)
+          row.appendChild(size)
+          list.appendChild(row)
+        })
+        panel.appendChild(list)
+      }
+
+      var foot = document.createElement('div')
+      foot.className = 'twt-modal-foot'
+      var status = document.createElement('span')
+      status.className = 'twt-hint'
+      foot.appendChild(status)
+      var spacer = document.createElement('span')
+      spacer.style.flex = '1'
+      foot.appendChild(spacer)
+      var presets = document.createElement('span')
+      presets.className = 'twt-hint'
+      presets.textContent = t('预设：') + MODE_PRESETS.map(function (preset) { return t(preset.label) }).join(' / ')
+      foot.appendChild(presets)
+      var save = document.createElement('button')
+      save.className = 'twt-action'
+      save.dataset.kind = 'primary'
+      save.textContent = t('保存')
+      save.addEventListener('click', function () {
+        save.disabled = true
+        status.textContent = t('保存中…')
+        writeSettings({
+          foldAboveTokens: Math.max(0, Math.round(Number(threshold.value) || 0)),
+          foldKeepTurns: Math.max(0, Math.round(Number(keep.value) || 0)),
+          foldScope: scope.value,
+          toolDeny: hidden.size === 0 ? null : Array.from(hidden),
+        }).then(function (payload) {
+          if (payload && payload.ok === false) throw new Error(payload.error || 'failed')
+          status.textContent = t('已保存')
+          if (typeof onSaved === 'function') onSaved()
+          back.remove()
+        }).catch(function (error) {
+          save.disabled = false
+          status.textContent = tf('保存失败：{}', error && error.message ? error.message : error)
+        })
+      })
+      foot.appendChild(save)
+      panel.appendChild(foot)
+      back.addEventListener('click', function (event) { if (event.target === back) back.remove() })
+      document.body.appendChild(back)
+    })
+  }
+
+  /**
+   * Mount the picker on the host's mode controls.
+   *
+   * The row can appear late (and be replaced on a route change), so this attaches on a
+   * mutation observer plus a short retry window, and never throws into the shell.
+   */
+  function mountModePreset() {
+    if (typeof document === 'undefined') return
+    var attached = null
+    var select = null
+
+    function refresh() {
+      if (select === null) return
+      readSettings().then(function (settings) {
+        var effective = (settings && settings.effective) || {}
+        select.value = currentPreset(effective)
+        select.title = t('盆栽预设') + ' · ' + select.options[select.selectedIndex].textContent
+      }).catch(function () {})
+    }
+
+    function build() {
+      var wrap = document.createElement('span')
+      wrap.className = 'twt-mode-preset'
+      select = document.createElement('select')
+      select.className = 'twt-mode-select'
+      select.setAttribute('aria-label', t('盆栽预设'))
+      MODE_PRESETS.forEach(function (preset) {
+        var option = document.createElement('option')
+        option.value = preset.id
+        option.textContent = t(preset.label)
+        select.appendChild(option)
+      })
+      var custom = document.createElement('option')
+      custom.value = 'custom'
+      custom.textContent = t('自定义…')
+      select.appendChild(custom)
+      select.addEventListener('change', function () {
+        var value = select.value
+        if (value === 'custom') {
+          openCustomSettings(refresh)
+          return
+        }
+        select.disabled = true
+        writePreset(value).then(function () { refresh() }).catch(function () {}).then(function () { select.disabled = false })
+      })
+      wrap.appendChild(select)
+      return wrap
+    }
+
+    function attach() {
+      var host = document.querySelector('[class*="modeControls"]')
+      if (host === null) return false
+      if (host.querySelector('.twt-mode-preset') !== null) {
+        attached = host
+        return true
+      }
+      ensureStyles()
+      host.appendChild(build())
+      attached = host
+      refresh()
+      return true
+    }
+
+    if (attach()) return
+    // The host replaces this row on route changes, so keep watching: attach() is a no-op when
+    // the picker is already there and rebuilds it when the host wiped it.
+    if (typeof MutationObserver === 'function') {
+      var observer = new MutationObserver(function () { attach() })
+      observer.observe(document.documentElement, { childList: true, subtree: true })
+    }
+    var tries = 0
+    var timer = setInterval(function () {
+      tries++
+      attach()
+      if (tries > 60) clearInterval(timer)
+    }, 500)
+  }
+
   exports.inject = ['slots']
   exports.apply = function apply(ctx) {
     try {
@@ -2935,6 +3206,15 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     } catch (error) {
       if (typeof console !== 'undefined' && console.warn) {
         console.warn('[dsh-token-tree] composer dock registration skipped:', error && error.message ? error.message : error)
+      }
+    }
+
+    // The picker anchors to host DOM, so it must never take the shell down.
+    try {
+      mountModePreset()
+    } catch (error) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[dsh-token-tree] preset picker skipped:', error && error.message ? error.message : error)
       }
     }
   }

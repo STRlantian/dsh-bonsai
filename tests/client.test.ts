@@ -291,6 +291,30 @@ test('the settings tab offers the tokenizer dropdown from the payload', { timeou
   assert.equal(select.value, '4', 'shows the generation actually in use')
 })
 
+test('the preset picker anchors to the host mode row', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  // The host renders its mode selector late; the observer must still catch it.
+  const row = client.window.document.createElement('div')
+  row.className = 'Xyz_modeControls'
+  row.innerHTML = '<select class="Xyz_modeSelector"><option>标准模式</option></select>'
+  client.window.document.body.appendChild(row)
+  await new Promise(resolve => setTimeout(resolve, 400))
+  await client.flush()
+
+  const picker = row.querySelector('.twt-mode-preset select')
+  assert.ok(picker !== null, 'the picker attached to the mode controls')
+  const values = [...picker.options].map(option => option.value)
+  assert.deepEqual(values, ['conservative', 'balanced', 'aggressive', 'custom'], 'three presets plus custom')
+
+  picker.value = 'aggressive'
+  await React.act(async () => { picker.dispatchEvent(new client.window.Event('change', { bubbles: true })) })
+  await client.flush()
+  const posted = client.requests.find(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST')
+  assert.ok(posted !== undefined, 'the picker posts to the preset route')
+  assert.ok(String(posted.body).includes('aggressive'), 'with the chosen preset')
+})
+
 test('the tool-result toggle sits on the right and only where it applies', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)
