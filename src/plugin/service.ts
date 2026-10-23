@@ -95,6 +95,14 @@ export interface SessionState {
   lastHint?: { counted: number | undefined; above: number; fast: number; fired: boolean; reason: string }
   /** When the last automatic compaction ran, for the cooldown. */
   lastCompactAt?: number
+  /** Last system-prompt assembly, recorded for diagnostics. */
+  assembly?: {
+    keys: string[]
+    sections: { name: string; chars: number }[]
+    totalChars: number
+    parts: { name: string; items: number; chars: number }[]
+    at: number
+  }
   /** Whether the post-compaction index was already injected. */
   indexInjected?: boolean
   /** Last auto-compaction decision, for diagnostics. */
@@ -364,6 +372,7 @@ export class TokenTreeService {
     locale: string
     lastPrompt: SessionState['probe'] | null
     lastDecision: SessionState['decisionShape'] | null
+    lastAssembly: SessionState['assembly'] | null
     autoCompact: SessionState['autoCompactProbe'] | null
     drift: { samples: number; ratio: number | null }
     lastHint: SessionState['lastHint'] | null
@@ -401,6 +410,7 @@ export class TokenTreeService {
       locale: this.settings?.all().locale ?? 'auto',
       lastPrompt: this.lastPromptInfo(),
       lastDecision: this.lastDecisionInfo(),
+      lastAssembly: this.assemblyInfo(),
       autoCompact: this.autoCompactInfo(),
       drift: this.driftInfo(),
       lastHint: this.lastHintInfo(),
@@ -1354,6 +1364,11 @@ export class TokenTreeService {
     return latest ?? null
   }
 
+  /** Shape of the last assembled system prompt. */
+  private assemblyInfo(): SessionState['assembly'] | null {
+    return this.stateOf('assembly').assembly ?? null
+  }
+
   /** Shape of the last decision object handed to `agent/pre-step`. */
   private lastDecisionInfo(): SessionState['decisionShape'] | null {
     let latest: SessionState['decisionShape'] | undefined
@@ -1491,6 +1506,53 @@ export class TokenTreeService {
     const state = typeof sessionIdOrState === 'string' ? this.stateOf(sessionIdOrState) : sessionIdOrState
     state.compacted = true
     state.indexInjected = false
+  }
+
+  /**
+   * Record the shape of an assembled system prompt: section names and their sizes.
+   *
+   * Read-only and size-only: the text never leaves the process, but knowing which section
+   * costs thousands of characters is what decides whether trimming is worth building.
+   * @param assembly - value handed to the `system-prompt/assemble` listener.
+   */
+  noteAssembly(assembly: unknown): void {
+    const sections: { name: string; chars: number }[] = []
+    let total = 0
+    const keys: string[] = []
+    if (assembly !== null && typeof assembly === 'object') {
+      const record = assembly as Record<string, unknown>
+      for (const key of Object.keys(record)) keys.push(key)
+      const collected = record.sections
+      const list = Array.isArray(collected) ? collected : []
+      for (const entry of list) {
+        if (entry === null || typeof entry !== 'object') continue
+        const section = entry as Record<string, unknown>
+        const name = typeof section.name === 'string' ? section.name : '?'
+        const text = typeof section.text === 'string' ? section.text : ''
+        sections.push({ name, chars: text.length })
+        total += text.length
+      }
+    }
+    // Other parts of the assembly: contexts, tools, variables. Measured as serialized size
+    // so the biggest consumer is obvious before anything is trimmed.
+    const parts: { name: string; items: number; chars: number }[] = []
+    if (assembly !== null && typeof assembly === 'object') {
+      const record = assembly as Record<string, unknown>
+      for (const key of ['contexts', 'tools', 'variables']) {
+        const value = record[key]
+        if (value === undefined) continue
+        const items = Array.isArray(value) ? value.length : (typeof value === 'object' && value !== null ? Object.keys(value).length : 0)
+        let chars = 0
+        try {
+          chars = JSON.stringify(value)?.length ?? 0
+        } catch {
+          chars = -1
+        }
+        parts.push({ name: key, items, chars })
+      }
+    }
+    const sessionId = 'assembly'
+    this.stateOf(sessionId).assembly = { keys, sections, totalChars: total, parts, at: Date.now() }
   }
 
   /** Current learned ratio, for the settings panel and the logs. */

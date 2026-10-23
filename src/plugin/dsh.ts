@@ -258,6 +258,11 @@ export interface ContextLike {
     event: 'agent/turn-stopping',
     listener: (payload: TurnStoppingPayloadLike) => void | Promise<void>,
   ): () => void
+  /** Register a system-prompt assembly listener; it must call `next()`. */
+  on(
+    event: 'system-prompt/assemble',
+    listener: (assembly: unknown, context: unknown, next: () => unknown) => unknown,
+  ): () => void
   /** Register a reversible effect. */
   effect(execute: () => unknown, label?: string): () => void
   /** Publish a service under a name; the returned disposer withdraws it. */

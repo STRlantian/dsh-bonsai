@@ -108,6 +108,20 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     }
   })
 
+  // Read-only observation of the prompt the host is about to assemble.
+  try {
+    ctx.on('system-prompt/assemble', (assembly, _context, next) => {
+      try {
+        service.noteAssembly(assembly)
+      } catch {
+        // Diagnostics must never break assembly.
+      }
+      return next()
+    })
+  } catch (error) {
+    ctx.logger.debug(`token-tree: system-prompt/assemble not available (${describe(error)})`)
+  }
+
   ctx.on('agent/turn-stopping', (payload) => {
     if (!service.effective().autoReflect) return
     if (!tracked(payload.agent, ctx, config)) return
