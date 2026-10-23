@@ -41,15 +41,23 @@ $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
 
 function Get-Manifest {
-  return (Get-Content 'package.json' -Raw | ConvertFrom-Json)
+  # Explicit UTF-8: PowerShell 5.1 defaults to the system code page, which mangles the Chinese
+  # in the description and wrote mojibake into a published tarball once already.
+  $path = Join-Path $root 'package.json'
+  $json = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+  return ($json | ConvertFrom-Json)
 }
 
 function Set-Version([string]$version) {
-  $manifest = Get-Manifest
-  $manifest.version = $version
-  $json = $manifest | ConvertTo-Json -Depth 20
+  # Patch the raw text instead of round-tripping the manifest: ConvertTo-Json would reflow the
+  # whole file and re-encode every string.
   $path = Join-Path $root 'package.json'
-  [System.IO.File]::WriteAllText($path, $json + [char]10, (New-Object System.Text.UTF8Encoding($false)))
+  $json = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+  $patched = [regex]::Replace($json, '"version"\s*:\s*"[^"]*"', ('"version": "' + $version + '"'), 'None')
+  if ($patched -eq $json -and $json -notmatch ('"version"\s*:\s*"' + [regex]::Escape($version) + '"')) {
+    throw "could not set version to $version"
+  }
+  [System.IO.File]::WriteAllText($path, $patched, (New-Object System.Text.UTF8Encoding($false)))
 }
 
 $original = $null
