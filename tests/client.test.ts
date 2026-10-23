@@ -291,6 +291,23 @@ test('the settings tab offers the tokenizer dropdown from the payload', { timeou
   assert.equal(select.value, '4', 'shows the generation actually in use')
 })
 
+test('the settings panel offers the three presets', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  await client.click('盆栽')
+  await client.click('设置')
+  const bar = client.document.querySelector('.twt-presets')
+  assert.ok(bar !== null, 'the preset bar is present')
+  const labels = [...bar.querySelectorAll('button')].map(button => button.textContent ?? '')
+  assert.deepEqual(labels, ['保守', '均衡', '激进'], 'three presets, in order')
+  const aggressive = [...bar.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('激进'))
+  await React.act(async () => { aggressive.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+  const posted = client.requests.find(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST')
+  assert.ok(posted !== undefined, 'the preset route was called')
+  assert.ok(String(posted.body).includes('aggressive'), 'with the chosen preset')
+})
+
 test('tools are hidden through a checklist, not a name field', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)

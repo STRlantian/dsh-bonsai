@@ -28,6 +28,9 @@ export const EDIT_ROUTE = '/api/token-tree/edit'
 /** Read/write route: the switches that can be flipped while the host runs. */
 export const SETTINGS_ROUTE = '/api/token-tree/settings'
 
+/** Route that applies a named preset in one write. */
+export const PRESET_ROUTE = '/api/token-tree/preset'
+
 /** Empty payload used before any session exists. */
 function emptyPayload(): TreePayload {
   return {
@@ -213,6 +216,26 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
       }
       },
     }), 'token-tree: /api/token-tree/settings')
+    // Presets: one call writes the whole bundle, so a half-applied fold setting is impossible.
+    scoped.effect(() => connection.fetch.register({
+      path: PRESET_ROUTE,
+      methods: ['POST'],
+      requestBody: 'buffered',
+      fetch: async (request: Request): Promise<Response> => {
+        if (request.method !== 'POST') return Response.json({ ok: false, error: 'method not allowed' }, { status: 405 })
+        let body: Record<string, unknown>
+        try {
+          body = await request.json() as Record<string, unknown>
+        } catch {
+          return Response.json({ ok: false, error: 'invalid json' }, { status: 400 })
+        }
+        const applied = service.applyPreset(body.preset)
+        if (applied === undefined) {
+          return Response.json({ ok: false, error: 'unknown preset or no settings store' }, { status: 400 })
+        }
+        return Response.json({ ok: true, ...applied }, { headers: { 'cache-control': 'no-store' } })
+      },
+    }), 'token-tree: /api/token-tree/preset')
     ctx.logger.info(`token-tree: serving ${SETTINGS_ROUTE}`)
   }
 

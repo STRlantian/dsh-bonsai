@@ -45,6 +45,16 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "单击选中；双击跳到对话中的这一轮": "Click to select; double-click to jump to that turn",
   "这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。": "That turn is outside the rendered transcript (virtualised list); see the detail panel instead.",
   "界面语言": "Language",
+  "预设": "Presets",
+  "保守": "Conservative",
+  "均衡": "Balanced",
+  "激进": "Aggressive",
+  "6 万 token 才折叠，保留 4 轮，不隐藏任何工具": "Fold only past 60k tokens, keep four turns, hide nothing.",
+  "4 万 token 开始折叠，保留 3 轮，不隐藏工具（默认）": "Start folding at 40k tokens, keep three turns, hide nothing (default).",
+  "2 万就开始折叠、只留 2 轮，并隐藏 9 个少用的重工具（能力会真的少掉）": "Fold from 20k, keep two turns, and hide nine heavy rarely-used tools - those capabilities really go away.",
+  "预设只改这一页的设置，随时可以再点另一个": "A preset only changes the settings on this page; you can switch any time.",
+  "已应用预设：{}": "Applied preset: {}",
+  "应用预设失败：{}": "Could not apply the preset: {}",
   "相关度低于这个值的节点不进入排序（0 = 不设门槛）。0.3 实测比较稳，0.5 会让多数查询空手（空手时会自动放宽一次）": "Nodes below this relevance never enter ranking (0 disables the gate). 0.3 measured safest; 0.5 leaves most queries empty, and an empty result is retried once with the gate relaxed.",
   "列出磁盘上实际找到的 tokenizer.json；「自主学习」不读词表，用估算加账单校准": "Lists the tokenizer.json files found on disk; 'learned' reads no vocabulary and calibrates from estimates and billed totals.",
   "对话达到这个 token 数才发检索提示；有词表时按实测，没有时按估算": "Send the retrieval hint once the conversation reaches this many tokens, measured with the tokenizer when available.",
@@ -447,6 +457,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-tool-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Consolas,monospace}',
     '.twt-tool-size{font-size:10px;opacity:.6}',
     '.twt-modal-foot{display:flex;align-items:center;gap:8px}',
+    '.twt-presets{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--twt-border);border-radius:10px;background:var(--twt-hover)}',
     '.twt-select{font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--twt-border);background:var(--twt-surface);color:var(--twt-text);color-scheme:light dark}',
     '.twt-select:focus{outline:2px solid var(--twt-accent);outline-offset:1px}',
     '.twt-modal-search{color-scheme:light dark}',
@@ -1075,6 +1086,29 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var toolDraft = toolDraftState[0]
     var setToolDraft = toolDraftState[1]
 
+    /** The bundles the host understands; the labels are what people read. */
+    var PRESET_LIST = [
+      { id: 'conservative', label: '保守', hint: '6 万 token 才折叠，保留 4 轮，不隐藏任何工具' },
+      { id: 'balanced', label: '均衡', hint: '4 万 token 开始折叠，保留 3 轮，不隐藏工具（默认）' },
+      { id: 'aggressive', label: '激进', hint: '2 万就开始折叠、只留 2 轮，并隐藏 9 个少用的重工具（能力会真的少掉）' },
+    ]
+
+    /** Apply a preset, then refresh the panel so the numbers match. */
+    function applyPreset(name) {
+      setBusy(true)
+      setNote('')
+      presetPost(name)
+        .then(function (payload) {
+          if (payload && payload.ok === false) throw new Error(payload.error || 'preset failed')
+          var picked = PRESET_LIST.filter(function (item) { return item.id === name })
+          setNote(tf('已应用预设：{}', picked.length > 0 ? t(picked[0].label) : name))
+          return settingsGet()
+        })
+        .then(function (payload) { setSettings(payload) })
+        .catch(function (error) { setNote(tf('应用预设失败：{}', error.message)) })
+        .finally(function () { setBusy(false) })
+    }
+
     // Tools the last assembly carried, and the ones the user hides. Defined before the
     // settings panel is built, because that panel reads them.
     var availableTools = (settings !== null && Array.isArray(settings.availableTools)) ? settings.availableTools : []
@@ -1131,6 +1165,15 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
      * @param {string} key - setting name.
      * @param {boolean|number|null} value - new value; null clears the override.
      */
+    /** POST one preset name to the host. */
+    function presetPost(name) {
+      return fetch('/api/token-tree/preset', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ preset: name }),
+      }).then(function (response) { return response.json() })
+    }
+
     function saveSetting(key, value) {
       setBusy(true)
       setNote('')
@@ -1278,6 +1321,18 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       settingsPanel = h('div', { className: 'twt-settings' },
         h('p', { className: 'twt-hint' },
           tf('这些开关立即生效，写入 {}，重启后仍然有效。', settings.path === null ? t('（未配置）') : settings.path)),
+        h('div', { className: 'twt-presets' },
+          h('span', { className: 'twt-dtitle' }, t('预设')),
+          PRESET_LIST.map(function (preset) {
+            return h('button', {
+              key: preset.id,
+              className: 'twt-action',
+              disabled: busy,
+              title: t(preset.hint),
+              onClick: function () { applyPreset(preset.id) },
+            }, t(preset.label))
+          }),
+          h('span', { className: 'twt-hint' }, t('预设只改这一页的设置，随时可以再点另一个'))),
         settingRow({
           key: 'autoInject',
           label: t('自动注入记忆块'),

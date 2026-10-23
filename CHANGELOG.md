@@ -18,6 +18,9 @@ history can now leave the model's view without a model call.
   `deriveMessages()`. The log stays append-only and the original stays in the tree.
   Measured: −14.3% prompt with tool-result folding, **no model call**, and after a whole turn
   was folded the model called `retrieve_context` and answered correctly.
+- **Presets** — 保守 / 均衡 / 激进, applied through `POST /api/token-tree/preset` in a single
+  write so a fold threshold and its scope can never be seen half-applied. 激进 also hides the
+  nine heaviest rarely-needed tools.
 - **Recycle bin tab** — every hidden branch root, with preview, subtree size, token count, a
   restore button per row and "restore all".
 - Read-only assembly diagnostics (`lastAssembly`, `lastDecision`, `fold`,
@@ -25,7 +28,7 @@ history can now leave the model's view without a model call.
 
 ### Changed
 
-- Folding defaults to **whole turns, above 60,000 tokens, keeping the last 3 turns**: long
+- Folding defaults to **whole turns, above 40,000 tokens, keeping the last 3 turns**: long
   sessions stop re-sending history, short ones are untouched. Set `foldAboveTokens: 0` to
   disable.
 - The opening turn is never folded: its first surface node is the system prompt, which only a

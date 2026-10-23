@@ -24,6 +24,7 @@ import { loadTokenizerFile } from '../core/tokenizer.ts'
 import { TokenRatio } from '../core/ratio.ts'
 import { BillingFit, classCounts } from '../core/billing.ts'
 import { resolveTokenizer, defaultTokenizerDir, discoverTokenizers } from './tokenizer-select.ts'
+import { presetOf } from './presets.ts'
 import type { Tokenize } from '../core/tokenizer.ts'
 import { contentFeatures, cosine, embedText } from '../core/embedding.ts'
 import type { RetrieveOptions, RetrieveResult } from '../core/retrieve.ts'
@@ -341,6 +342,23 @@ export class TokenTreeService {
     // A different vocabulary invalidates every cached number, so re-resolve it here.
     if (Object.prototype.hasOwnProperty.call(patch, 'tokenizerVersion')) this.reloadTokenizer()
     return { effective: this.effective(), overrides: { ...overrides } }
+  }
+
+  /**
+   * Apply one named preset.
+   *
+   * All keys go through a single `settings.apply` call, so the file is written once and the
+   * fold threshold, scope and hidden tools can never be observed half-applied.
+   * @param name - preset id from the request body.
+   * @returns The result, or `undefined` when the name is unknown.
+   */
+  applyPreset(name: unknown): { preset: string; effective: ReturnType<TokenTreeService['effective']> } | undefined {
+    const preset = presetOf(name)
+    if (preset === undefined) return undefined
+    if (this.settings === undefined) return undefined
+    this.settings.apply(preset.settings)
+    this.logger.info(`token-tree: applied preset ${preset.name}`)
+    return { preset: preset.name, effective: this.effective() }
   }
 
   /**
