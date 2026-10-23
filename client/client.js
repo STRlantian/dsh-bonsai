@@ -45,6 +45,15 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "单击选中；双击跳到对话中的这一轮": "Click to select; double-click to jump to that turn",
   "这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。": "That turn is outside the rendered transcript (virtualised list); see the detail panel instead.",
   "界面语言": "Language",
+  "相关度低于这个值的节点不进入排序（0 = 不设门槛）。0.3 实测比较稳，0.5 会让多数查询空手（空手时会自动放宽一次）": "Nodes below this relevance never enter ranking (0 disables the gate). 0.3 measured safest; 0.5 leaves most queries empty, and an empty result is retried once with the gate relaxed.",
+  "列出磁盘上实际找到的 tokenizer.json；「自主学习」不读词表，用估算加账单校准": "Lists the tokenizer.json files found on disk; 'learned' reads no vocabulary and calibrates from estimates and billed totals.",
+  "对话达到这个 token 数才发检索提示；有词表时按实测，没有时按估算": "Send the retrieval hint once the conversation reaches this many tokens, measured with the tokenizer when available.",
+  "每回合把检索到的节点作为一块推到上下文里，约 428 token/轮": "Push the retrieved nodes into context as one block every turn, about 428 tokens per turn.",
+  "工具输出：只移走旧的工具结果。整轮对话：整轮换成一行提示，工具调用与结果一起移走": "Tool output: move old tool results out. Whole turns: replace an entire turn with one line, taking the tool call and its result together.",
+  "最近这么多轮保持原样，保证正在用的上下文完整": "This many recent turns are left untouched, so the context in use stays complete.",
+  "对话超过这个 token 数就把较早的内容移出模型视野（0 = 关闭）。只改模型看到的部分，日志和对话树里的原文不动，也不产生模型调用": "Above this many tokens, older content leaves the model view (0 disables). Only what the model sees changes: the log and the tree keep the original, and no model call is made.",
+  "从清单里挑不需要的工具，模型就看不到它们。工具定义占 prompt 的大头，隐藏几个用得少的能明显省钱；默认一个都不藏": "Pick tools you do not need and the model stops seeing them. Tool definitions dominate the prompt, so hiding a few rarely used ones saves real tokens; nothing is hidden by default.",
+  "对话超过这个 token 数就调用一次模型，把旧历史压成摘要（0 = 关闭）。会产生一次全量历史的费用；想更便宜就用下面的「折叠历史」": "Above this many tokens, one model call condenses old history into a summary (0 disables). It costs one pass over the whole history; the fold setting below is cheaper.",
   "隐藏工具": "Hide tools",
   "工具 schema 是 prompt 的大头：实测隐藏 9 个可省 3,377 token/轮（−32%）。默认一个都不藏": "Tool schemas dominate the prompt: hiding nine of them saved 3,377 tokens per turn (-32%) in measurement. Nothing is hidden by default.",
   "已隐藏 {} 个": "{} hidden",
@@ -438,6 +447,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-tool-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Consolas,monospace}',
     '.twt-tool-size{font-size:10px;opacity:.6}',
     '.twt-modal-foot{display:flex;align-items:center;gap:8px}',
+    '.twt-select{font-size:12px;padding:5px 8px;border-radius:8px;border:1px solid var(--twt-border);background:var(--twt-surface);color:var(--twt-text);color-scheme:light dark}',
+    '.twt-select:focus{outline:2px solid var(--twt-accent);outline-offset:1px}',
+    '.twt-modal-search{color-scheme:light dark}',
   '.twt-compare{display:flex;flex-direction:column;gap:8px;padding:8px 10px;overflow:auto;height:100%}',
   '.twt-compare-cols{display:flex;gap:10px;align-items:stretch;overflow:auto}',
   '.twt-branch-col{flex:1 1 0;min-width:180px;max-width:320px;border:1px solid var(--twt-border);border-radius:8px;padding:8px;display:flex;flex-direction:column;gap:6px;background:var(--twt-surface)}',
@@ -1269,7 +1281,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'autoInject',
           label: t('自动注入记忆块'),
-          hint: t('每回合把检索到的节点作为一块推到上下文里（实测约 428 token/轮）'),
+          hint: t('每回合把检索到的节点作为一块推到上下文里，约 428 token/轮'),
           control: h('input', {
             type: 'checkbox',
             checked: effective.autoInject === true,
@@ -1320,7 +1332,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'admitRelevance',
           label: t('检索准入阈值'),
-          hint: t('原始相关度（余弦）达到这个值才进入排序，0 表示不设门槛；实测 0.3 召回不降、返回节点约少四成，0.5 会让七成查询空手（空手时会自动放宽一次）'),
+          hint: t('相关度低于这个值的节点不进入排序（0 = 不设门槛）。0.3 实测比较稳，0.5 会让多数查询空手（空手时会自动放宽一次）'),
           control: h('input', {
             type: 'number',
             min: 0,
@@ -1342,7 +1354,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'hintAboveTokens',
           label: t('提示起始 token 数'),
-          hint: t('实测对话 token 达到这个值才发检索提示；有 tokenizer 时按实测、没有时按估算（并自动打 0.85 折）'),
+          hint: t('对话达到这个 token 数才发检索提示；有词表时按实测，没有时按估算'),
           control: h('input', {
             type: 'number',
             min: 100,
@@ -1363,8 +1375,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'tokenizerVersion',
           label: 'tokenizer',
-          hint: t('下拉里列的是磁盘上实际找到的 tokenizer.json；「自主学习」不用词表，靠估算 + 账单校准，节点预算会自动打 0.85 折'),
+          hint: t('列出磁盘上实际找到的 tokenizer.json；「自主学习」不读词表，用估算加账单校准'),
           control: h('select', {
+            className: 'twt-select',
             defaultValue: currentTokenizerChoice(effective, settings),
             disabled: busy,
             style: { width: '184px' },
@@ -1395,7 +1408,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'autoCompactAboveTokens',
           label: t('自动压缩阈值'),
-          hint: t('对话 token 超过这个值就主动压缩（0 = 关闭）。这是唯一能真正减少 input 的手段，代价是丢失细节'),
+          hint: t('对话超过这个 token 数就调用一次模型，把旧历史压成摘要（0 = 关闭）。会产生一次全量历史的费用；想更便宜就用下面的「折叠历史」'),
           control: h('input', {
             type: 'number',
             min: 0,
@@ -1416,7 +1429,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'toolDeny',
           label: t('隐藏工具'),
-          hint: t('工具 schema 是 prompt 的大头：实测隐藏 9 个可省 3,377 token/轮（−32%）。默认一个都不藏'),
+          hint: t('从清单里挑不需要的工具，模型就看不到它们。工具定义占 prompt 的大头，隐藏几个用得少的能明显省钱；默认一个都不藏'),
           control: h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
             h('span', { className: 'twt-hint', 'data-testid': 'tool-deny-count' },
               tf('已隐藏 {} 个', deniedTools.length)),
@@ -1437,7 +1450,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'foldAboveTokens',
           label: t('折叠历史阈值'),
-          hint: t('超过这个 token 数就把旧的工具输出从模型视野里折叠掉（0 = 关闭）。用 surfaceOp replace，不调模型；原文留在日志与树里'),
+          hint: t('对话超过这个 token 数就把较早的内容移出模型视野（0 = 关闭）。只改模型看到的部分，日志和对话树里的原文不动，也不产生模型调用'),
           control: h('input', {
             type: 'number',
             min: 0,
@@ -1458,9 +1471,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'foldScope',
           label: t('折叠范围'),
-          hint: t('工具输出：只折叠旧的 tool/result。整轮：把整轮对话换成一个占位行（工具调用与结果一起消失，不会只剩一半）'),
+          hint: t('工具输出：只移走旧的工具结果。整轮对话：整轮换成一行提示，工具调用与结果一起移走'),
           control: h('select', {
-            className: 'twt-action',
+            className: 'twt-select',
             defaultValue: effective.foldScope === 'turns' ? 'turns' : 'tools',
             disabled: busy,
             onChange: function (event) { saveSetting('foldScope', event.target.value) },
@@ -1471,7 +1484,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'foldKeepTurns',
           label: t('保留最近轮数'),
-          hint: t('最近这么多轮的工具输出不折叠，保证正在用的上下文完整'),
+          hint: t('最近这么多轮保持原样，保证正在用的上下文完整'),
           control: h('input', {
             type: 'number',
             min: 0,

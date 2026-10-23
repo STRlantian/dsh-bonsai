@@ -17,6 +17,8 @@
 
 import type { MemoryNode, NodeId, NodeKind } from '../core/types.ts'
 import { MemoryTree } from '../core/graph.ts'
+import { dirname, join } from 'node:path'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { estimateTokens, leadingSentences } from '../core/tokens.ts'
 import { loadTokenizerFile } from '../core/tokenizer.ts'
 import { TokenRatio } from '../core/ratio.ts'
@@ -1453,8 +1455,48 @@ export class TokenTreeService {
    * `tools.restrict()` will accept: it validates them, and one unknown name rejects the filter.
    * @returns Tool names with their schema size in characters; empty before any assembly.
    */
+  /** Where the last observed tool list is cached for the next process. */
+  private toolsFile(): string | undefined {
+    const path = this.settings?.path
+    if (typeof path !== 'string' || path === '') return undefined
+    return join(dirname(path), 'assembly-tools.json')
+  }
+
+  /**
+   * Cache the tool list so the picker works before the first model call of a session.
+   * @param tools - names with their schema size.
+   */
+  private persistTools(tools: readonly { name: string; chars: number }[]): void {
+    const file = this.toolsFile()
+    if (file === undefined) return
+    try {
+      writeFileSync(file, JSON.stringify({ tools: [...tools], at: Date.now() }), 'utf8')
+    } catch {
+      // A read-only home is not a reason to fail assembly.
+    }
+  }
+
+  /** @returns The cached tool list, or an empty list when nothing was observed yet. */
+  private cachedTools(): { name: string; chars: number }[] {
+    const file = this.toolsFile()
+    if (file === undefined) return []
+    try {
+      const parsed = JSON.parse(readFileSync(file, 'utf8')) as { tools?: unknown }
+      const list = Array.isArray(parsed.tools) ? parsed.tools : []
+      return list.filter(
+        (entry): entry is { name: string; chars: number } =>
+          entry !== null && typeof entry === 'object'
+          && typeof (entry as { name?: unknown }).name === 'string'
+          && typeof (entry as { chars?: unknown }).chars === 'number',
+      )
+    } catch {
+      return []
+    }
+  }
+
   private availableTools(): { name: string; chars: number }[] {
-    const tools = this.stateOf('assembly').assembly?.tools ?? []
+    const live = this.stateOf('assembly').assembly?.tools ?? []
+    const tools = live.length > 0 ? live : this.cachedTools()
     return [...tools]
       .filter(tool => typeof tool.name === 'string' && tool.name !== '?')
       .sort((left, right) => right.chars - left.chars)
@@ -1669,6 +1711,7 @@ export class TokenTreeService {
     }
     const sessionId = 'assembly'
     this.stateOf(sessionId).assembly = { keys, sections, totalChars: total, parts, tools: toolSizes, at: Date.now() }
+    this.persistTools(toolSizes)
   }
 
   /** Current learned ratio, for the settings panel and the logs. */
