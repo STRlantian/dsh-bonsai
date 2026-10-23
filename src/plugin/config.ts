@@ -141,6 +141,8 @@ export interface ResolvedConfig {
   foldAboveTokens: number
   /** Recent turns left unfolded. */
   foldKeepTurns: number
+  /** What folding removes: tool output only (`tools`) or whole turns (`turns`). */
+  foldScope: string
   /** Whether to supervise failures. */
   autoReflect: boolean
   /** Whether subagent sessions are tracked. */
@@ -364,6 +366,10 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
         foldKeepTurns: scalar(source, 'foldKeepTurns', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 2,
+        foldScope: (() => {
+          const scope = scalar(source, 'foldScope', (input): input is string => typeof input === 'string', issues, 'a string')
+          return scope === 'turns' ? 'turns' : 'tools'
+        })(),
         tokenizerVersion: typeof source.tokenizerVersion === 'string' && source.tokenizerVersion.trim() !== ''
           ? source.tokenizerVersion.trim()
           : typeof source.tokenizerVersion === 'number'

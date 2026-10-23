@@ -96,7 +96,7 @@ export interface SessionState {
   /** When the last automatic compaction ran, for the cooldown. */
   lastCompactAt?: number
   /** Last fold applied to a session, for diagnostics. */
-  fold?: { sessionId: string; folded: number; tokens: number; threshold: number; planned?: number; visible?: number; error?: string; at: number }
+  fold?: { sessionId: string; folded: number; tokens: number; threshold: number; planned?: number; visible?: number; range?: string; error?: string; at: number }
   /** What the session object handed to `session/event` actually exposes. */
   sessionCapability?: { keys: string[]; hasAppend: boolean; hasSurface: boolean; nodes?: number; at: number }
   /** Last tool restriction applied to an agent, for diagnostics. */
@@ -307,6 +307,7 @@ export class TokenTreeService {
     compactionIndex: boolean
     foldAboveTokens: number
     foldKeepTurns: number
+    foldScope: string
   } {
     const overrides = this.settings?.all() ?? {}
     return {
@@ -320,6 +321,7 @@ export class TokenTreeService {
       compactionIndex: overrides.compactionIndex ?? this.config.compactionIndex,
       foldAboveTokens: overrides.foldAboveTokens ?? this.config.foldAboveTokens,
       foldKeepTurns: overrides.foldKeepTurns ?? this.config.foldKeepTurns,
+      foldScope: overrides.foldScope ?? this.config.foldScope,
     }
   }
 
@@ -405,6 +407,7 @@ export class TokenTreeService {
         compactionIndex: this.config.compactionIndex,
         foldAboveTokens: this.config.foldAboveTokens,
         foldKeepTurns: this.config.foldKeepTurns,
+        foldScope: this.config.foldScope,
         hintAboveTokens: this.config.hintAboveTokens,
         tokenizerPath: this.config.tokenizerPath ?? null,
       },
@@ -1436,7 +1439,7 @@ export class TokenTreeService {
     folded: number,
     tokens: number,
     threshold: number,
-    extra: { planned?: number; visible?: number; error?: string } = {},
+    extra: { planned?: number; visible?: number; range?: string; error?: string } = {},
   ): void {
     this.stateOf('assembly').fold = { sessionId, folded, tokens, threshold, ...extra, at: Date.now() }
   }

@@ -49,6 +49,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "折叠历史阈值": "Fold history above",
   "超过这个 token 数就把旧的工具输出从模型视野里折叠掉（0 = 关闭）。用 surfaceOp replace，不调模型；原文留在日志与树里": "Above this many tokens, old tool output is folded out of the model view (0 disables). Uses surfaceOp replace with no model call; the original stays in the log and the tree.",
   "保留最近轮数": "Keep recent turns",
+  "折叠范围": "Fold scope",
+  "工具输出：只折叠旧的 tool/result。整轮：把整轮对话换成一个占位行（工具调用与结果一起消失，不会只剩一半）": "Tool output: fold old tool/result entries. Whole turns: replace an entire turn with one placeholder line (a tool call disappears together with its result, never half of a pair).",
+  "工具输出": "Tool output",
+  "整轮对话": "Whole turns",
   "最近这么多轮的工具输出不折叠，保证正在用的上下文完整": "Tool output from this many recent turns is left unfolded, so the context in use stays complete.",
   "上次折叠：{} 条工具输出（会话 {} tok，阈值 {}）": "Last fold: {} tool result(s) (session {} tok, threshold {})",
   "逗号分隔。工具 schema 是 prompt 的大头：实测隐藏 9 个工具可省 3,377 token/轮（−32%），且每轮都省。名字必须存在，否则整批被拒": "Comma separated. Tool schemas dominate the prompt: hiding nine tools saved 3,377 tokens per turn (-32%) in measurement. Names must exist, otherwise the whole filter is rejected.",
@@ -1402,6 +1406,19 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               saveSetting('foldAboveTokens', Math.round(next))
             },
           }),
+        }),
+        settingRow({
+          key: 'foldScope',
+          label: t('折叠范围'),
+          hint: t('工具输出：只折叠旧的 tool/result。整轮：把整轮对话换成一个占位行（工具调用与结果一起消失，不会只剩一半）'),
+          control: h('select', {
+            className: 'twt-action',
+            defaultValue: effective.foldScope === 'turns' ? 'turns' : 'tools',
+            disabled: busy,
+            onChange: function (event) { saveSetting('foldScope', event.target.value) },
+          },
+            h('option', { value: 'tools' }, t('工具输出')),
+            h('option', { value: 'turns' }, t('整轮对话'))),
         }),
         settingRow({
           key: 'foldKeepTurns',

@@ -21,7 +21,7 @@ import type { ResolvedConfig } from './config.ts'
 import type { AgentLike, ContextLike, SessionLike } from './dsh.ts'
 import { agentRegistryOf } from './dsh.ts'
 import { buildInjectedMessage, isInjected, textOfContent } from './messages.ts'
-import { planFold } from './fold.ts'
+import { planFold, planTurnFold } from './fold.ts'
 import type { TokenTreeService } from './service.ts'
 
 /** Longest query text taken from a user message. */
@@ -243,6 +243,31 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   const visible = Array.isArray(session.surface?.nodes) && session.surface.nodes.length > 0
     ? [...session.surface.nodes]
     : events.map(event => event.seq)
+  if (settings.foldScope === 'turns') {
+    const turns = planTurnFold(events, visible, settings.foldKeepTurns)
+    if (turns.length === 0) {
+      service.noteFold(session.id, 0, tokens, threshold, { planned: 0, visible: visible.length })
+      return
+    }
+    let folded = 0
+    for (const turn of turns) {
+      try {
+        session.append('user/message', turn.data, {
+          surfaceOp: { op: 'replace', startSeq: turn.startSeq, endSeq: turn.endSeq },
+          // The host requires every shadowed surface node to be named.
+          sourceEventSeqs: turn.seqs,
+        })
+        folded++
+      } catch (error) {
+        ctx.logger.warn(`token-tree: could not fold turn ${turn.startSeq}-${turn.endSeq} (${describe(error)})`)
+        service.noteFold(session.id, folded, tokens, threshold, { planned: turns.length, visible: visible.length, range: `first=${turns[0].startSeq}-${turns[0].endSeq} seqs=${turns[0].seqs.join(',')} visible=${visible.join(',')}`, error: describe(error) })
+        return
+      }
+    }
+    service.noteFold(session.id, folded, tokens, threshold, { planned: turns.length, visible: visible.length })
+    return
+  }
+
   const plan = planFold(events, visible, settings.foldKeepTurns)
   if (plan.length === 0) {
     service.noteFold(session.id, 0, tokens, threshold, { planned: 0, visible: visible.length })

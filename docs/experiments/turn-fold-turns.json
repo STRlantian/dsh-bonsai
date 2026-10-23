@@ -1,0 +1,28 @@
+{
+  "mode": "turns",
+  "sessionId": "session-c92eb56f-98b3-41c1-8ff5-3691b1893952",
+  "prompts": [
+    10452,
+    10478,
+    10732,
+    10896,
+    11766
+  ],
+  "fold": {
+    "sessionId": "session-c92eb56f-98b3-41c1-8ff5-3691b1893952",
+    "folded": 1,
+    "tokens": 73,
+    "threshold": 15,
+    "planned": 1,
+    "visible": 18,
+    "at": 1792725544911
+  },
+  "answer": "1733",
+  "correct": true,
+  "refused": false,
+  "retrieveCalls": 1,
+  "otherTools": 2,
+  "failedTurn": 0,
+  "firstAnswer": "1733",
+  "firstRetrieve": 0
+}
