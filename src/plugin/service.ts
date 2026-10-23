@@ -95,6 +95,8 @@ export interface SessionState {
   lastHint?: { counted: number | undefined; above: number; fast: number; fired: boolean; reason: string }
   /** When the last automatic compaction ran, for the cooldown. */
   lastCompactAt?: number
+  /** Whether the post-compaction index was already injected. */
+  indexInjected?: boolean
   /** Last auto-compaction decision, for diagnostics. */
   autoCompactProbe?: {
     tokens: number
@@ -567,9 +569,9 @@ export class TokenTreeService {
     switch (event.type) {
       case 'compaction/start':
       case 'compaction/end': {
-        // Once history has been summarised, older facts really can be missing from the
-        // model's context, so the retrieval hint starts to earn its tokens.
-        state.compacted = true
+        // History has been folded away, so the hint starts to earn its tokens — and the next
+        // hint carries a map of what was folded, because the originals are still in the tree.
+        this.noteCompactionObserved(state)
         return
       }
       case 'turn/start': {
@@ -999,8 +1001,12 @@ export class TokenTreeService {
   retrievalHint(sessionId: string): string | undefined {
     const state = this.stateOf(sessionId)
     const tree = state.tree
-    // A compacted session has already lost history, so no further gate is needed.
-    if (state.compacted === true) return HINT_TEXT
+    // A compacted session has already lost history, so no further gate is needed. The first
+    // hint after a compaction carries the map of what was folded away.
+    if (state.compacted === true) {
+      const index = this.compactionIndex(sessionId)
+      return index === undefined ? HINT_TEXT : `${HINT_TEXT}\n\n${index}`
+    }
     // The measured size of the conversation so far, from node tokens (re-counted from
     // estimates to real numbers when the tokenizer loads). Deliberately not based on
     // `decision.messages`: at `agent/pre-step` those hold only the newest message, so a
@@ -1399,6 +1405,52 @@ export class TokenTreeService {
    */
   noteCompacted(sessionId: string, now = Date.now()): void {
     this.stateOf(sessionId).lastCompactAt = now
+  }
+
+  /**
+   * A compact map of the most recent nodes, injected once after a compaction.
+   *
+   * Kept deliberately small: id, kind, one line, size. It is a pointer, not a summary — the
+   * whole point is that the model fetches the original instead of trusting a paraphrase.
+   * @param sessionId - session identity.
+   * @param limit - maximum number of entries.
+   * @param maxChars - approximate character budget for the whole block.
+   * @returns The index text, or `undefined` when it was already sent.
+   */
+  compactionIndex(sessionId: string, limit = 8, maxChars = 1_200): string | undefined {
+    const state = this.stateOf(sessionId)
+    if (state.indexInjected === true) return undefined
+    const nodes = [...state.tree.nodes.values()].filter(node => node.kind !== 'note')
+    if (nodes.length === 0) return undefined
+    const recent = nodes.slice(-limit)
+    const lines: string[] = []
+    for (const node of recent) {
+      const label = node.kind === 'question' ? '问题' : node.kind === 'answer' ? '回答' : node.kind === 'tool_result' ? '工具' : '反思'
+      const summary = (node.summary ?? node.content).replace(/\s+/g, ' ').slice(0, 60)
+      lines.push(`- ${node.id} [${label}] ${summary}（${node.tokens} tok）`)
+    }
+    const header = `[盆栽] 更早的对话已被压缩，原文完整保存在对话树中（不是摘要）。最近被折叠的节点：`
+    const footer = '需要原始细节时调用 retrieve_context("关键词") 取回原文；不要把摘要里的数字当成原文，也不要在缺细节时凭印象编造。'
+    let text = `${header}\n${lines.join('\n')}\n${footer}`
+    if (text.length > maxChars) {
+      // Drop the oldest entries until it fits.
+      while (lines.length > 1 && text.length > maxChars) {
+        lines.shift()
+        text = `${header}\n${lines.join('\n')}\n${footer}`
+      }
+    }
+    state.indexInjected = true
+    return text
+  }
+
+  /**
+   * Note that the host compacted this session, so the index is worth sending next turn.
+   * @param sessionId - session identity.
+   */
+  noteCompactionObserved(sessionIdOrState: string | SessionState): void {
+    const state = typeof sessionIdOrState === 'string' ? this.stateOf(sessionIdOrState) : sessionIdOrState
+    state.compacted = true
+    state.indexInjected = false
   }
 
   /** Current learned ratio, for the settings panel and the logs. */
