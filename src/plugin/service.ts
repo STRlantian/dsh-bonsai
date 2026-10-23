@@ -385,6 +385,22 @@ export class TokenTreeService {
     return total
   }
 
+  /**
+   * Model-visible size of the whole session, across every branch.
+   *
+   * This is the number folding and compaction should compare against a threshold: the next
+   * request carries the conversation, not just the path to the current node. Hidden nodes are
+   * included, because they still sit in the log the host replays.
+   * @param sessionId - session identity.
+   * @returns Sum of every node's tokens.
+   */
+  historyTokens(sessionId: string): number {
+    const tree = this.stateOf(sessionId).tree
+    let total = 0
+    for (const node of tree.nodes.values()) total += node.tokens
+    return total
+  }
+
   /** The override file in use, for the settings panel to show. */
   settingsInfo(): {
     path: string | null

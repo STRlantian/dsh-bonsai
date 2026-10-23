@@ -233,7 +233,8 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   const threshold = settings.foldAboveTokens
   if (threshold <= 0) return
   if (typeof session.append !== 'function') return
-  const tokens = service.conversationTokens(session.id)
+  // The whole session, not the current branch: the next request carries all of it.
+  const tokens = service.historyTokens(session.id)
   if (tokens < threshold) return
   const events = (session.snapshotEvents?.() ?? []).map(event => ({
     type: event.type,
