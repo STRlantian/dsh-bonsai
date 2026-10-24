@@ -826,6 +826,15 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var boxState = React.useState(null)
     var box = boxState[0]
     var setBox = boxState[1]
+    // Null means "fitted to the focus". A pan pins the view; the 回到当前 button clears it.
+    var pinnedState = React.useState(false)
+    var pinned = pinnedState[0]
+    var setPinned = pinnedState[1]
+    React.useEffect(function () {
+      if (pinned) return
+      if (props.focusId === undefined || props.focusId === '') return
+      setBox(null)
+    }, [props.focusId, pinned])
     // A 1,800-node tree fitted to the viewport is a single faint line. Start on the
     // current node at a readable zoom instead; 「全图」 still fits everything.
     var focusSpot = props.focusId === undefined ? undefined : slot[props.focusId]
@@ -870,6 +879,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       }
       window.addEventListener('mousemove', onMove)
       window.addEventListener('mouseup', onUp)
+      setPinned(true)
       event.preventDefault()
     }
 
@@ -939,7 +949,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       // One box per exchange: the question is the title, the answer the body.
       // Both are width-fitted so nothing spills outside the box.
       var innerWidth = NODE_W - 16
-      var title = fitText(node.id + ' ' + (node.preview || ''), 10.5, innerWidth)
+      var hiddenNote = props.answerHidden === true && node.kind === 'question' ? '⊘ ' : ''
+      var title = fitText(hiddenNote + node.id + ' ' + (node.preview || ''), 10.5, innerWidth)
       var body = fitText(node.detail === undefined ? '' : String(node.detail), 9.5, innerWidth)
       return h('g', {
         key: node.id,
@@ -1174,7 +1185,15 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           if (!response.ok) throw new Error('HTTP ' + response.status)
           return response.json()
         })
-        .then(function (data) { setView({ loading: false, data: data, error: null }) })
+        .then(function (data) {
+        var signature = payloadSignature(data)
+        setView(function (previous) {
+          if (previous.data !== null && previous.data !== undefined && payloadSignature(previous.data) === signature) {
+            return { loading: false, data: previous.data, error: null }
+          }
+          return { loading: false, data: data, error: null }
+        })
+      })
         .catch(function (error) { setView({ loading: false, data: null, error: '读取失败：' + error.message }) })
     }
 
@@ -2499,6 +2518,22 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
  * @param hideAnswers - drop answers.
  * @returns Rows to draw, with parentId and depth rewritten.
  */
+/**
+ * A cheap stand-in for "this payload changed".
+ *
+ * Comparing counts and the focus is enough: any new turn moves them, and an unchanged tree must
+ * not cost a full graph relayout.
+ * @param data - tree payload.
+ * @returns A small string that changes when the conversation does.
+ */
+function payloadSignature(data) {
+  if (data === null || data === undefined) return 'null'
+  var stats = data.stats ?? {}
+  var hidden = Array.isArray(data.hidden) ? data.hidden.length : 0
+  var nodes = Array.isArray(data.nodes) ? data.nodes.length : 0
+  return [stats.nodes ?? -1, stats.questions ?? -1, stats.tokens ?? -1, hidden, data.focusId ?? '', nodes].join('|')
+}
+
 function visibleRows(rows, hideTools, hideAnswers) {
   var byId = {}
   rows.forEach(function (row) { byId[row.id] = row })
@@ -2572,8 +2607,26 @@ function visibleRows(rows, hideTools, hideAnswers) {
         ignored: node.ignored,
         pathCost: node.pathCost,
         turn: node.turn,
+        // The body of a question is its folded answer: hiding answers must drop it too.
+        ...(hideAnswers ? { detail: undefined } : {}),
       })
     })
+    var MAX_BOXES = 900
+    if (nodes.length > MAX_BOXES) {
+      var kept = {}
+      nodes.forEach(function (node) { kept[node.id] = node })
+      var keep = new Set()
+      for (var tail = Math.max(0, nodes.length - MAX_BOXES); tail < nodes.length; tail++) {
+        var walker = nodes[tail]
+        var guard = 0
+        while (walker !== undefined && !keep.has(walker.id) && guard < 400) {
+          keep.add(walker.id)
+          walker = walker.parentId === null ? undefined : kept[walker.parentId]
+          guard++
+        }
+      }
+      nodes = nodes.filter(function (node) { return keep.has(node.id) })
+    }
     return { nodes: nodes, folded: folded }
   }
 
@@ -2994,6 +3047,7 @@ function visibleRows(rows, hideTools, hideAnswers) {
         // Compact by default in the dock: the conversation column is narrow, and the
         // full text already sits in the right rail.
         compact: compact !== false,
+        answerHidden: dockHideAnswers === true,
         moveSource: moveSource,
         onMoveTarget: completeMove,
         onPick: function (id) { pickNode(nodeById[id] === undefined ? { id: id } : nodeById[id]) },
@@ -3600,6 +3654,7 @@ function visibleRows(rows, hideTools, hideAnswers) {
   // Testing hook: the re-attachment rule is pure and worth unit-testing directly.
   exports.__visibleRows = visibleRows
   exports.__graphProjection = graphProjection
+  exports.__payloadSignature = payloadSignature
   exports.__editorControl = editorControl
   exports.__disposeEditorHost = disposeEditorHost
 

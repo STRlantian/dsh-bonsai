@@ -615,6 +615,30 @@ test('the graph projection honours both hide switches', { timeout: 30000 }, asyn
   assert.ok(!noTools.nodes.some(node => node.id === 'tool'), 'no tool box survives')
 })
 
+test('an unchanged payload is recognised, and the graph stays bounded', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+
+  const payload = { focusId: 'n2', stats: { nodes: 2, questions: 1, tokens: 10 }, nodes: [{ id: 'n1' }, { id: 'n2' }], hidden: [] }
+  const same = JSON.parse(JSON.stringify(payload))
+  const moved = JSON.parse(JSON.stringify(payload))
+  moved.focusId = 'n3'
+  moved.stats.nodes = 3
+  assert.equal(client.bundle.__payloadSignature(payload), client.bundle.__payloadSignature(same), 'identical payloads match')
+  assert.notEqual(client.bundle.__payloadSignature(payload), client.bundle.__payloadSignature(moved), 'a new turn changes it')
+
+  // A long session: the newest rows survive and their chain stays connected.
+  const rows = [{ id: 'n1', kind: 'note', parentId: null, depth: 0, preview: 'root' }]
+  for (let index = 2; index <= 1200; index++) {
+    rows.push({ id: 'n' + index, kind: 'question', parentId: 'n1', depth: 1, preview: 'p' })
+  }
+  const projection = client.bundle.__graphProjection(rows, false, false)
+  assert.ok(projection.nodes.length < rows.length, 'the graph is capped')
+  assert.ok(projection.nodes.length >= 900, 'but keeps a useful window')
+  assert.ok(projection.nodes.some(node => node.id === 'n1200'), 'the newest node is drawn')
+  assert.ok(projection.nodes.some(node => node.id === 'n1'), 'the root stays in the projection')
+})
+
 test('the settings panel can switch the interface language', { timeout: 30000 }, async t => {
   const client = await mountClient('header', 'en')
   t.after(client.cleanup)
