@@ -394,6 +394,50 @@ test('rules show as chips and can be added from the bar', { timeout: 30000 }, as
   assert.ok(String(posted.body).includes('不要擅自发布'), 'with the text')
 })
 
+test('an existing rule opens with its text and can be edited or deleted', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  await client.click('盆栽')
+  await client.click('完整树')
+
+  const chip = client.document.querySelector('.twt-rule-chip')
+  assert.ok(chip !== null, 'the rule chip is there')
+  await React.act(async () => { chip.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+
+  const input = client.document.querySelector('.twt-rule-input')
+  assert.ok(input !== null, 'the dialog opened')
+  assert.equal(input.value, '发布前必须先问我', 'with the existing text prefilled')
+
+  // Edit it.
+  const setter = Object.getOwnPropertyDescriptor(client.window.HTMLTextAreaElement.prototype, 'value').set
+  await React.act(async () => {
+    setter.call(input, '发布或推送前必须先问我')
+    input.dispatchEvent(new client.window.Event('input', { bubbles: true }))
+  })
+  await client.flush()
+  const save = [...client.document.querySelectorAll('.twt-modal-foot button')].find(button => (button.textContent ?? '').includes('保存'))
+  await React.act(async () => { save.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+  const update = client.requests.find(entry => entry.url.includes('/api/token-tree/edit') && String(entry.body).includes('"op":"update"'))
+  assert.ok(update !== undefined, 'an update is posted')
+  assert.ok(String(update.body).includes('rule-1'), 'for the existing rule')
+  assert.ok(String(update.body).includes('发布或推送前必须先问我'), 'with the new text')
+
+  // Delete it.
+  client.requests.length = 0
+  const chipAgain = client.document.querySelector('.twt-rule-chip')
+  await React.act(async () => { chipAgain.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+  const remove = [...client.document.querySelectorAll('.twt-modal-foot button')].find(button => (button.textContent ?? '').includes('删除'))
+  assert.ok(remove !== undefined, 'the dialog offers delete')
+  await React.act(async () => { remove.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+  const removal = client.requests.find(entry => entry.url.includes('/api/token-tree/edit') && String(entry.body).includes('"op":"remove"'))
+  assert.ok(removal !== undefined, 'a remove is posted')
+  assert.ok(String(removal.body).includes('rule-1'), 'for the existing rule')
+})
+
 test('the settings panel offers the three presets', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)

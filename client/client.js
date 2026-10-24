@@ -1886,7 +1886,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               className: 'twt-rule-chip',
               disabled: busy,
               title: (rule.source === 'manual' ? t('手写') : t('自动识别')) + ' · ' + t('点击编辑'),
-              onClick: function () { setRuleDraft({ id: rule.id, source: rule.source }); setRuleText(rule.text) },
+              onClick: function () { setRuleDraft({ id: rule.id, source: rule.source, text: rule.text }); setRuleText(rule.text) },
             },
               (rule.source === 'manual' ? '✎ ' : '') + rule.text)
           }),
