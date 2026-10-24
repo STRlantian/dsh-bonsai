@@ -68,9 +68,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "保存失败：{}": "Could not save: {}",
   "保存": "Save",
   "自定义…": "Custom…",
-  "保留最多": "Keep most",
+  "保留": "Keep",
   "平衡": "Balanced",
-  "省最多": "Save most",
+  "节省": "Save",
   "6 万 token 才折叠，保留 4 轮，不隐藏任何工具 —— 最接近原生行为": "Fold only past 60k tokens, keep four turns, hide nothing - closest to native behaviour.",
   "4 万 token 开始折叠，保留 3 轮，不隐藏工具（默认）": "Start folding at 40k tokens, keep three turns, hide nothing (default).",
   "2 万就开始折叠、只留 2 轮，并隐藏 9 个少用的重工具 —— 这些能力会真的不可用": "Fold from 20k, keep two turns, and hide nine heavy rarely-used tools - those capabilities become unavailable.",
@@ -1131,9 +1131,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
 
     /** The bundles the host understands; the labels are what people read. */
     var PRESET_LIST = [
-      { id: 'conservative', label: '保留最多', hint: '6 万 token 才折叠，保留 4 轮，不隐藏任何工具 —— 最接近原生行为' },
+      { id: 'conservative', label: '保留', hint: '6 万 token 才折叠，保留 4 轮，不隐藏任何工具 —— 最接近原生行为' },
       { id: 'balanced', label: '平衡', hint: '4 万 token 开始折叠，保留 3 轮，不隐藏工具（默认）' },
-      { id: 'aggressive', label: '省最多', hint: '2 万就开始折叠、只留 2 轮，并隐藏 9 个少用的重工具 —— 这些能力会真的不可用' },
+      { id: 'aggressive', label: '节省', hint: '2 万就开始折叠、只留 2 轮，并隐藏 9 个少用的重工具 —— 这些能力会真的不可用' },
     ]
 
     /** Apply a preset, then refresh the panel so the numbers match. */
@@ -3048,16 +3048,16 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   // A throwing apply here must never take the shell down.
   // --- composer preset picker ---------------------------------------------
   var MODE_PRESETS = [
-    { id: 'conservative', label: '保守' },
-    { id: 'balanced', label: '均衡' },
-    { id: 'aggressive', label: '激进' },
+    { id: 'conservative', label: '保留' },
+    { id: 'balanced', label: '平衡' },
+    { id: 'aggressive', label: '节省' },
   ]
 
   /**
    * Which preset (if any) the settings currently match.
    *
    * Hidden tools are stored as an override and never appear in `effective`, so both bags are
-   * consulted; reading only the effective one made 激进 look like a custom setup.
+   * consulted; reading only the effective one made 节省 look like a custom setup.
    */
   function currentPreset(settings) {
     if (settings === undefined || settings === null) return 'custom'

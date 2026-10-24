@@ -339,7 +339,7 @@ test('the preset picker sits beside the mode chip', { timeout: 30000 }, async t 
   assert.ok(posted !== undefined, 'the picker posts to the preset route')
   assert.ok(String(posted.body).includes('aggressive'), 'with the chosen preset')
   await client.flush()
-  assert.equal(picker.value, 'aggressive', 'and the select settles on 激进 instead of 自定义')
+  assert.equal(picker.value, 'aggressive', 'and the select settles on 节省 instead of 自定义')
 })
 
 test('the tool-result toggle sits on the right and only where it applies', { timeout: 30000 }, async t => {
@@ -448,8 +448,8 @@ test('the settings panel offers the three presets', { timeout: 30000 }, async t 
   const bar = client.document.querySelector('.twt-presets')
   assert.ok(bar !== null, 'the preset bar is present')
   const labels = [...bar.querySelectorAll('button')].map(button => button.textContent ?? '')
-  assert.deepEqual(labels, ['保留最多', '平衡', '省最多'], 'three presets, in order')
-  const aggressive = [...bar.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('省最多'))
+  assert.deepEqual(labels, ['保留', '平衡', '节省'], 'three presets, in order')
+  const aggressive = [...bar.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('节省'))
   await React.act(async () => { aggressive.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
   await client.flush()
   const posted = client.requests.find(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST')

@@ -1,7 +1,7 @@
 {
   "name": "dsh-bonsai",
   "version": "0.1.6-test.0",
-  "description": "Bonsai (盆栽) — an editable conversation tree for DeepSeek Harness: branch editing and a recycle bin, exact token accounting, tool trimming and zero-call history folding.",
+  "description": "Bonsai (盆栽) — an editable conversation tree for DeepSeek Harness: branch editing and a recycle bin, a rule editor, exact token accounting, tool trimming and zero-call history folding.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

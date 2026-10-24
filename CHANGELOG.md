@@ -1,22 +1,9 @@
 # Changelog
 
-## [0.1.7] — 2026-10-24
-
-### Changed
-
-- The three presets are named after what they do to the context: 保留最多 (fold only past 60k,
-  keep 4 turns), 平衡 (40k, 3 turns, the default) and 省最多 (20k, 2 turns, and nine heavy tools
-  hidden). The old 保守 / 均衡 / 激进 said nothing about the tradeoff.
-
-### Fixed
-
-- The tool picker listed only what the host still reports, so after applying 省最多 it showed 28
-  tools with nothing checked while the row said "9 hidden". It now shows the union of the reported
-  tools and the hidden names, with a "hidden" marker for the latter.
-
 ## [0.1.6] — 2026-10-24
 
-Rules are editable, and the repository states its publishing rule.
+Rules are editable, a cancelled turn stays out of the tree, and the repository states its
+publishing rule.
 
 ### Added
 
@@ -24,12 +11,29 @@ Rules are editable, and the repository states its publishing rule.
   hand-written ones marked), with add, edit and delete. Rules carry an id and a source, are
   recorded in the same append-only edit log as tree edits, survive a restart, and ride along with
   the retrieval hint so the model actually sees them.
+- **Cancelled turns leave the tree**: `turn/end` with reason `aborted` or `interrupted` hides the
+  question and anything streamed under it, so a stopped turn costs nothing in the tree, the list,
+  the graph or the token totals. A failed turn keeps its question, since the user did ask it.
+  Measured first: over 40 local sessions the reasons were completed 296, error 9, aborted 7,
+  interrupted 1.
 - `AGENTS.md`: publishing to npm or pushing a release tag requires an explicit instruction.
+
+### Changed
+
+- The three presets are named after what they do to the context: 保留 (fold only past 60k, keep
+  four turns), 平衡 (40k, three turns, the default) and 节省 (20k, two turns, and nine heavy tools
+  hidden). The old 保守 / 均衡 / 激进 said nothing about the tradeoff.
+- Hidden branches no longer count towards the fold threshold.
 
 ### Fixed
 
 - `POST /api/token-tree/edit` handles `action: rule` before it demands a `nodeId`, so a rule
   edit no longer fails with "nodeId is required".
+- An existing rule opened with an empty field, which made editing look broken and left delete
+  unreachable.
+- The tool picker listed only what the host still reports, so after applying 节省 it showed 28
+  tools with nothing checked while the row said "9 hidden". It now shows the union of the reported
+  tools and the hidden names, with a "hidden" marker for the latter.
 
 ## [0.1.5] — 2026-10-24
 
