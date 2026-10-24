@@ -234,6 +234,8 @@ export interface NodeRow {
   detail?: string
   /** Token estimate of the node, reasoning included. */
   tokens: number
+  /** How many same-turn answers this row stands for; absent when it is just one. */
+  merged?: number
   /** Share of `tokens` spent on reasoning, when the model reported any. */
   reasoningTokens?: number
   /** Cost of the edge into this node. */
@@ -315,7 +317,7 @@ export function nodesOf(
 ): NodesPayload {
   const focusId = options.focusId ?? tree.currentId
   const distance = tree.distancesFrom(focusId)
-  const rows: NodeRow[] = []
+  const visitedRows: NodeRow[] = []
   const seen = new Set<NodeId>()
 
   const visit = (id: NodeId, depth: number): void => {
@@ -324,7 +326,7 @@ export function nodesOf(
     // A soft-deleted branch is not shown at all, children included.
     if (tree.hidden(id)) return
     const node = tree.node(id)
-    rows.push({
+    visitedRows.push({
       id,
       parentId: node.parentId,
       kind: node.kind,
@@ -353,6 +355,27 @@ export function nodesOf(
   visit(tree.rootId, 0)
   // Anything not reachable from the root still belongs to the conversation.
   for (const node of tree.nodes.values()) if (!seen.has(node.id)) visit(node.id, 0)
+
+  // One turn can produce several assistant messages (answer, tool call, answer again). They are
+  // separate nodes in the log, but one exchange to read: fold consecutive answers of the same
+  // turn and the same parent into the first of them, summing their tokens.
+  const rows: NodeRow[] = []
+  const answerRowByTurn = new Map<number, NodeRow>()
+  for (const row of visitedRows) {
+    if (row.kind === 'answer' && row.turn !== undefined) {
+      const existing = answerRowByTurn.get(row.turn)
+      if (existing !== undefined) {
+        existing.tokens += row.tokens
+        existing.merged = (existing.merged ?? 1) + 1
+        if (row.reasoningTokens !== undefined) {
+          existing.reasoningTokens = (existing.reasoningTokens ?? 0) + row.reasoningTokens
+        }
+        continue
+      }
+      answerRowByTurn.set(row.turn, row)
+    }
+    rows.push(row)
+  }
 
   let questions = 0
   let answers = 0

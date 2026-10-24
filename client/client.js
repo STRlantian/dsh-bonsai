@@ -151,6 +151,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     "关闭": "Close",
     "隐藏工具结果": "Hide tool results",
   "只看对话与回答，工具结果不显示": "Conversation and answers only; tool results stay hidden",
+  "隐藏回答": "Hide answers",
+  "只看问题与工具调用的骨架": "Questions and tool calls only",
     "跟随配置": "Follow config",
     "读取中…": "Loading…",
     "读取设置中…": "Loading settings…",
@@ -1113,6 +1115,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var hideState = React.useState(false)
     var hideTools = hideState[0]
     var setHideTools = hideState[1]
+    var hideAnswerState = React.useState(false)
+    var hideAnswers = hideAnswerState[0]
+    var setHideAnswers = hideAnswerState[1]
     var toolPickState = React.useState(false)
     var toolPickerOpen = toolPickState[0]
     var setToolPickerOpen = toolPickState[1]
@@ -2023,6 +2028,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       data.nodes.forEach(function (node) {
         nodeById[node.id] = node
         if (hideTools && node.kind === 'tool_result') return
+        if (hideAnswers && node.kind === 'answer') return
         entries.push({
           id: node.id,
           kind: node.kind,
@@ -2142,6 +2148,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       data.nodes.forEach(function (node) { graphById[node.id] = node })
       data.nodes.forEach(function (node) {
         if (node.kind !== 'answer') return
+        if (hideAnswers) return
         var parent = node.parentId === null ? undefined : graphById[node.parentId]
         if (parent !== undefined && parent.kind === 'question') folded[node.id] = parent.id
       })
@@ -2220,6 +2227,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           entry.pinned === true ? h('span', { className: 'twt-ebadge' }, t('置顶')) : null,
           entry.ignored === true ? h('span', { className: 'twt-ebadge', style: { color: '#e06c75' } }, t('忽略')) : null,
           anchorTagged(anchoredId === entry.id),
+          entry.merged !== undefined && entry.merged > 1 ? h('span', { className: 'twt-ebadge' }, '×' + entry.merged) : null,
           h('span', { className: 'twt-count' }, entry.tokens + 't'))
       )
     })
@@ -2416,6 +2424,16 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
                     }),
                     t('隐藏工具结果'),
                     h('span', { className: 'twt-hint' }, t('只看对话与回答，工具结果不显示')))
+                  : null,
+                (mode === 'nodes' || mode === 'graph')
+                  ? h('label', { className: 'twt-hint twt-togglerow' },
+                    h('input', {
+                      type: 'checkbox',
+                      checked: hideAnswers,
+                      onChange: function (event) { setHideAnswers(event.target.checked) },
+                    }),
+                    t('隐藏回答'),
+                    h('span', { className: 'twt-hint' }, t('只看问题与工具调用的骨架')))
                   : null,
                 detail,
                 h(BranchList, {

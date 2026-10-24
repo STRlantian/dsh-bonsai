@@ -281,6 +281,26 @@ test('the recycle bin lists hidden branches and restores them', { timeout: 30000
   assert.ok(String(call.body).includes('n5'), 'for the hidden node')
 })
 
+test('the answer toggle removes answers from the list', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  await client.click('盆栽')
+  await client.click('完整树')
+
+  const rowsBefore = [...client.document.querySelectorAll('.twt-erow')]
+  assert.ok(rowsBefore.some(row => row.getAttribute('data-kind') === 'answer'), 'answers are shown at first')
+
+  const toggle = [...client.document.querySelectorAll('label')].find(label => (label.textContent ?? '').includes('隐藏回答'))
+  assert.ok(toggle !== undefined, 'the toggle is offered')
+  const box = toggle.querySelector('input')
+  await React.act(async () => { box.click() })
+  await client.flush()
+
+  const rowsAfter = [...client.document.querySelectorAll('.twt-erow')]
+  assert.ok(!rowsAfter.some(row => row.getAttribute('data-kind') === 'answer'), 'answers are gone')
+  assert.ok(rowsAfter.length > 0, 'the questions remain')
+})
+
 test('the recycle bin shows how much is hidden and can restore it all', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)
