@@ -66,6 +66,8 @@ interface AttachmentContext {
   nodeCount: number
   /** Feature count of the node the question would otherwise extend, the penalty reference. */
   referenceFeatures: number
+  /** The node the question would extend, exempt from the weak-evidence discount. */
+  defaultNodeId: NodeId
 }
 
 /** Mutable per-session bookkeeping. */
@@ -796,15 +798,34 @@ export class TokenTreeService {
     // it is no evidence that the question is about this node. Two-node trees are exempt (there
     // is nothing to be common in).
     const spread = bestFeature === '' ? 0 : (input.documentFrequency.get(bestFeature) ?? 0)
-    const specific = input.nodeCount <= 2 || spread <= Math.max(1, Math.floor(input.nodeCount / 3))
+    // A tenth, not a third: "算法" in 8 of 32 nodes is a domain word, not this node's topic.
+    const specific = input.nodeCount <= 2 || spread <= Math.max(2, Math.floor(input.nodeCount / 10))
     const lexical = input.maxIdf === 0 || !specific ? 0 : best / input.maxIdf
+
+    // Evidence strength: how many *specific* terms the question and the node share, and the
+    // longest of them. One two-character word ("算法") is what attached an algorithm question to
+    // a chord answer, so a lone short term is discounted rather than allowed to decide a branch.
+    let shared = 0
+    let longest = 0
+    for (const feature of input.questionFeatures) {
+      if (!features.has(feature)) continue
+      const frequency = input.documentFrequency.get(feature) ?? 0
+      const isSpecific = input.nodeCount <= 2 || frequency <= Math.max(2, Math.floor(input.nodeCount / 10))
+      if (!isSpecific) continue
+      shared++
+      if (feature.length > longest) longest = feature.length
+    }
+    const strong = shared >= 2 || longest >= 3
+    // Only a jump to another branch needs strong evidence; the current thread is governed by
+    // newTopicBelow, where a single shared term is normal for a follow-up.
+    const discount = strong || node.id === input.defaultNodeId ? 1 : 0.3
     // A 9k-token lecture shares *something* rare with almost any question, which is how an
     // unrelated question used to attach to whichever answer happened to be longest. Scale the
     // lexical half down by how much bigger the node is than a typical answer.
     const penalty = Math.min(1, Math.sqrt(input.referenceFeatures / Math.max(1, features.size)))
     // Applied to the whole score: the semantic half is a bag-of-characters cosine that also
     // rewards size, so scaling only the lexical half left long answers winning.
-    return (0.45 * semantic + 0.55 * lexical) * penalty
+    return (0.45 * semantic + 0.55 * lexical) * penalty * discount
   }
 
   /**
@@ -841,6 +862,7 @@ export class TokenTreeService {
       if (weight > maxIdf) maxIdf = weight
     }
     const referenceFeatures = Math.max(1, nodeFeatures.get(state.tree.currentId)?.size ?? 1)
+    const defaultNodeId = state.tree.currentId
     return {
       embedding,
       questionFeatures,
@@ -850,6 +872,7 @@ export class TokenTreeService {
       documentFrequency,
       nodeCount,
       referenceFeatures,
+      defaultNodeId,
     }
   }
 

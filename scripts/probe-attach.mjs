@@ -81,9 +81,17 @@ for (const event of events) {
         rows.push({ id: node.id, score: service.attachmentScore(context, node), preview: (node.summary ?? node.content).replace(/\s+/g, ' ').slice(0, 24) })
       }
       rows.sort((left, right) => right.score - left.score)
+      const best = rows[0]
+      let detail = ''
+      if (best !== undefined) {
+        const features = service.stateOf(sessionId).tree.node(best.id).content
+        const shared = [...context.questionFeatures].filter(feature => features.includes(feature))
+        detail = shared.slice(0, 6).join(',')
+      }
       const top = rows.slice(0, 2).map(row => `${row.id}=${row.score.toFixed(3)}(${row.preview})`).join(' · ')
       console.log(`Q${questionIndex} "${question}"`)
       console.log(`    current ${currentId}=${currentScore.toFixed(3)} · answers: ${top || 'none'}`)
+      if (detail !== '') console.log(`    shared with ${best.id}: ${detail}`)
     } else {
       console.log(`Q${questionIndex} "${question}" → (opens the tree)`)
     }

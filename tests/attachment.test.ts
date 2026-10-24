@@ -40,22 +40,34 @@ test('an unrelated question starts its own branch even under a short answer', ()
   assert.notEqual(second.parentId, first.id)
 })
 
-test('a word shared by half the answers is not evidence of a topic', () => {
+test('an unrelated question opens a branch instead of extending the last answer', () => {
   const run = conversation()
   run.ask('介绍图论里的最短路算法。')
   run.tell('最短路可以用 Dijkstra，堆优化可以把复杂度降到 O(m log n)。')
   run.ask('介绍动态规划的转移方程。')
   run.tell('转移方程可以从暴力搜索改写，也可以从状态定义直接推导。')
-  run.ask('介绍并查集的路径压缩。')
-  run.tell('路径压缩可以在查询时把节点直接接到根，也可以按秩合并。')
+  run.ask('今晚吃点什么好？')
+
+  const questions = run.questions()
+  const tree = run.service.stateOf('s').tree
+  assert.equal(questions.at(-1).parentId, tree.rootId)
+  assert.equal(questions.at(-1).metadata.attached, 'topic')
+})
+
+test('one generic shared word does not justify jumping to an older branch', () => {
+  const run = conversation()
+  run.ask('介绍图论里的最短路算法。')
+  run.tell('最短路可以用 Dijkstra，堆优化可以把复杂度降到 O(m log n)。')
+  run.ask('介绍动态规划的转移方程。')
+  run.tell('转移方程可以从暴力搜索改写，也可以从状态定义直接推导。')
+  // Shares only 也可以 with those answers: not enough to leave the current thread for them.
   run.ask('这个也可以吗？')
 
   const questions = run.questions()
   const tree = run.service.stateOf('s').tree
-  // "可以" appears in every answer, so the specificity gate refuses it and the question that
-  // shares only that word starts its own branch instead of latching onto the current answer.
-  assert.equal(questions.at(-1).parentId, tree.rootId)
-  assert.equal(questions.at(-1).metadata.attached, 'topic')
+  const answers = [...tree.nodes.values()].filter(node => node.kind === 'answer')
+  const first = answers[0]
+  assert.notEqual(questions.at(-1).parentId, first.id, 'it must not jump back to the first answer')
 })
 
 test('a cooking question does not hang under an algorithm answer', () => {

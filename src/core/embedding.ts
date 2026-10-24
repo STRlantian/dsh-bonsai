@@ -56,6 +56,27 @@ export function normalize(vector: number[]): number[] {
   return vector
 }
 
+/** Chinese characters that carry grammar, not topic. */
+const FUNCTION_CHARS = new Set([
+  '的', '了', '是', '在', '中', '和', '与', '对', '为', '以', '及', '把', '被', '给', '让', '使',
+  '从', '向', '到', '就', '也', '都', '很', '更', '最', '这', '那', '之', '其', '或', '而', '且',
+  '但', '如', '若', '则', '即', '等', '着', '过', '地', '得', '吗', '呢', '吧', '啊', '呀', '哦',
+  '嗯', '个', '些', '有', '无', '不', '会', '能', '要', '一',
+])
+
+/**
+ * Whether a feature is grammatical noise rather than a topic.
+ *
+ * Two-character CJK sequences whose characters are all function characters ("中的", "的对")
+ * dominate raw bigram overlap without meaning anything.
+ * @param feature - candidate feature.
+ * @returns True when the feature carries no topic.
+ */
+function isFunctionBigram(feature: string): boolean {
+  if (feature.length !== 2) return false
+  return [...feature].every(character => FUNCTION_CHARS.has(character))
+}
+
 /** Function words that carry no topic, excluded from lexical overlap. */
 const STOPWORDS = new Set([
   'the', 'a', 'an', 'and', 'or', 'but', 'if', 'then', 'of', 'to', 'in', 'on', 'at', 'by', 'for',
@@ -88,6 +109,7 @@ export function contentFeatures(text: string): Set<string> {
   for (const feature of tokenize(text)) {
     if (feature.length < 2) continue
     if (STOPWORDS.has(feature)) continue
+    if (isFunctionBigram(feature)) continue
     features.add(feature)
   }
   return features

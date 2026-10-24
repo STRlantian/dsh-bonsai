@@ -14,7 +14,7 @@ import { contentFeatures, cosine, embedText } from '../src/core/embedding.ts'
 
 const prefix = process.argv[2]
 const question = process.argv[3]
-const project = '--D-dsh-token-tree--'
+const project = process.argv[4] ?? '--D-dsh-token-tree--'
 const dir = join('C:/Users/ASUS/.dsh/sessions', project)
 
 let file = ''
@@ -69,7 +69,7 @@ for (const node of candidates) {
   for (const feature of context.questionFeatures) {
     if (!features.has(feature)) continue
     const weight = context.idf.get(feature) ?? 0
-    shared.push(`${feature}:${weight.toFixed(2)}`)
+    shared.push(`${feature}:idf=${weight.toFixed(2)},df=${context.documentFrequency.get(feature) ?? 0}`)
     if (weight > best) best = weight
   }
   const semantic = Math.max(0, cosine(embedding, node.embedding))

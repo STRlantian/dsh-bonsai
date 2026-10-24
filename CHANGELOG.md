@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.5] — 2026-10-24
+
+Branching fixes found by running the published build on a real 17-turn session, plus the
+cache measurements from that run.
+
+### Fixed
+
+- Bigrams made only of function characters ("中的", "的对") are no longer features. They were
+  supplying the "rarest shared term" that attached an algorithm question to a chord answer.
+- The specificity gate is a tenth of the topic-owning nodes (floor 2) instead of a third, so a
+  domain word like 算法 that appears in eight nodes no longer counts as this node's topic.
+- A jump to another branch now needs two specific shared terms, or one of at least three
+  characters; a lone short match is discounted to 0.3. Extending the current thread is exempt,
+  because a genuine follow-up often shares a single term.
+
+### Measured
+
+- Folding capped that session at ~47k tokens where it would otherwise have grown past 90k, and
+  every fold after the first kept a 98.5-99.7% cache hit rate.
+- The first fold lands early (turn 2) and costs one round at 57.2% because it invalidates the
+  tail; it is a one-time cost that pays back within a few turns.
+
 ## [0.1.3] — 2026-10-24
 
 Documentation only: the README now leads with the measurements and states the limits plainly,
