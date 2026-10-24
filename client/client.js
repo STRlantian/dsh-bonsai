@@ -606,9 +606,25 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
    * @param {number} turn - turn number.
    * @returns {Element|null} the row.
    */
-  function turnRow(turn) {
+  function turnRow(turn, text) {
     if (typeof turn !== 'number' || typeof document === 'undefined') return null
-    return document.querySelector('[data-chat-turn="' + turn + '"]')
+    var rows = document.querySelectorAll('[data-chat-turn="' + turn + '"]')
+    if (rows.length === 0) return null
+    if (typeof text === 'string' && text.length > 0) {
+      var needle = text.replace(/\s+/g, ' ').trim().slice(0, 24)
+      for (var index = 0; index < rows.length; index++) {
+        var content = (rows[index].textContent || '').replace(/\s+/g, ' ')
+        if (needle.length >= 4 && content.indexOf(needle) !== -1) return rows[index]
+      }
+    }
+    // No text hint: the shortest row is the message itself, not the turn wrapper.
+    var best = rows[0]
+    var bestLength = Number.POSITIVE_INFINITY
+    for (var index2 = 0; index2 < rows.length; index2++) {
+      var length = (rows[index2].textContent || '').length
+      if (length < bestLength) { best = rows[index2]; bestLength = length }
+    }
+    return best
   }
 
   /**
@@ -620,11 +636,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
    * @param {string} text - node text to look for.
    * @returns {boolean} whether a row was found and scrolled to.
    */
-  function revealByText(text) {
+  function revealByText(text, turn) {
     if (typeof document === 'undefined' || typeof text !== 'string') return false
     var needle = text.replace(/\s+/g, ' ').trim().slice(0, 24)
     if (needle.length < 4) return false
     var rows = document.querySelectorAll('[data-chat-node-key], [data-chat-turn]')
+    var wantTurn = typeof turn === 'number' && Number.isFinite(turn) ? turn : null
     var best = null
     var bestLength = Number.POSITIVE_INFINITY
     for (var index = 0; index < rows.length; index++) {
@@ -633,6 +650,18 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       if (content.indexOf(needle) === -1) continue
       // Skip our own command output: it embeds the question text verbatim.
       if (content.indexOf('token-tree') !== -1) continue
+      // With a known turn, only that turn's row may be picked: a block's long question text is
+      // echoed later by summaries and tool output, and landing on one of those is the wrong place.
+      if (wantTurn !== null) {
+        var owner = row
+        var turnAttr = null
+        while (owner !== null && owner !== document.body) {
+          var value = owner.getAttribute !== undefined ? owner.getAttribute('data-chat-turn') : null
+          if (value !== null && value !== undefined) { turnAttr = value; break }
+          owner = owner.parentElement
+        }
+        if (turnAttr === null || Number(turnAttr) !== wantTurn) continue
+      }
       if (content.length < bestLength) {
         best = row
         bestLength = content.length
@@ -726,18 +755,19 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       return true
     }
     if (revealViaRail(turn)) {
-      // The rail loads the page and scrolls; wait for the row, then flash it.
+      // The rail loads the page and scrolls; wait for the row, then flash it. A nearby mark is not
+      // the target, so claiming success without a row would report a jump that never happened.
       for (var wait = 0; wait < 16; wait++) {
         await new Promise(function (resolve) { setTimeout(resolve, 250) })
-        var landed = turnRow(turn)
+        var landed = turnRow(turn, text)
         if (landed !== null) {
           highlightRow(landed)
           return true
         }
       }
-      return true
+      return false
     }
-    if (revealByText(text)) return true
+    if (revealByText(text, turn)) return true
     var scroller = transcriptScroller()
     if (scroller === null) return false
     var height = scroller.scrollHeight
@@ -3645,6 +3675,8 @@ function visibleRows(rows, hideTools, hideAnswers) {
   exports.__visibleRows = visibleRows
   exports.__graphProjection = graphProjection
   exports.__payloadSignature = payloadSignature
+  exports.__revealByText = revealByText
+  exports.__turnRow = turnRow
   exports.__editorControl = editorControl
   exports.__disposeEditorHost = disposeEditorHost
 

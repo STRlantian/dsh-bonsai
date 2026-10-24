@@ -640,6 +640,38 @@ test('an unchanged payload is recognised, and the graph stays bounded', { timeou
   assert.ok(projection.nodes.some(node => node.id === 'n1'), 'the root stays in the projection')
 })
 
+test('a jump only lands on the row of its own turn', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+
+  // A transcript where the same question text shows up twice: the question itself at turn 3 and a
+  // later turn-9 row that quotes it. Picking the shortest match used to land on the quote.
+  const scroller = client.document.createElement('div')
+  scroller.setAttribute('data-conversation-scroll', '')
+  const questionRow = client.document.createElement('div')
+  questionRow.setAttribute('data-chat-turn', '3')
+  questionRow.setAttribute('data-chat-node-key', 'k3')
+  questionRow.textContent = '介绍一下算法竞赛中的对拍（压力测试）怎么用？它的原理是什么'
+  const quotingRow = client.document.createElement('div')
+  quotingRow.setAttribute('data-chat-turn', '9')
+  quotingRow.setAttribute('data-chat-node-key', 'k9')
+  quotingRow.textContent = '介绍一下算法竞赛中的对拍'
+  scroller.append(questionRow, quotingRow)
+  client.document.body.append(scroller)
+
+  // The needle is shared by both rows; the shortest row is the later quote, which is exactly the
+  // wrong place to land when the target is turn 3.
+  const text = '介绍一下算法竞赛中的对拍'
+  assert.equal(client.bundle.__revealByText(text, 3), true, 'turn 3 is found')
+  assert.ok(questionRow.style.outline.includes('6ea8fe'), 'and it is the turn-3 row that was flashed')
+  questionRow.style.outline = ''
+  quotingRow.style.outline = ''
+  assert.equal(client.bundle.__revealByText(text, 9), true, 'turn 9 is found too')
+  assert.ok(quotingRow.style.outline.includes('6ea8fe'), 'flashing the turn-9 row')
+  assert.equal(client.bundle.__turnRow(3, text), questionRow, 'turnRow prefers the row that carries the text')
+  assert.equal(client.bundle.__turnRow(9, 'no such text'), quotingRow, 'and falls back to the shortest row of the turn')
+})
+
 test('the settings panel can switch the interface language', { timeout: 30000 }, async t => {
   const client = await mountClient('header', 'en')
   t.after(client.cleanup)
