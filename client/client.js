@@ -611,11 +611,15 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var rows = document.querySelectorAll('[data-chat-turn="' + turn + '"]')
     if (rows.length === 0) return null
     if (typeof text === 'string' && text.length > 0) {
-      var needle = text.replace(/\s+/g, ' ').trim().slice(0, 24)
+      var needle = needleOf(text)
+      var found = null
       for (var index = 0; index < rows.length; index++) {
         var content = (rows[index].textContent || '').replace(/\s+/g, ' ')
-        if (needle.length >= 4 && content.indexOf(needle) !== -1) return rows[index]
+        if (needle.length >= 4 && content.indexOf(needle) !== -1) { found = rows[index]; break }
       }
+      // A turn that exists but does not carry this text is a different turn under a colliding
+      // number; landing there is the wrong jump, so report "not here" instead.
+      return found
     }
     // No text hint: the shortest row is the message itself, not the turn wrapper.
     var best = rows[0]
@@ -625,6 +629,36 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       if (length < bestLength) { best = rows[index2]; bestLength = length }
     }
     return best
+  }
+
+  /**
+   * The user-message row that carries some text.
+   *
+   * The transcript marks rows with their kind, so the question row can be found by text alone -
+   * independent of the turn numbering, which differs once history has been compacted.
+   * @param {string} needle - normalised text prefix.
+   * @returns {Element|null} the row.
+   */
+  function questionRow(needle) {
+    if (typeof document === 'undefined' || needle.length < 4) return null
+    var rows = document.querySelectorAll('[data-chat-flow-kind="user-message"]')
+    var best = null
+    var bestLength = Number.POSITIVE_INFINITY
+    for (var index = 0; index < rows.length; index++) {
+      var content = (rows[index].textContent || '').replace(/\s+/g, ' ')
+      if (content.indexOf(needle) === -1) continue
+      if (content.length < bestLength) {
+        best = rows[index]
+        bestLength = content.length
+      }
+    }
+    return best
+  }
+
+  /** Normalise text into the prefix used for matching. */
+  function needleOf(text) {
+    if (typeof text !== 'string') return ''
+    return text.replace(/\s+/g, ' ').trim().slice(0, 24)
   }
 
   /**
@@ -638,8 +672,13 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
    */
   function revealByText(text, turn) {
     if (typeof document === 'undefined' || typeof text !== 'string') return false
-    var needle = text.replace(/\s+/g, ' ').trim().slice(0, 24)
+    var needle = needleOf(text)
     if (needle.length < 4) return false
+    var direct = questionRow(needle)
+    if (direct !== null) {
+      highlightRow(direct)
+      return true
+    }
     var rows = document.querySelectorAll('[data-chat-node-key], [data-chat-turn]')
     var wantTurn = typeof turn === 'number' && Number.isFinite(turn) ? turn : null
     var best = null
@@ -749,38 +788,40 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
    * @returns {Promise<boolean>} whether the row was found.
    */
   async function revealDeep(text, turn) {
-    var direct = turnRow(turn)
+    var needle = needleOf(text)
+    // 1. The row is already rendered, belongs to this turn, and carries the text.
+    var direct = turnRow(turn, text)
     if (direct !== null) {
       highlightRow(direct)
       return true
     }
+    // 2. Ask the host's rail to page history in. Its navigation reaches turns the virtualised list
+    //    has not loaded, but a nearby mark is not the target - so look for the row afterwards.
     if (revealViaRail(turn)) {
-      // The rail loads the page and scrolls; wait for the row, then flash it. A nearby mark is not
-      // the target, so claiming success without a row would report a jump that never happened.
-      for (var wait = 0; wait < 16; wait++) {
+      for (var wait = 0; wait < 20; wait++) {
         await new Promise(function (resolve) { setTimeout(resolve, 250) })
-        var landed = turnRow(turn, text)
+        var landed = turnRow(turn, text) || questionRow(needle)
         if (landed !== null) {
           highlightRow(landed)
           return true
         }
       }
-      return false
     }
+    // 3. Rendered, but under a number that disagrees with ours: match the user-message row.
     if (revealByText(text, turn)) return true
+    // 4. Page by scrolling to the top, watching for either signal.
     var scroller = transcriptScroller()
     if (scroller === null) return false
     var height = scroller.scrollHeight
-    for (var attempt = 0; attempt < 12; attempt++) {
+    for (var attempt = 0; attempt < 14; attempt++) {
       scroller.scrollTop = 0
       await new Promise(function (resolve) { setTimeout(resolve, 350) })
-      var row = turnRow(turn)
+      var row = turnRow(turn, text) || questionRow(needle)
       if (row !== null) {
         highlightRow(row)
         return true
       }
-      if (revealByText(text)) return true
-      if (scroller.scrollHeight === height) return false
+      if (scroller.scrollHeight === height) break
       height = scroller.scrollHeight
     }
     return false

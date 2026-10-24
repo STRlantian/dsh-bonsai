@@ -669,7 +669,22 @@ test('a jump only lands on the row of its own turn', { timeout: 30000 }, async t
   assert.equal(client.bundle.__revealByText(text, 9), true, 'turn 9 is found too')
   assert.ok(quotingRow.style.outline.includes('6ea8fe'), 'flashing the turn-9 row')
   assert.equal(client.bundle.__turnRow(3, text), questionRow, 'turnRow prefers the row that carries the text')
-  assert.equal(client.bundle.__turnRow(9, 'no such text'), quotingRow, 'and falls back to the shortest row of the turn')
+  // With the text given, a row of that turn that does not carry it is a different turn under a
+  // colliding number: the jump must report "not here" rather than land there.
+  assert.equal(client.bundle.__turnRow(9, 'no such text'), null, 'a colliding turn is refused')
+  assert.equal(client.bundle.__turnRow(9, ''), quotingRow, 'without a text hint the shortest row of the turn wins')
+
+  // After compaction the transcript numbers turns differently; the user-message kind still finds
+  // the question row by text alone.
+  const renumbered = client.document.createElement('div')
+  renumbered.setAttribute('data-chat-flow-kind', 'user-message')
+  renumbered.setAttribute('data-chat-turn', '77')
+  renumbered.textContent = '介绍一下算法竞赛中的对拍'
+  client.document.body.append(renumbered)
+  questionRow.style.outline = ''
+  quotingRow.style.outline = ''
+  assert.equal(client.bundle.__revealByText('介绍一下算法竞赛中的对拍', 5), true, 'a renumbered turn still jumps')
+  assert.ok(renumbered.style.outline.includes('6ea8fe'), 'and lands on the user-message row')
 })
 
 test('the settings panel can switch the interface language', { timeout: 30000 }, async t => {
