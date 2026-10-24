@@ -59,3 +59,22 @@ test('answers from different turns stay apart', () => {
   assert.equal(rows.length, 2, 'two turns, two rows')
   assert.equal(rows[0].merged, undefined, 'neither row is merged')
 })
+
+test('a row under a merged-away answer follows the surviving row', () => {
+  const run = conversation()
+  run.push('turn/start', { turn: 1 })
+  run.ask('介绍一下凸包')
+  run.tell('先给定义。')
+  run.tell('再给一个例子。')
+  // A tool result lands on the current node, which is the second answer - the row that the merge
+  // drops. Without a re-point it would be drawn under nothing.
+  run.push('tool/result', { callId: 'c1', ok: true, content: [{ type: 'text', text: 'ran probe' }], toolName: 'pwsh' })
+
+  const rows = nodesOf(run.tree()).nodes
+  const ids = new Set(rows.map(row => row.id))
+  const dangling = rows.filter(row => row.parentId !== null && !ids.has(row.parentId))
+  assert.equal(dangling.length, 0, 'nothing points at a merged-away row')
+  const tool = rows.find(row => row.kind === 'tool_result')
+  const answer = rows.find(row => row.kind === 'answer')
+  assert.equal(tool.parentId, answer.id, 'the tool row hangs under the surviving answer')
+})

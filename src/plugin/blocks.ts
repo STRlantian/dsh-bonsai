@@ -361,7 +361,16 @@ export function nodesOf(
   // turn and the same parent into the first of them, summing their tokens.
   const rows: NodeRow[] = []
   const answerRowByTurn = new Map<number, NodeRow>()
+  const mergedInto = new Map<NodeId, NodeId>()
   for (const row of visitedRows) {
+    // A row whose parent was merged away follows the surviving row instead of dangling.
+    let parentId = row.parentId
+    let guard = 0
+    while (parentId !== null && mergedInto.has(parentId) && guard < 200) {
+      parentId = mergedInto.get(parentId)!
+      guard++
+    }
+    row.parentId = parentId
     if (row.kind === 'answer' && row.turn !== undefined) {
       const existing = answerRowByTurn.get(row.turn)
       if (existing !== undefined) {
@@ -370,6 +379,7 @@ export function nodesOf(
         if (row.reasoningTokens !== undefined) {
           existing.reasoningTokens = (existing.reasoningTokens ?? 0) + row.reasoningTokens
         }
+        mergedInto.set(row.id, existing.id)
         continue
       }
       answerRowByTurn.set(row.turn, row)

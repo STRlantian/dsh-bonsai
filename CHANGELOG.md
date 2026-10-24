@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.1.7] — 2026-10-25
+
+One exchange per turn, a switch for the answers, and a graph that keeps up with a long session.
+
+### Added
+
+- **One row per turn**: the log keeps every assistant message, but the tree, the list and the graph
+  now show one row per turn (tokens summed, a `×N` badge). A real 155-turn session went from 462
+  answer rows to 129.
+- **Hide answers** in the editor: the list shows questions and tool calls only. In the graph an
+  answer is the body of its question box, so hiding them drops the body and marks the box.
+- The dock keeps the tool switch (its graph folds answers into questions, so an answer switch there
+  had nothing to hide).
+
+### Changed
+
+- The editor keeps polling for new turns, so the graph follows the conversation.
+- An unchanged payload is not re-rendered, and the graph draws at most 900 boxes (the newest rows
+  plus the ancestors that keep them connected). A 3,500-node session used to relayout 3,370 SVG
+  boxes every two seconds.
+- The graph re-centres on the current node while the user has not panned it.
+
+### Fixed
+
+- A row whose parent was merged away (a tool result under a turn's second answer, say) now follows
+  the surviving row instead of being drawn under nothing.
+- Hiding a node re-attaches its children to the nearest visible ancestor, and a new question never
+  attaches under a hidden one — a real session lost its newest question because the dialogue stood
+  on a hidden node when it arrived.
+- The floating editor survives the header slot unmounting (its own React root, and the open state
+  is remembered) instead of closing when the pointer leaves.
+- Jumps land on the target: text matching respects the turn, the question row is found by
+  `data-chat-flow-kind`, and a rail click that never produces the row reports failure instead of a
+  fake success.
+- `scripts/toggle-plugin.ps1` wrote a wrong dependency path (`file:D:\plugin`).
+
 ## [0.1.6] — 2026-10-24
 
 Rules are editable, a cancelled turn stays out of the tree, and the repository states its
