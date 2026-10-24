@@ -85,6 +85,8 @@ export interface SessionState {
    * not become a tree node either.
    */
   skipNextAnswer: boolean
+  /** Question created by the turn in flight, so a cancelled turn can drop it. */
+  pendingQuestionId?: NodeId
   /** Whether this session's earlier log has already been replayed into the tree. */
   backfilled: boolean
   /** Highest event sequence already folded, so a replay cannot double-apply. */
@@ -406,7 +408,10 @@ export class TokenTreeService {
   historyTokens(sessionId: string): number {
     const tree = this.stateOf(sessionId).tree
     let total = 0
-    for (const node of tree.nodes.values()) total += node.tokens
+    for (const node of tree.nodes.values()) {
+      if (tree.hidden(node.id)) continue
+      total += node.tokens
+    }
     return total
   }
 
@@ -708,6 +713,7 @@ export class TokenTreeService {
         return
       }
       case 'turn/start': {
+        state.pendingQuestionId = undefined
         state.turn = numberField(data.turn) ?? state.turn + 1
         state.step = 0
         state.steps = 0
@@ -745,12 +751,38 @@ export class TokenTreeService {
         return
       }
       case 'turn/end': {
+        this.settleTurn(state, data)
         state.observations = []
         return
       }
       default:
         return
     }
+  }
+
+  /**
+   * Drop the question of a turn the user cancelled.
+   *
+   * A node is created the moment a message is sent, because tool results during the turn have to
+   * hang somewhere. When the turn ends `aborted` (or `interrupted`) there is no exchange to keep:
+   * the question is hidden, so it leaves the tree, the list, the graph and the token totals, and
+   * it stays recoverable from the recycle bin. A partial answer streamed before the cancel is
+   * hidden with it: a cancelled turn is not an exchange.
+   * @param state - session state of the finishing turn.
+   * @param data - `turn/end` payload.
+   */
+  private settleTurn(state: SessionState, data: Record<string, unknown>): void {
+    const reason = objectField(data.reason)
+    const kind = stringField(reason?.kind) ?? ''
+    const pending = state.pendingQuestionId
+    state.pendingQuestionId = undefined
+    if (pending === undefined) return
+    if (kind !== 'aborted' && kind !== 'interrupted') return
+    const node = state.tree.node(pending)
+    if (node === undefined) return
+    // Hidden by inheritance: a partial answer or tool result under it disappears with it.
+    state.tree.mark(pending, { deleted: true })
+    this.logger.info(`token-tree: cancelled turn dropped question ${pending} (${kind})`)
   }
 
   /** Turn one learner message into a question node. */
@@ -785,7 +817,7 @@ export class TokenTreeService {
     const placement = this.pickQuestionParent(state, text, embedding)
     const parentId = placement.parentId
     const attached = placement.manual === true || parentId !== state.tree.currentId
-    state.tree.addNode({
+    const node = state.tree.addNode({
       kind: 'question',
       content: text,
       tokens: this.countTokens(text),
@@ -806,6 +838,8 @@ export class TokenTreeService {
       },
       ...(summary === undefined ? {} : { summary }),
     })
+    // Remembered so a cancelled turn can take its question back out of the tree.
+    state.pendingQuestionId = node.id
     if (placement.manual === true) {
       this.logger.info(`token-tree: question attached to the user-picked anchor ${parentId} (session ${state.sessionId})`)
     } else if (attached) {
