@@ -2591,6 +2591,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var lastMoveState = React.useState(null)
     var lastMove = lastMoveState[0]
     var setLastMove = lastMoveState[1]
+    var dockHideToolsState = React.useState(false)
+    var dockHideTools = dockHideToolsState[0]
+    var setDockHideTools = dockHideToolsState[1]
+    var dockHideAnswersState = React.useState(false)
+    var dockHideAnswers = dockHideAnswersState[0]
+    var setDockHideAnswers = dockHideAnswersState[1]
 
     // Expanded state only drives the spacing rule around the dock.
     var rootRef = React.useRef(null)
@@ -2764,6 +2770,13 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
 
     var data = view.data
     var nodes = data !== null && data.nodes !== undefined ? data.nodes : []
+    // The same two filters as the editor's detail column, applied at the source so the rows and
+    // the graph cannot disagree.
+    var dockVisible = nodes.filter(function (node) {
+      if (dockHideTools && node.kind === 'tool_result') return false
+      if (dockHideAnswers && node.kind === 'answer') return false
+      return true
+    })
     var nodeById = {}
     nodes.forEach(function (node) { nodeById[node.id] = node })
     var focusId = data === null ? '' : data.focusId
@@ -2775,12 +2788,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var graphNodes = []
     var folded = {}
     if (data !== null) {
-      nodes.forEach(function (node) {
+      dockVisible.forEach(function (node) {
         if (node.kind !== 'answer') return
         var parent = node.parentId === null ? undefined : nodeById[node.parentId]
         if (parent !== undefined && parent.kind === 'question') folded[node.id] = parent.id
       })
-      nodes.forEach(function (node) {
+      dockVisible.forEach(function (node) {
         if (folded[node.id] !== undefined) return
         var parentId = node.parentId
         while (parentId !== null && folded[parentId] !== undefined) parentId = folded[parentId]
@@ -2843,9 +2856,23 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         title: t('在只显示节点号和显示问题/回答摘要之间切换'),
         onClick: function (event) { event.stopPropagation(); setCompact(!compact) },
       }, compact ? t('详细') : t('精简')) : null,
+      h('button', {
+        className: 'twt-action',
+        style: { padding: '2px 8px' },
+        'data-kind': dockHideTools ? 'primary' : undefined,
+        title: t('只看对话与回答，工具结果不显示'),
+        onClick: function (event) { event.stopPropagation(); setDockHideTools(!dockHideTools) },
+      }, t('隐藏工具结果')),
+      h('button', {
+        className: 'twt-action',
+        style: { padding: '2px 8px' },
+        'data-kind': dockHideAnswers ? 'primary' : undefined,
+        title: t('只看问题与工具调用的骨架'),
+        onClick: function (event) { event.stopPropagation(); setDockHideAnswers(!dockHideAnswers) },
+      }, t('隐藏回答')),
       h('span', { className: 'twt-hint' }, isOpen ? t('收起') : t('展开')))
 
-    var rows = nodes.map(function (node) {
+    var rows = dockVisible.map(function (node) {
       return h('div', {
         key: node.id,
         className: 'twt-dockrow',
@@ -2995,28 +3022,100 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
    * @param {object} props - `{ sessionId }` from the header actions slot.
    * @returns {object} the button plus its editor portal.
    */
+  // --- floating editor store -----------------------------------------------
+  // One editor per page, owned by a root that survives the header slot unmounting.
+  var editorHostMounted = false
+  var editorControl = {
+    open: false,
+    sessionId: '',
+    listeners: [],
+    setOpen: function (open, sessionId) {
+      var next = open === true
+      if (sessionId !== undefined) editorControl.sessionId = sessionId
+      if (editorControl.open === next) return
+      editorControl.open = next
+      editorControl.listeners.slice().forEach(function (listener) {
+        try { listener(next) } catch (error) { /* one bad listener must not stop the rest */ }
+      })
+    },
+    subscribe: function (listener) {
+      editorControl.listeners.push(listener)
+      return function () {
+        var at = editorControl.listeners.indexOf(listener)
+        if (at >= 0) editorControl.listeners.splice(at, 1)
+      }
+    },
+  }
+
+  /** The editor, mounted once into the document body by {@link mountEditorHost}. */
+  function EditorHost() {
+    var state = React.useState(editorControl.open)
+    var open = state[0]
+    var setOpen = state[1]
+    var sessionState = React.useState(editorControl.sessionId)
+    var session = sessionState[0]
+    var setSession = sessionState[1]
+    React.useEffect(function () {
+      return editorControl.subscribe(function (next) {
+        setOpen(next)
+        setSession(editorControl.sessionId)
+      })
+    }, [])
+    if (!open) return null
+    return h(TreeEditor, {
+      sessionId: session,
+      onClose: function () { editorControl.setOpen(false) },
+      onChanged: function () {},
+    })
+  }
+
+  /**
+   * Mount the detached editor root.
+   *
+   * Called from `apply`; when the shell exposes no react-dom/client the button keeps its own
+   * portal instead, so nothing breaks on an older host.
+   */
+  function mountEditorHost() {
+    if (typeof document === 'undefined') return
+    try {
+      var client = require('react-dom/client')
+      if (client === undefined || client === null || typeof client.createRoot !== 'function') return
+      var host = document.createElement('div')
+      host.id = 'twt-editor-host'
+      document.body.appendChild(host)
+      client.createRoot(host).render(h(EditorHost))
+      editorHostMounted = true
+    } catch (error) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[dsh-token-tree] detached editor unavailable:', error && error.message ? error.message : error)
+      }
+    }
+  }
+
   function TreeButton(props) {
     ensureStyles()
     var sessionId = props.sessionId
-    var editorState = React.useState(false)
+    var editorState = React.useState(editorControl.open)
     var editorOpen = editorState[0]
     var setEditorOpen = editorState[1]
     var tickState = React.useState(0)
     var tick = tickState[0]
     var setTick = tickState[1]
+    React.useEffect(function () { return editorControl.subscribe(setEditorOpen) }, [])
 
     var button = h('button', {
       className: 'twt-btn',
       'data-active': String(editorOpen),
-      onClick: function () { setEditorOpen(!editorOpen) },
+      onClick: function () { editorControl.setOpen(!editorControl.open, sessionId) },
       title: t('盆栽：对话树的详细信息与设置'),
     }, h('span', null, t('盆栽')))
 
+    // Fallback only: without a detached root the portal belongs to this component.
     var editor = null
-    if (editorOpen && typeof document !== 'undefined') {
+    if (!editorHostMounted && editorOpen && typeof document !== 'undefined') {
       editor = createPortal(h(TreeEditor, {
         sessionId: sessionId,
-        onClose: function () { setEditorOpen(false) },
+        onClose: function () { editorControl.setOpen(false) },
         onChanged: function () { setTick(tick + 1) },
       }), document.body)
     }
@@ -3410,6 +3509,15 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     } catch (error) {
       if (typeof console !== 'undefined' && console.warn) {
         console.warn('[dsh-token-tree] composer dock registration skipped:', error && error.message ? error.message : error)
+      }
+    }
+
+    // The editor gets its own root so the header slot unmounting cannot take it down.
+    try {
+      mountEditorHost()
+    } catch (error) {
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('[dsh-token-tree] editor host skipped:', error && error.message ? error.message : error)
       }
     }
 

@@ -151,11 +151,15 @@ async function mountClient(which, locale = 'zh') {
   const factory = await loadFactory(window)
   assert.ok(registeredId === 'dsh-bonsai', 'client bundle registers under the published package name')
   assert.ok(factory !== undefined, 'client registered a factory')
-  const platformRequire = name => (name === 'react' ? React : require('react-dom'))
+  const platformRequire = name => name === 'react'
+    ? React
+    : name === 'react-dom/client'
+      ? ReactDOMClient
+      : require('react-dom')
   const exported = factory(platformRequire)
 
   const components = {}
-  exported.apply({
+  const applyContext = {
     slots: {
       inject: (_name, body) => body(),
       register: (spec, component) => {
@@ -167,7 +171,9 @@ async function mountClient(which, locale = 'zh') {
     effect: body => body(),
     logger: { info: () => {}, warn: () => {}, debug: () => {}, error: () => {} },
     get: () => undefined,
-  })
+  }
+  // apply() mounts the detached editor root, which is a React update.
+  await React.act(async () => { exported.apply(applyContext) })
 
   const Component = which === 'dock'
     ? components['conversation.composer.dock']
@@ -177,7 +183,7 @@ async function mountClient(which, locale = 'zh') {
   assert.ok(Component !== undefined, `${which} component registered`)
 
   const container = window.document.getElementById('root')
-  const root = ReactDOMClient.createRoot(container)
+  let root = ReactDOMClient.createRoot(container)
   const flush = async () => {
     for (let index = 0; index < 8; index++) await React.act(async () => { await Promise.resolve() })
   }
@@ -213,7 +219,14 @@ async function mountClient(which, locale = 'zh') {
     }
   }
 
-  return { window, document: window.document, container, requests, click, clickRow, flush, cleanup }
+  const remount = async () => {
+    await React.act(async () => { root.unmount() })
+    root = ReactDOMClient.createRoot(container)
+    await React.act(async () => { root.render(React.createElement(Component, props)) })
+    await flush()
+  }
+
+  return { window, document: window.document, container, requests, click, clickRow, flush, remount, cleanup }
 }
 
 test('the dock renders the conversation tree it fetched', { timeout: 30000 }, async t => {
@@ -234,6 +247,18 @@ test('the UI follows the host language, English included', { timeout: 30000 }, a
   assert.ok(client.container.innerHTML.includes('Bonsai'), 'product name in English')
   assert.ok(client.container.innerHTML.includes('Graph'), 'tab label translated')
   assert.ok(!client.container.innerHTML.includes('\u56fe\u5f62'), 'no Chinese tab label left in English mode')
+})
+
+test('the editor survives the header slot unmounting', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  await client.click('盆栽')
+  assert.ok(client.document.querySelector('.twt-editor') !== null, 'the editor opened')
+
+  // The shell unmounts the header actions when the pointer leaves; that used to take the portal
+  // (and the open editor) with it.
+  await client.remount()
+  assert.ok(client.document.querySelector('.twt-editor') !== null, 'the editor is still open after a remount')
 })
 
 test('the injected styles follow the host theme instead of forcing dark', { timeout: 30000 }, async t => {
@@ -299,6 +324,22 @@ test('the answer toggle removes answers from the list', { timeout: 30000 }, asyn
   const rowsAfter = [...client.document.querySelectorAll('.twt-erow')]
   assert.ok(!rowsAfter.some(row => row.getAttribute('data-kind') === 'answer'), 'answers are gone')
   assert.ok(rowsAfter.length > 0, 'the questions remain')
+})
+
+test('the dock carries the same two hide switches', { timeout: 30000 }, async t => {
+  const client = await mountClient('dock')
+  t.after(client.cleanup)
+  await client.click('列表')
+  const rowKinds = () => [...client.document.querySelectorAll('.twt-dockrow')]
+    .map(row => row.querySelector('.twt-ekind')?.getAttribute('data-kind'))
+  assert.ok(rowKinds().includes('answer'), 'answers show at first')
+
+  await client.click('隐藏回答')
+  assert.ok(!rowKinds().includes('answer'), 'answers are gone')
+  assert.ok(rowKinds().length > 0, 'questions remain')
+
+  await client.click('隐藏工具结果')
+  assert.ok(!rowKinds().includes('tool_result'), 'tool rows are gone too')
 })
 
 test('the recycle bin shows how much is hidden and can restore it all', { timeout: 30000 }, async t => {
