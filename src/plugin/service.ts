@@ -37,7 +37,8 @@ import type { EditOp, EditStore } from './store.ts'
 import type { SettingsStore } from './settings.ts'
 import { asMessage, buildInjectedMessage, isInjected, reasoningOfContent, supervisorMessage, textOfContent } from './messages.ts'
 import type { Classification, Constraint } from './requirements.ts'
-import { activeConstraints, applyConstraint, classifyTurn } from './requirements.ts'
+import { activeConstraints, applyConstraint, applyRuleEdit, classifyTurn } from './requirements.ts'
+import type { RuleEdit } from './requirements.ts'
 
 /**
  * Content features a node needs before it can close a topic.
@@ -602,6 +603,36 @@ export class TokenTreeService {
   }
 
   /**
+   * Add, edit, drop or toggle one rule.
+   *
+   * Rules steer the model ("keep answers under 100 words", "do not publish without asking"), so
+   * the editor has to be able to write them by hand instead of waiting for the classifier to
+   * notice. The change is applied immediately and recorded in the same append-only log the tree
+   * edits use.
+   * @param sessionId - session the rule belongs to.
+   * @param edit - the mutation.
+   * @returns The rules still in force, or `undefined` when the edit targeted nothing.
+   */
+  editRule(sessionId: string, edit: Omit<RuleEdit, 'at'>): Constraint[] | undefined {
+    const state = this.stateOf(sessionId)
+    const before = state.constraints
+    const after = applyRuleEdit(before, { ...edit, at: Date.now() })
+    if (after === before) return undefined
+    state.constraints = after
+    this.remember({
+      session: sessionId,
+      action: 'rule',
+      ruleOp: edit.op,
+      ...(edit.id === undefined ? {} : { ruleId: edit.id }),
+      ...(edit.text === undefined ? {} : { ruleText: edit.text }),
+      ...(edit.active === undefined ? {} : { ruleActive: edit.active }),
+      at: Date.now(),
+    })
+    this.logger.info(`token-tree: rule ${edit.op} (${sessionId})`)
+    return activeConstraints(after)
+  }
+
+  /**
    * Replay the durable edit log over a freshly rebuilt tree.
    *
    * Operations are applied in the recorded order and each one is skipped when its
@@ -614,20 +645,34 @@ export class TokenTreeService {
     if (ops.length === 0) return
     let applied = 0
     for (const op of ops) {
-      if (!state.tree.nodes.has(op.nodeId)) continue
       try {
+        // Rules have no node: replay them before the node lookup below.
+        if (op.action === 'rule') {
+          if (op.ruleOp === undefined) continue
+          state.constraints = applyRuleEdit(state.constraints, {
+            op: op.ruleOp,
+            ...(op.ruleId === undefined ? {} : { id: op.ruleId }),
+            ...(op.ruleText === undefined ? {} : { text: op.ruleText }),
+            ...(op.ruleActive === undefined ? {} : { active: op.ruleActive }),
+            at: op.at,
+          })
+          applied++
+          continue
+        }
+        const nodeId = op.nodeId
+        if (nodeId === undefined || !state.tree.nodes.has(nodeId)) continue
         if (op.action === 'reparent') {
           if (op.parentId === undefined || !state.tree.nodes.has(op.parentId)) continue
-          if (state.tree.node(op.nodeId).parentId === op.parentId) continue
-          state.tree.reparent(op.nodeId, op.parentId)
+          if (state.tree.node(nodeId).parentId === op.parentId) continue
+          state.tree.reparent(nodeId, op.parentId)
           applied++
         } else if (op.action === 'remove') {
           // Legacy log entries came from the destructive version; replay them as the
           // soft mark so an old log cannot delete nodes outright.
-          state.tree.mark(op.nodeId, { deleted: true })
+          state.tree.mark(nodeId, { deleted: true })
           applied++
         } else {
-          state.tree.mark(op.nodeId, {
+          state.tree.mark(nodeId, {
             ...(op.pinned === undefined ? {} : { pinned: op.pinned }),
             ...(op.ignored === undefined ? {} : { ignored: op.ignored }),
             ...(op.deleted === undefined ? {} : { deleted: op.deleted }),
@@ -1146,6 +1191,26 @@ export class TokenTreeService {
    * @returns The line, or `undefined` while retrieval cannot matter yet.
    */
   retrievalHint(sessionId: string): string | undefined {
+    const rules = activeConstraints(this.stateOf(sessionId).constraints)
+    const ruleLine = rules.length === 0
+      ? ''
+      : `[盆栽] 仍然生效的规则：${rules.map(entry => entry.text).join(' | ')}`
+    const hint = this.baseHint(sessionId)
+    if (ruleLine === '') return hint
+    // Rules are the one thing a user writes by hand and expects to see take effect, so they ride
+    // along with the hint instead of waiting for the (off by default) full injection.
+    return hint === undefined ? ruleLine + '\n' + HINT_TEXT : hint + '\n\n' + ruleLine
+  }
+
+  /**
+   * The retrieval hint without the rules.
+   *
+   * Kept separate so {@link retrievalHint} can attach the rule line without duplicating the
+   * gating logic below.
+   * @param sessionId - session identity.
+   * @returns The line, or `undefined` while retrieval cannot matter yet.
+   */
+  private baseHint(sessionId: string): string | undefined {
     const state = this.stateOf(sessionId)
     const tree = state.tree
     // A compacted session has already lost history, so no further gate is needed. The first

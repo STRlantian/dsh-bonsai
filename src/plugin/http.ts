@@ -140,7 +140,7 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
       methods: ['POST'],
       requestBody: 'buffered',
       fetch: async (request: Request): Promise<Response> => {
-        let body: { session?: unknown; action?: unknown; nodeId?: unknown; parentId?: unknown; pinned?: unknown; ignored?: unknown }
+        let body: { session?: unknown; action?: unknown; nodeId?: unknown; parentId?: unknown; pinned?: unknown; ignored?: unknown; rule?: unknown }
         try {
           body = await request.json() as typeof body
         } catch {
@@ -149,6 +149,22 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
         const requested = typeof body.session === 'string' ? body.session : ''
         const sessionId = requested.length > 0 ? requested : (service.sessionIds.at(-1) ?? '')
         if (sessionId.length === 0) return Response.json({ ok: false, error: 'no session' }, { status: 409 })
+        // Rules have no node, so they are handled before the nodeId requirement below.
+        if (body.action === 'rule') {
+          const edit = (typeof body.rule === 'object' && body.rule !== null ? body.rule : {}) as Record<string, unknown>
+          const op = String(edit.op ?? '')
+          if (op !== 'add' && op !== 'update' && op !== 'remove' && op !== 'toggle') {
+            return Response.json({ ok: false, error: `unknown rule op ${op}` }, { status: 400 })
+          }
+          const result = service.editRule(sessionId, {
+            op,
+            ...(typeof edit.id === 'string' ? { id: edit.id } : {}),
+            ...(typeof edit.text === 'string' ? { text: edit.text } : {}),
+            ...(typeof edit.active === 'boolean' ? { active: edit.active } : {}),
+          })
+          if (result === undefined) return Response.json({ ok: false, error: 'rule edit had no effect' }, { status: 400 })
+          return Response.json({ ok: true, rules: result }, { headers: { 'cache-control': 'no-store' } })
+        }
         const nodeId = typeof body.nodeId === 'string' ? body.nodeId : ''
         if (nodeId.length === 0) return Response.json({ ok: false, error: 'nodeId is required' }, { status: 400 })
         try {

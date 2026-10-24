@@ -23,9 +23,9 @@ export interface EditOp {
   /** Session the edit belongs to. */
   session: string
   /** What was done. */
-  action: 'reparent' | 'remove' | 'mark'
-  /** Node acted on. */
-  nodeId: NodeId
+  action: 'reparent' | 'remove' | 'mark' | 'rule'
+  /** Node acted on; absent for a rule edit. */
+  nodeId?: NodeId
   /** New parent, for `reparent`. */
   parentId?: NodeId
   /** Pin flag, for `mark`. */
@@ -34,6 +34,14 @@ export interface EditOp {
   ignored?: boolean
   /** Soft-delete flag, for `mark`: hidden branches stay restorable. */
   deleted?: boolean
+  /** Rule mutation, for `rule`. */
+  ruleOp?: 'add' | 'update' | 'remove' | 'toggle'
+  /** Rule id, for `rule` except `add`. */
+  ruleId?: string
+  /** Rule text, for `rule` add/update. */
+  ruleText?: string
+  /** Rule active flag, for `rule` toggle. */
+  ruleActive?: boolean
   /** Wall-clock time recorded at write. */
   at: number
 }
@@ -136,7 +144,7 @@ export class EditStore {
       if (typeof parsed !== 'object' || parsed === null) continue
       const candidate = parsed as Partial<EditOp>
       if (typeof candidate.session !== 'string' || typeof candidate.nodeId !== 'string') continue
-      if (candidate.action !== 'reparent' && candidate.action !== 'remove' && candidate.action !== 'mark') continue
+      if (candidate.action !== 'reparent' && candidate.action !== 'remove' && candidate.action !== 'mark' && candidate.action !== 'rule') continue
       const list = this.bySession.get(candidate.session) ?? []
       list.push({
         session: candidate.session,

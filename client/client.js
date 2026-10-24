@@ -46,6 +46,18 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "这条不在对话区当前渲染范围内（列表虚拟化），原文见右侧详情。": "That turn is outside the rendered transcript (virtualised list); see the detail panel instead.",
   "界面语言": "Language",
   "预设": "Presets",
+  "规则": "Rules",
+  "还没有规则。规则会跟着检索提示一起发给模型。": "No rules yet. Rules ride along with the retrieval hint.",
+  "手写": "hand-written",
+  "自动识别": "detected",
+  "点击编辑": "click to edit",
+  "＋ 规则": "＋ Rule",
+  "新增规则": "New rule",
+  "编辑规则": "Edit rule",
+  "模型会在检索提示里看到这条规则": "The model sees this rule in the retrieval hint.",
+  "例如：发布或推送前必须先问我": "For example: ask before publishing or pushing",
+  "规则保存失败：{}": "Could not save the rule: {}",
+  "删除": "Delete",
   "盆栽 · 预设与折叠": "Bonsai · presets and folding",
   "盆栽预设": "Bonsai preset",
   "折叠历史阈值": "Fold history above",
@@ -352,6 +364,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     if (payload.parentId !== undefined) body.parentId = payload.parentId
     if (payload.pinned !== undefined) body.pinned = payload.pinned
     if (payload.ignored !== undefined) body.ignored = payload.ignored
+    if (payload.rule !== undefined) body.rule = payload.rule
     return fetch(EDIT, {
       method: 'POST',
       credentials: 'same-origin',
@@ -421,6 +434,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-note{padding:14px 12px;font-size:12px;opacity:.7}',
     '.twt-err{color:var(--twt-danger)}',
     '.twt-constraints{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--twt-border);font-size:11px}',
+    '.twt-rule-chip{font-size:11px;padding:2px 8px;border-radius:999px;border:1px solid var(--twt-border);background:var(--twt-hover);color:inherit;cursor:pointer;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+    '.twt-rule-chip:hover{border-color:var(--twt-accent)}',
+    '.twt-rule-add{font-size:11px;padding:2px 8px;border-radius:999px;border:1px dashed var(--twt-border);background:transparent;color:inherit;cursor:pointer}',
+    '.twt-rule-input{width:100%;min-height:72px;resize:vertical;font:inherit;font-size:12px;padding:8px 10px;border-radius:8px;border:1px solid var(--twt-border);background:transparent;color:inherit;color-scheme:light dark}',
     '.twt-constraints-label{opacity:.6}',
     '.twt-constraint{border:1px solid rgba(224,164,88,.45);color:#e0a458;border-radius:999px;padding:0 8px;line-height:17px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
     '.twt-branches{display:flex;flex-direction:column;gap:6px;border-top:1px solid var(--twt-border);padding-top:8px}',
@@ -1104,6 +1121,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var toolDraftState = React.useState([])
     var toolDraft = toolDraftState[0]
     var setToolDraft = toolDraftState[1]
+    var ruleDraftState = React.useState(null)
+    var ruleDraft = ruleDraftState[0]
+    var setRuleDraft = ruleDraftState[1]
+    var ruleTextState = React.useState('')
+    var ruleText = ruleTextState[0]
+    var setRuleText = ruleTextState[1]
 
     /** The bundles the host understands; the labels are what people read. */
     var PRESET_LIST = [
@@ -1836,6 +1859,82 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             }, t('应用')))))
     }
 
+    /** Save one rule change and reload the tree so the bar matches the server. */
+    function saveRule(edit) {
+      setBusy(true)
+      setNote('')
+      editRequest(sessionId, { action: 'rule', rule: edit })
+        .then(function () {
+          setRuleDraft(null)
+          load()
+          if (typeof onChanged === 'function') onChanged()
+        })
+        .catch(function (error) { setNote(tf('规则保存失败：{}', error.message)) })
+        .finally(function () { setBusy(false) })
+    }
+
+    /** The bar: one chip per rule, and a plus. */
+    function renderRuleBar() {
+      if (mode === 'settings') return null
+      return h('div', { className: 'twt-constraints' },
+        h('span', { className: 'twt-constraints-label' }, t('规则')),
+        rules.length === 0
+          ? h('span', { className: 'twt-hint' }, t('还没有规则。规则会跟着检索提示一起发给模型。'))
+          : rules.map(function (rule) {
+            return h('button', {
+              key: rule.id,
+              className: 'twt-rule-chip',
+              disabled: busy,
+              title: (rule.source === 'manual' ? t('手写') : t('自动识别')) + ' · ' + t('点击编辑'),
+              onClick: function () { setRuleDraft({ id: rule.id, source: rule.source }); setRuleText(rule.text) },
+            },
+              (rule.source === 'manual' ? '✎ ' : '') + rule.text)
+          }),
+        h('button', {
+          className: 'twt-rule-add',
+          disabled: busy,
+          onClick: function () { setRuleDraft({ id: null, source: 'manual' }); setRuleText('') },
+        }, t('＋ 规则')))
+    }
+
+    /** The dialog: one line of text, save or delete. */
+    function renderRuleEditor() {
+      if (ruleDraft === null) return null
+      var isNew = ruleDraft.id === null
+      return h('div', { className: 'twt-modal-backdrop', onClick: function () { setRuleDraft(null) } },
+        h('div', { className: 'twt-modal', onClick: function (event) { event.stopPropagation() } },
+          h('div', { className: 'twt-modal-head' },
+            h('span', { className: 'twt-dtitle' }, isNew ? t('新增规则') : t('编辑规则')),
+            h('span', { className: 'twt-hint' }, t('模型会在检索提示里看到这条规则'))),
+          h('textarea', {
+            className: 'twt-rule-input',
+            rows: 3,
+            autoFocus: true,
+            defaultValue: ruleDraft.text || '',
+            placeholder: t('例如：发布或推送前必须先问我'),
+            onChange: function (event) { setRuleText(event.target.value) },
+          }),
+          h('div', { className: 'twt-modal-foot' },
+            isNew ? null : h('button', {
+              className: 'twt-action',
+              disabled: busy,
+              onClick: function () { saveRule({ op: 'remove', id: ruleDraft.id }) },
+            }, t('删除')),
+            h('span', { style: { flex: '1' } }),
+            h('button', { className: 'twt-action', onClick: function () { setRuleDraft(null) } }, t('取消')),
+            h('button', {
+              className: 'twt-action',
+              'data-kind': 'primary',
+              disabled: busy,
+              onClick: function () {
+                var field = document.querySelector('.twt-rule-input')
+                var text = String((field && field.value) || ruleText || '').trim()
+                if (text === '') { setRuleDraft(null); return }
+                saveRule(isNew ? { op: 'add', text: text } : { op: 'update', id: ruleDraft.id, text: text })
+              },
+            }, t('保存')))))
+    }
+
     /** The recycle bin: every hidden branch root, with a restore action. */
     function renderBasket() {
       if (hiddenRows.length === 0) {
@@ -2044,6 +2143,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     }
     // Hidden branch roots, newest first; the payload already filters inherited hides.
     var hiddenRows = (data !== null && Array.isArray(data.hidden)) ? data.hidden : []
+    // Rules ("constraints") the model is expected to follow, from the classifier or by hand.
+    var rules = (data !== null && Array.isArray(data.constraints)) ? data.constraints : []
 
     var selected = picked === null ? null : (byId[picked] !== undefined ? byId[picked] : (nodeById[picked] !== undefined ? nodeById[picked] : null))
     var selectedKind = selected === null ? '' : (selected.kind !== undefined ? selected.kind : 'question')
@@ -2257,9 +2358,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           }, t('设置')),
           h('button', { className: 'twt-action', style: { padding: '3px 10px' }, onClick: load }, t('刷新')),
           h('button', { className: 'twt-close', onClick: onClose, title: t('关闭') }, '✕')),
+        renderRuleBar(),
+        renderRuleEditor(),
         h('div', { className: 'twt-editor-body' },
           mode === 'settings'
-            ? h(React.Fragment, null, settingsPanel, renderToolPicker())
+            ? h(React.Fragment, null, settingsPanel, renderToolPicker(), renderRuleEditor())
             : h(React.Fragment, null,
               h('div', {
                 className: mode === 'graph' ? 'twt-elist twt-elist-graph' : 'twt-elist',

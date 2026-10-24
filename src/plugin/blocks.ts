@@ -72,7 +72,7 @@ export interface TreePayload {
   /** Structural counters for the header. */
   stats: { blocks: number; branches: number; maxDepth: number; tokens: number }
   /** Instructions still in force; they are not blocks because they are session-wide. */
-  constraints: { text: string; createdAt: number }[]
+  constraints: { id: string; text: string; createdAt: number; source: string }[]
   /** Blocks in creation order. */
   blocks: BlockView[]
 }
@@ -131,7 +131,7 @@ export function blocksOf(
   options: {
     focusId?: NodeId
     anchoredId?: NodeId
-    constraints?: readonly { text: string; createdAt: number }[]
+    constraints?: readonly { id: string; text: string; createdAt: number; source: string }[]
   } = {},
 ): TreePayload {
   const focusId = options.focusId ?? tree.currentId
@@ -205,7 +205,12 @@ export function blocksOf(
       maxDepth: tree.stats().maxDepth,
       tokens: blocks.reduce((total, block) => total + block.tokens, 0),
     },
-    constraints: (options.constraints ?? []).map(entry => ({ text: entry.text, createdAt: entry.createdAt })),
+    constraints: (options.constraints ?? []).map(entry => ({
+      id: entry.id,
+      text: entry.text,
+      createdAt: entry.createdAt,
+      source: entry.source,
+    })),
     blocks,
   }
 }
@@ -260,7 +265,7 @@ export interface NodesPayload {
   /** Counters for the header. */
   stats: { nodes: number; questions: number; answers: number; tools: number; maxDepth: number; branches: number; tokens: number }
   /** Instructions still in force. */
-  constraints: { text: string; createdAt: number }[]
+  constraints: { id: string; text: string; createdAt: number; source: string }[]
   /** Every node, parents before children. */
   nodes: NodeRow[]
   /**
@@ -305,7 +310,7 @@ export function nodesOf(
   options: {
     focusId?: NodeId
     anchoredId?: NodeId
-    constraints?: readonly { text: string; createdAt: number }[]
+    constraints?: readonly { id: string; text: string; createdAt: number; source: string }[]
   } = {},
 ): NodesPayload {
   const focusId = options.focusId ?? tree.currentId
@@ -391,7 +396,12 @@ export function nodesOf(
       branches,
       tokens: tree.stats().totalTokens,
     },
-    constraints: (options.constraints ?? []).map(entry => ({ text: entry.text, createdAt: entry.createdAt })),
+    constraints: (options.constraints ?? []).map(entry => ({
+      id: entry.id,
+      text: entry.text,
+      createdAt: entry.createdAt,
+      source: entry.source,
+    })),
     nodes: rows,
     hidden,
   }

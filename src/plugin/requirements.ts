@@ -18,8 +18,12 @@ export type TurnKind = 'topic' | 'constraint'
 
 /** One active or expired constraint. */
 export interface Constraint {
+  /** Stable id, so an edit can target one rule. */
+  id: string
   /** Original turn text. */
   text: string
+  /** Where it came from: the classifier, or the rule editor. */
+  source: 'auto' | 'manual'
   /** When it arrived. */
   createdAt: number
   /** Whether it still applies. */
@@ -121,7 +125,14 @@ export function applyConstraint(
     ? list.map(entry => (entry.active ? { ...entry, active: false, supersededBy: text } : entry))
     : [...list]
   if (!classification.cancels) {
-    next.push({ text, createdAt, active: true, reason: classification.reason })
+    next.push({
+      id: `rule-${createdAt.toString(36)}-${next.length}`,
+      text,
+      createdAt,
+      active: true,
+      source: 'auto',
+      reason: classification.reason,
+    })
   }
   return next.slice(-keep)
 }
@@ -133,4 +144,59 @@ export function applyConstraint(
  */
 export function activeConstraints(list: readonly Constraint[]): Constraint[] {
   return list.filter(entry => entry.active).reverse()
+}
+
+/** One hand edit of a rule. */
+export interface RuleEdit {
+  /** Which mutation to apply. */
+  op: 'add' | 'update' | 'remove' | 'toggle'
+  /** Target rule; ignored by `add`. */
+  id?: string
+  /** New text, for `add` and `update`. */
+  text?: string
+  /** New active flag, for `toggle`. */
+  active?: boolean
+  /** Wall-clock time of the edit. */
+  at: number
+}
+
+/**
+ * Apply one hand edit to the rule list.
+ *
+ * Hand edits always produce `source: 'manual'`, so the chip can show where a rule came from and
+ * a later classifier pass never overwrites one.
+ * @param list - current rules, oldest first.
+ * @param edit - the mutation.
+ * @returns The updated list; unchanged when the edit targets a missing rule.
+ */
+export function applyRuleEdit(list: readonly Constraint[], edit: RuleEdit): Constraint[] {
+  const next = [...list]
+  if (edit.op === 'add') {
+    const text = (edit.text ?? '').trim()
+    if (text === '') return next
+    next.push({
+      id: `rule-${edit.at.toString(36)}-${next.length}`,
+      text,
+      createdAt: edit.at,
+      active: edit.active !== false,
+      source: 'manual',
+      reason: 'manual',
+    })
+    return next
+  }
+  const index = next.findIndex(entry => entry.id === edit.id)
+  if (index < 0) return next
+  if (edit.op === 'remove') {
+    next.splice(index, 1)
+    return next
+  }
+  const current = next[index]
+  if (edit.op === 'update') {
+    const text = (edit.text ?? '').trim()
+    if (text === '') return next
+    next[index] = { ...current, text, source: 'manual' }
+    return next
+  }
+  next[index] = { ...current, active: edit.active === true, source: 'manual' }
+  return next
 }

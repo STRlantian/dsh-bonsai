@@ -25,6 +25,7 @@ function treePayload() {
     anchoredId: null,
     stats: { nodes: 6, questions: 3, answers: 2, tools: 1, blocks: 3, branches: 2, tokens: 120 },
     hidden: [{ id: 'n5', kind: 'question', preview: '分支 B：直接换哈希表呢？', parentId: 'n2', subtreeSize: 1, tokens: 14 }],
+    constraints: [{ id: 'rule-1', text: '发布前必须先问我', createdAt: 1, source: 'manual' }],
     nodes: [
       { id: 'n1', kind: 'note', preview: 'session root', detail: 'session root', parentId: null, tokens: 3, cost: 0, pathCost: 0, depth: 0, turn: 0 },
       { id: 'n2', kind: 'question', preview: '第一个问题：布隆过滤器的误判率由什么决定？', detail: '第一个问题', parentId: 'n1', tokens: 30, cost: 1, pathCost: 1, depth: 1, turn: 1 },
@@ -354,6 +355,43 @@ test('the tool-result toggle sits on the right and only where it applies', { tim
   // Settings mode: gone, because it controls nothing there.
   await client.click('设置')
   assert.equal(byLabel(), undefined, 'the settings panel does not show it')
+})
+
+test('rules show as chips and can be added from the bar', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  await client.click('盆栽')
+  await client.click('完整树')
+
+  const bar = client.document.querySelector('.twt-constraints')
+  assert.ok(bar !== null, 'the rule bar is rendered')
+  const chips = [...bar.querySelectorAll('.twt-rule-chip')]
+  assert.equal(chips.length, 1, 'one rule from the payload')
+  assert.ok((chips[0].textContent ?? '').includes('发布前必须先问我'), 'the chip shows the rule text')
+
+  const add = [...bar.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('规则'))
+  assert.ok(add !== undefined, 'the bar offers adding one')
+  await React.act(async () => { add.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+
+  const input = client.document.querySelector('.twt-rule-input')
+  assert.ok(input !== null, 'the dialog opens with an input')
+  // React tracks the value, so set it through the native setter before dispatching input.
+  const setter = Object.getOwnPropertyDescriptor(client.window.HTMLTextAreaElement.prototype, 'value').set
+  await React.act(async () => {
+    setter.call(input, '不要擅自发布')
+    input.dispatchEvent(new client.window.Event('input', { bubbles: true }))
+  })
+  await client.flush()
+  const save = [...client.document.querySelectorAll('.twt-modal-foot button')].find(button => (button.textContent ?? '').includes('保存'))
+  assert.ok(save !== undefined, 'the dialog offers saving')
+  await React.act(async () => { save.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+
+  const posted = client.requests.find(entry => entry.url.includes('/api/token-tree/edit') && entry.method === 'POST')
+  assert.ok(posted !== undefined, 'the rule is posted to the edit route')
+  assert.ok(String(posted.body).includes('"action":"rule"'), 'using the rule action')
+  assert.ok(String(posted.body).includes('不要擅自发布'), 'with the text')
 })
 
 test('the settings panel offers the three presets', { timeout: 30000 }, async t => {

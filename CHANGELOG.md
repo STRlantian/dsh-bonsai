@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.6] — 2026-10-24
+
+Rules are editable, and the repository states its publishing rule.
+
+### Added
+
+- **Rule editor**: a bar above the editor lists every rule as a chip (auto-detected ones plain,
+  hand-written ones marked), with add, edit and delete. Rules carry an id and a source, are
+  recorded in the same append-only edit log as tree edits, survive a restart, and ride along with
+  the retrieval hint so the model actually sees them.
+- `AGENTS.md`: publishing to npm or pushing a release tag requires an explicit instruction.
+
+### Fixed
+
+- `POST /api/token-tree/edit` handles `action: rule` before it demands a `nodeId`, so a rule
+  edit no longer fails with "nodeId is required".
+
 ## [0.1.5] — 2026-10-24
 
 Branching fixes found by running the published build on a real 17-turn session, plus the
