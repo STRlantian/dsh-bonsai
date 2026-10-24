@@ -2025,10 +2025,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var entries = []
 
     if (data !== null && mode !== 'blocks' && data.nodes !== undefined) {
-      data.nodes.forEach(function (node) {
-        nodeById[node.id] = node
-        if (hideTools && node.kind === 'tool_result') return
-        if (hideAnswers && node.kind === 'answer') return
+      data.nodes.forEach(function (node) { nodeById[node.id] = node })
+      visibleRows(data.nodes, hideTools, hideAnswers).forEach(function (node) {
         entries.push({
           id: node.id,
           kind: node.kind,
@@ -2518,6 +2516,50 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
    * @param {object} props - `{ session, input }` from the input dock slot.
    * @returns {object} rendered element.
    */
+/**
+ * Drop some kinds and re-attach what is left to its nearest visible ancestor.
+ *
+ * Answers are usually the parent of the next question, so hiding them used to leave those
+ * questions indented under a row that is not drawn - "not attached to the root".
+ * @param rows - payload rows.
+ * @param hideTools - drop tool results.
+ * @param hideAnswers - drop answers.
+ * @returns Rows to draw, with parentId and depth rewritten.
+ */
+function visibleRows(rows, hideTools, hideAnswers) {
+  var byId = {}
+  rows.forEach(function (row) { byId[row.id] = row })
+  var visible = rows.filter(function (row) {
+    if (hideTools && row.kind === 'tool_result') return false
+    if (hideAnswers && row.kind === 'answer') return false
+    return true
+  })
+  var visibleIds = {}
+  visible.forEach(function (row) { visibleIds[row.id] = true })
+  return visible.map(function (row) {
+    var parentId = row.parentId
+    var guard = 0
+    while (parentId !== null && visibleIds[parentId] !== true && guard < 200) {
+      var parent = byId[parentId]
+      if (parent === undefined) { parentId = null; break }
+      parentId = parent.parentId
+      guard++
+    }
+    var depth = 0
+    var cursor = parentId
+    var guard2 = 0
+    while (cursor !== null && guard2 < 200) {
+      var ancestor = byId[cursor]
+      if (ancestor === undefined) break
+      if (visibleIds[cursor] === true) depth++
+      cursor = ancestor.parentId
+      guard2++
+    }
+    return Object.assign({}, row, { parentId: parentId, depth: depth })
+  })
+}
+
+
   function TreeDock(props) {
     ensureStyles()
     // The dock slot is session-scoped, but which prop carries the session depends on
@@ -2772,11 +2814,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var nodes = data !== null && data.nodes !== undefined ? data.nodes : []
     // The same two filters as the editor's detail column, applied at the source so the rows and
     // the graph cannot disagree.
-    var dockVisible = nodes.filter(function (node) {
-      if (dockHideTools && node.kind === 'tool_result') return false
-      if (dockHideAnswers && node.kind === 'answer') return false
-      return true
-    })
+    var dockVisible = visibleRows(nodes, dockHideTools, dockHideAnswers)
     var nodeById = {}
     nodes.forEach(function (node) { nodeById[node.id] = node })
     var focusId = data === null ? '' : data.focusId
@@ -3532,6 +3570,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       }
     }
   }
+
+  // Testing hook: the re-attachment rule is pure and worth unit-testing directly.
+  exports.__visibleRows = visibleRows
 
   return module.exports
 } })

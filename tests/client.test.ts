@@ -226,7 +226,7 @@ async function mountClient(which, locale = 'zh') {
     await flush()
   }
 
-  return { window, document: window.document, container, requests, click, clickRow, flush, remount, cleanup }
+  return { window, document: window.document, container, requests, bundle: exported, click, clickRow, flush, remount, cleanup }
 }
 
 test('the dock renders the conversation tree it fetched', { timeout: 30000 }, async t => {
@@ -564,6 +564,28 @@ test('a hidden tool the host no longer reports still shows as checked', { timeou
   assert.ok(workflow !== undefined, 'the hidden tool is still listed')
   assert.equal(workflow.querySelector('input').checked, true, 'and it is checked')
   assert.ok((workflow.textContent ?? '').includes('已隐藏'), 'marked as hidden rather than 0 chars')
+})
+
+test('hiding a kind re-attaches its children to the nearest visible ancestor', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  const rows = [
+    { id: 'q1', kind: 'question', parentId: null, depth: 0, preview: 'q1' },
+    { id: 'a1', kind: 'answer', parentId: 'q1', depth: 1, preview: 'a1' },
+    { id: 'q2', kind: 'question', parentId: 'a1', depth: 2, preview: 'q2' },
+    { id: 'tool', kind: 'tool_result', parentId: 'a1', depth: 2, preview: 't' },
+  ]
+
+  const withoutAnswers = client.bundle.__visibleRows(rows, false, true)
+  const q2 = withoutAnswers.find(row => row.id === 'q2')
+  assert.equal(q2.parentId, 'q1', 'the question hangs under its nearest visible ancestor')
+  assert.equal(q2.depth, 1, 'and its depth is recomputed')
+  const tool = withoutAnswers.find(row => row.id === 'tool')
+  assert.equal(tool.parentId, 'q1', 'the tool result is re-attached too')
+
+  const withoutTools = client.bundle.__visibleRows(rows, true, false)
+  assert.ok(!withoutTools.some(row => row.id === 'tool'), 'tool results are removed')
+  assert.equal(withoutTools.find(row => row.id === 'q2').parentId, 'a1', 'answers are still there to parent it')
 })
 
 test('the settings panel can switch the interface language', { timeout: 30000 }, async t => {
