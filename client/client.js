@@ -3060,6 +3060,7 @@ function visibleRows(rows, hideTools, hideAnswers) {
   // --- floating editor store -----------------------------------------------
   // One editor per page, owned by a root that survives the header slot unmounting.
   var editorHostMounted = false
+  var editorRoot = null
   var editorControl = {
     open: false,
     sessionId: '',
@@ -3069,6 +3070,13 @@ function visibleRows(rows, hideTools, hideAnswers) {
       if (sessionId !== undefined) editorControl.sessionId = sessionId
       if (editorControl.open === next) return
       editorControl.open = next
+      try {
+        if (editorControl.sessionId !== '') {
+          window.sessionStorage.setItem('twt-editor-open:' + editorControl.sessionId, next ? '1' : '0')
+        }
+      } catch (error) {
+        // Private mode or storage disabled: the editor simply starts closed.
+      }
       editorControl.listeners.slice().forEach(function (listener) {
         try { listener(next) } catch (error) { /* one bad listener must not stop the rest */ }
       })
@@ -3099,6 +3107,7 @@ function visibleRows(rows, hideTools, hideAnswers) {
     if (!open) return null
     return h(TreeEditor, {
       sessionId: session,
+      conversationMode: true,
       onClose: function () { editorControl.setOpen(false) },
       onChanged: function () {},
     })
@@ -3118,7 +3127,8 @@ function visibleRows(rows, hideTools, hideAnswers) {
       var host = document.createElement('div')
       host.id = 'twt-editor-host'
       document.body.appendChild(host)
-      client.createRoot(host).render(h(EditorHost))
+      editorRoot = client.createRoot(host)
+      editorRoot.render(h(EditorHost))
       editorHostMounted = true
     } catch (error) {
       if (typeof console !== 'undefined' && console.warn) {
@@ -3137,6 +3147,13 @@ function visibleRows(rows, hideTools, hideAnswers) {
     var tick = tickState[0]
     var setTick = tickState[1]
     React.useEffect(function () { return editorControl.subscribe(setEditorOpen) }, [])
+    React.useEffect(function () {
+      if (sessionId === undefined || sessionId === null || sessionId === '') return
+      if (editorControl.open) return
+      var remembered = false
+      try { remembered = window.sessionStorage.getItem('twt-editor-open:' + sessionId) === '1' } catch (error) {}
+      if (remembered) editorControl.setOpen(true, sessionId)
+    }, [sessionId])
 
     var button = h('button', {
       className: 'twt-btn',
@@ -3150,6 +3167,7 @@ function visibleRows(rows, hideTools, hideAnswers) {
     if (!editorHostMounted && editorOpen && typeof document !== 'undefined') {
       editor = createPortal(h(TreeEditor, {
         sessionId: sessionId,
+        conversationMode: true,
         onClose: function () { editorControl.setOpen(false) },
         onChanged: function () { setTick(tick + 1) },
       }), document.body)
@@ -3568,9 +3586,22 @@ function visibleRows(rows, hideTools, hideAnswers) {
     }
   }
 
+  /** Close the editor and unmount its detached root; used on unload and by tests. */
+  function disposeEditorHost() {
+    editorControl.setOpen(false)
+    var host = typeof document === 'undefined' ? null : document.getElementById('twt-editor-host')
+    if (host !== null && editorRoot !== null) {
+      try { editorRoot.unmount() } catch (error) { /* already gone */ }
+      editorRoot = null
+      host.remove()
+    }
+  }
+
   // Testing hook: the re-attachment rule is pure and worth unit-testing directly.
   exports.__visibleRows = visibleRows
   exports.__graphProjection = graphProjection
+  exports.__editorControl = editorControl
+  exports.__disposeEditorHost = disposeEditorHost
 
   return module.exports
 } })

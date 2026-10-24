@@ -213,6 +213,8 @@ async function mountClient(which, locale = 'zh') {
 
   const cleanup = async () => {
     try {
+      // The detached editor root keeps a refresh timer; close and unmount it first.
+      await React.act(async () => { exported.__disposeEditorHost?.() })
       await React.act(async () => { root.unmount() })
     } finally {
       window.close()
