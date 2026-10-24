@@ -969,6 +969,26 @@ export class TokenTreeService {
    * @param embedding - question embedding.
    * @returns Parent node id.
    */
+  /**
+   * Walk up past hidden nodes, so a new turn never lands under a deleted one.
+   *
+   * Hiding a node hides its subtree; if the dialogue was standing on that node when the next
+   * question arrived, the question used to attach underneath it and vanish from the view - a real
+   * session lost its newest question exactly that way.
+   * @param tree - session graph.
+   * @param id - candidate parent.
+   * @returns The nearest visible ancestor, or the root.
+   */
+  private visibleParent(tree: MemoryTree, id: NodeId | null): NodeId {
+    let cursor = id
+    let guard = 0
+    while (cursor !== null && guard < 500 && tree.nodes.has(cursor) && tree.hidden(cursor)) {
+      cursor = tree.node(cursor).parentId
+      guard++
+    }
+    return cursor !== null && tree.nodes.has(cursor) ? cursor : tree.rootId
+  }
+
   private pickQuestionParent(
     state: SessionState,
     text: string,
@@ -979,9 +999,15 @@ export class TokenTreeService {
     if (state.manualAnchor !== undefined) {
       const anchor = state.manualAnchor
       state.manualAnchor = undefined
-      if (tree.nodes.has(anchor)) return { parentId: anchor, score: 1, manual: true }
+      if (tree.nodes.has(anchor)) {
+        const visible = this.visibleParent(tree, anchor)
+        if (visible !== anchor) {
+          this.logger.info(`token-tree: anchor ${anchor} is hidden; attaching under ${visible} instead`)
+        }
+        return { parentId: visible, score: 1, manual: true }
+      }
     }
-    const defaultId = tree.currentId
+    const defaultId = this.visibleParent(tree, tree.currentId)
     if (this.config.attachments === 'linear') return { parentId: defaultId, score: 0 }
     const context = this.attachmentContext(state, text, embedding)
     const defaultNode = tree.node(defaultId)
@@ -1002,7 +1028,7 @@ export class TokenTreeService {
     if (bestId !== defaultId
       && bestScore >= this.config.attachThreshold
       && bestScore >= defaultScore + this.config.attachMargin) {
-      return { parentId: bestId, score: bestScore }
+      return { parentId: this.visibleParent(tree, bestId), score: bestScore }
     }
     // A turn that has nothing in common with where the dialogue currently stands
     // starts a new top-level branch instead of extending the line. Without this,

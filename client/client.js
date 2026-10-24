@@ -2706,9 +2706,6 @@ function visibleRows(rows, hideTools, hideAnswers) {
     var dockHideToolsState = React.useState(false)
     var dockHideTools = dockHideToolsState[0]
     var setDockHideTools = dockHideToolsState[1]
-    var dockHideAnswersState = React.useState(false)
-    var dockHideAnswers = dockHideAnswersState[0]
-    var setDockHideAnswers = dockHideAnswersState[1]
 
     // Expanded state only drives the spacing rule around the dock.
     var rootRef = React.useRef(null)
@@ -2884,7 +2881,7 @@ function visibleRows(rows, hideTools, hideAnswers) {
     var nodes = data !== null && data.nodes !== undefined ? data.nodes : []
     // The same two filters as the editor's detail column, applied at the source so the rows and
     // the graph cannot disagree.
-    var dockVisible = visibleRows(nodes, dockHideTools, dockHideAnswers)
+    var dockVisible = visibleRows(nodes, dockHideTools, false)
     var nodeById = {}
     nodes.forEach(function (node) { nodeById[node.id] = node })
     var focusId = data === null ? '' : data.focusId
@@ -2894,7 +2891,7 @@ function visibleRows(rows, hideTools, hideAnswers) {
     // the first render has no payload yet, and reading it there used to throw and
     // take the whole dock down.
     var dockProjection = data !== null
-      ? graphProjection(nodes, dockHideTools, dockHideAnswers)
+      ? graphProjection(nodes, dockHideTools, false)
       : { nodes: [], folded: {} }
     var graphNodes = dockProjection.nodes
     var folded = dockProjection.folded
@@ -2951,13 +2948,6 @@ function visibleRows(rows, hideTools, hideAnswers) {
         title: t('只看对话与回答，工具结果不显示'),
         onClick: function (event) { event.stopPropagation(); setDockHideTools(!dockHideTools) },
       }, t('隐藏工具结果')),
-      h('button', {
-        className: 'twt-action',
-        style: { padding: '2px 8px' },
-        'data-kind': dockHideAnswers ? 'primary' : undefined,
-        title: t('只看问题与工具调用的骨架'),
-        onClick: function (event) { event.stopPropagation(); setDockHideAnswers(!dockHideAnswers) },
-      }, t('隐藏回答')),
       h('span', { className: 'twt-hint' }, isOpen ? t('收起') : t('展开')))
 
     var rows = dockVisible.map(function (node) {
@@ -3047,7 +3037,7 @@ function visibleRows(rows, hideTools, hideAnswers) {
         // Compact by default in the dock: the conversation column is narrow, and the
         // full text already sits in the right rail.
         compact: compact !== false,
-        answerHidden: dockHideAnswers === true,
+        answerHidden: false,
         moveSource: moveSource,
         onMoveTarget: completeMove,
         onPick: function (id) { pickNode(nodeById[id] === undefined ? { id: id } : nodeById[id]) },

@@ -328,20 +328,21 @@ test('the answer toggle removes answers from the list', { timeout: 30000 }, asyn
   assert.ok(rowsAfter.length > 0, 'the questions remain')
 })
 
-test('the dock carries the same two hide switches', { timeout: 30000 }, async t => {
+test('the dock carries only the tools switch', { timeout: 30000 }, async t => {
   const client = await mountClient('dock')
   t.after(client.cleanup)
   await client.click('列表')
   const rowKinds = () => [...client.document.querySelectorAll('.twt-dockrow')]
     .map(row => row.querySelector('.twt-ekind')?.getAttribute('data-kind'))
   assert.ok(rowKinds().includes('answer'), 'answers show at first')
-
-  await client.click('隐藏回答')
-  assert.ok(!rowKinds().includes('answer'), 'answers are gone')
-  assert.ok(rowKinds().length > 0, 'questions remain')
+  // The dock graph folds answers into their question, so the dock keeps only the tools switch.
+  const labels = [...client.document.querySelectorAll('.twt-dockbar button')].map(node => (node.textContent ?? '').trim())
+  assert.ok(!labels.includes('隐藏回答'), 'no answer switch in the dock: ' + labels.join(','))
+  assert.ok(labels.includes('隐藏工具结果'), 'the tools switch is there')
 
   await client.click('隐藏工具结果')
-  assert.ok(!rowKinds().includes('tool_result'), 'tool rows are gone too')
+  assert.ok(!rowKinds().includes('tool_result'), 'tool rows are gone')
+  assert.ok(rowKinds().includes('answer'), 'answers stay')
 })
 
 test('the recycle bin shows how much is hidden and can restore it all', { timeout: 30000 }, async t => {
