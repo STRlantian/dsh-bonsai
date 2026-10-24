@@ -68,12 +68,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "保存失败：{}": "Could not save: {}",
   "保存": "Save",
   "自定义…": "Custom…",
-  "保守": "Conservative",
-  "均衡": "Balanced",
-  "激进": "Aggressive",
-  "6 万 token 才折叠，保留 4 轮，不隐藏任何工具": "Fold only past 60k tokens, keep four turns, hide nothing.",
+  "保留最多": "Keep most",
+  "平衡": "Balanced",
+  "省最多": "Save most",
+  "6 万 token 才折叠，保留 4 轮，不隐藏任何工具 —— 最接近原生行为": "Fold only past 60k tokens, keep four turns, hide nothing - closest to native behaviour.",
   "4 万 token 开始折叠，保留 3 轮，不隐藏工具（默认）": "Start folding at 40k tokens, keep three turns, hide nothing (default).",
-  "2 万就开始折叠、只留 2 轮，并隐藏 9 个少用的重工具（能力会真的少掉）": "Fold from 20k, keep two turns, and hide nine heavy rarely-used tools - those capabilities really go away.",
+  "2 万就开始折叠、只留 2 轮，并隐藏 9 个少用的重工具 —— 这些能力会真的不可用": "Fold from 20k, keep two turns, and hide nine heavy rarely-used tools - those capabilities become unavailable.",
   "预设只改这一页的设置，随时可以再点另一个": "A preset only changes the settings on this page; you can switch any time.",
   "已应用预设：{}": "Applied preset: {}",
   "应用预设失败：{}": "Could not apply the preset: {}",
@@ -100,6 +100,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "全部显示": "Show all",
   "应用": "Apply",
   "{} 字符": "{} chars",
+  "已隐藏": "hidden",
   "折叠历史阈值": "Fold history above",
   "超过这个 token 数就把旧的工具输出从模型视野里折叠掉（0 = 关闭）。用 surfaceOp replace，不调模型；原文留在日志与树里": "Above this many tokens, old tool output is folded out of the model view (0 disables). Uses surfaceOp replace with no model call; the original stays in the log and the tree.",
   "保留最近轮数": "Keep recent turns",
@@ -1130,9 +1131,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
 
     /** The bundles the host understands; the labels are what people read. */
     var PRESET_LIST = [
-      { id: 'conservative', label: '保守', hint: '6 万 token 才折叠，保留 4 轮，不隐藏任何工具' },
-      { id: 'balanced', label: '均衡', hint: '4 万 token 开始折叠，保留 3 轮，不隐藏工具（默认）' },
-      { id: 'aggressive', label: '激进', hint: '2 万就开始折叠、只留 2 轮，并隐藏 9 个少用的重工具（能力会真的少掉）' },
+      { id: 'conservative', label: '保留最多', hint: '6 万 token 才折叠，保留 4 轮，不隐藏任何工具 —— 最接近原生行为' },
+      { id: 'balanced', label: '平衡', hint: '4 万 token 开始折叠，保留 3 轮，不隐藏工具（默认）' },
+      { id: 'aggressive', label: '省最多', hint: '2 万就开始折叠、只留 2 轮，并隐藏 9 个少用的重工具 —— 这些能力会真的不可用' },
     ]
 
     /** Apply a preset, then refresh the panel so the numbers match. */
@@ -1793,6 +1794,27 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         .finally(function () { setBusy(false) })
     }
 
+    /**
+     * Every tool worth showing: what the host reports plus anything already hidden.
+     *
+     * A hidden tool never reaches the next assembly, so the host stops listing it. Without the
+     * union the picker showed 28 tools with nothing checked while the row said "9 hidden".
+     */
+    function pickerTools() {
+      var seen = {}
+      var union = []
+      availableTools.forEach(function (tool) {
+        seen[tool.name] = true
+        union.push(tool)
+      })
+      deniedTools.forEach(function (name) {
+        if (seen[name] === true) return
+        seen[name] = true
+        union.push({ name: name, chars: 0 })
+      })
+      return union.sort(function (left, right) { return right.chars - left.chars })
+    }
+
     /** Schema characters of the tools selected in the picker, and a rough token equivalent. */
     function draftWeight() {
       var chars = 0
@@ -1815,7 +1837,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     function renderToolPicker() {
       if (!toolPickerOpen) return null
       var needle = toolQuery.trim().toLowerCase()
-      var listed = availableTools.filter(function (tool) {
+      var listed = pickerTools().filter(function (tool) {
         return needle === '' || tool.name.toLowerCase().indexOf(needle) >= 0
       })
       var weight = draftWeight()
@@ -1828,7 +1850,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             onChange: function () { toggleTool(tool.name) },
           }),
           h('span', { className: 'twt-tool-name' }, tool.name),
-          h('span', { className: 'twt-tool-size' }, tf('{} 字符', tool.chars)))
+          h('span', { className: 'twt-tool-size' }, tool.chars === 0 ? t('已隐藏') : tf('{} 字符', tool.chars)))
       })
       return h('div', { className: 'twt-modal-backdrop', onClick: function () { setToolPickerOpen(false) } },
         h('div', { className: 'twt-modal', onClick: function (event) { event.stopPropagation() } },

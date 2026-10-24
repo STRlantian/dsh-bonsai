@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.7] — 2026-10-24
+
+### Changed
+
+- The three presets are named after what they do to the context: 保留最多 (fold only past 60k,
+  keep 4 turns), 平衡 (40k, 3 turns, the default) and 省最多 (20k, 2 turns, and nine heavy tools
+  hidden). The old 保守 / 均衡 / 激进 said nothing about the tradeoff.
+
+### Fixed
+
+- The tool picker listed only what the host still reports, so after applying 省最多 it showed 28
+  tools with nothing checked while the row said "9 hidden". It now shows the union of the reported
+  tools and the hidden names, with a "hidden" marker for the latter.
+
 ## [0.1.6] — 2026-10-24
 
 Rules are editable, and the repository states its publishing rule.

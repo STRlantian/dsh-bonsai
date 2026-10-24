@@ -43,7 +43,11 @@ function settingsPayload(preset = null) {
   const balanced = preset === 'balanced'
   return {
     path: 'C:/tmp/settings.json',
-    overrides: aggressive ? { toolDeny: ['workflow'], foldAboveTokens: 20000 } : {},
+    overrides: aggressive
+      ? { toolDeny: ['workflow'], foldAboveTokens: 20000 }
+      : Array.isArray(settingsPayload.hiddenTools)
+        ? { toolDeny: settingsPayload.hiddenTools }
+        : {},
     base: { autoInject: false, retrievalHint: true, autoReflect: true, hintMinNodes: 40, hintAboveTokens: 12000, admitRelevance: 0.3, summaryMatch: true },
     effective: {
       autoInject: false,
@@ -79,11 +83,9 @@ function settingsPayload(preset = null) {
     budget: { factor: 0.85, conservative: 0.85 },
     drift: { samples: 0, ratio: null },
     lastHint: null,
-    availableTools: [
-      { name: 'pwsh', chars: 3495 },
-      { name: 'workflow', chars: 3389 },
-      { name: 'schedule_create', chars: 3143 },
-    ],
+    availableTools: Array.isArray(settingsPayload.hiddenTools) && settingsPayload.hiddenTools.includes('workflow')
+      ? [{ name: 'pwsh', chars: 3495 }, { name: 'schedule_create', chars: 3143 }]
+      : [{ name: 'pwsh', chars: 3495 }, { name: 'workflow', chars: 3389 }, { name: 'schedule_create', chars: 3143 }],
     toolRestriction: null,
   }
 }
@@ -446,8 +448,8 @@ test('the settings panel offers the three presets', { timeout: 30000 }, async t 
   const bar = client.document.querySelector('.twt-presets')
   assert.ok(bar !== null, 'the preset bar is present')
   const labels = [...bar.querySelectorAll('button')].map(button => button.textContent ?? '')
-  assert.deepEqual(labels, ['保守', '均衡', '激进'], 'three presets, in order')
-  const aggressive = [...bar.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('激进'))
+  assert.deepEqual(labels, ['保留最多', '平衡', '省最多'], 'three presets, in order')
+  const aggressive = [...bar.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('省最多'))
   await React.act(async () => { aggressive.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
   await client.flush()
   const posted = client.requests.find(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST')
@@ -482,6 +484,25 @@ test('tools are hidden through a checklist, not a name field', { timeout: 30000 
   assert.ok(saved !== undefined, 'settings POST issued')
   assert.ok(String(saved.body).includes('toolDeny'), 'the chosen names are persisted')
   assert.ok(String(saved.body).includes('workflow'), 'and it is the checked tool')
+})
+
+test('a hidden tool the host no longer reports still shows as checked', { timeout: 30000 }, async t => {
+  // The catalogue no longer carries workflow: it is restricted, so the next assembly omits it.
+  settingsPayload.hiddenTools = ['workflow']
+  const client = await mountClient('header')
+  t.after(() => { settingsPayload.hiddenTools = undefined; client.cleanup() })
+  await client.click('盆栽')
+  await client.click('设置')
+
+  const open = [...client.document.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('选择工具'))
+  await React.act(async () => { open.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  await client.flush()
+
+  const rows = [...client.document.querySelectorAll('.twt-tool-row')]
+  const workflow = rows.find(row => (row.textContent ?? '').includes('workflow'))
+  assert.ok(workflow !== undefined, 'the hidden tool is still listed')
+  assert.equal(workflow.querySelector('input').checked, true, 'and it is checked')
+  assert.ok((workflow.textContent ?? '').includes('已隐藏'), 'marked as hidden rather than 0 chars')
 })
 
 test('the settings panel can switch the interface language', { timeout: 30000 }, async t => {
