@@ -2136,38 +2136,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     }
 
     var anchoredId = data !== null && data.anchoredId !== undefined ? data.anchoredId : null
-    var graphNodes = []
-    var folded = {}
-    if (data !== null && data.nodes !== undefined) {
-      // Fold each answer into its question: one box per exchange, question as the
-      // title and answer as the body. Children of the answer hang off the question,
-      // so a tool result under an answer stays under the merged box.
-      var graphById = {}
-      data.nodes.forEach(function (node) { graphById[node.id] = node })
-      data.nodes.forEach(function (node) {
-        if (node.kind !== 'answer') return
-        if (hideAnswers) return
-        var parent = node.parentId === null ? undefined : graphById[node.parentId]
-        if (parent !== undefined && parent.kind === 'question') folded[node.id] = parent.id
-      })
-      data.nodes.forEach(function (node) {
-        if (folded[node.id] !== undefined) return
-        if (hideTools && node.kind === 'tool_result') return
-        var parentId = node.parentId
-        while (parentId !== null && folded[parentId] !== undefined) parentId = folded[parentId]
-        graphNodes.push({
-          id: node.id,
-          kind: node.kind,
-          preview: node.preview,
-          detail: node.detail,
-          parentId: parentId,
-          pinned: node.pinned,
-          ignored: node.ignored,
-          pathCost: node.pathCost,
-          turn: node.turn,
-        })
-      })
-    }
+    var projection = data !== null && data.nodes !== undefined
+      ? graphProjection(data.nodes, hideTools, hideAnswers)
+      : { nodes: [], folded: {} }
+    var graphNodes = projection.nodes
+    var folded = projection.folded
     // Hidden branch roots, newest first; the payload already filters inherited hides.
     var hiddenRows = (data !== null && Array.isArray(data.hidden)) ? data.hidden : []
     // Rules ("constraints") the model is expected to follow, from the classifier or by hand.
@@ -2560,6 +2533,50 @@ function visibleRows(rows, hideTools, hideAnswers) {
 }
 
 
+  /**
+   * Project rows into graph boxes.
+   *
+   * Answers fold into their question so the graph draws one box per exchange; the two hide
+   * switches remove their kinds before the fold, and orphans of a removed kind are re-pointed.
+   * @param rows - payload rows.
+   * @param hideTools - drop tool results.
+   * @param hideAnswers - drop answers.
+   * @returns The boxes plus the answer-to-question fold map.
+   */
+  function graphProjection(rows, hideTools, hideAnswers) {
+    var visible = visibleRows(rows, hideTools, hideAnswers)
+    var byId = {}
+    visible.forEach(function (node) { byId[node.id] = node })
+    var folded = {}
+    visible.forEach(function (node) {
+      if (node.kind !== 'answer') return
+      var parent = node.parentId === null ? undefined : byId[node.parentId]
+      if (parent !== undefined && parent.kind === 'question') folded[node.id] = parent.id
+    })
+    var nodes = []
+    visible.forEach(function (node) {
+      if (folded[node.id] !== undefined) return
+      var parentId = node.parentId
+      var guard = 0
+      while (parentId !== null && folded[parentId] !== undefined && guard < 200) {
+        parentId = folded[parentId]
+        guard++
+      }
+      nodes.push({
+        id: node.id,
+        kind: node.kind,
+        preview: node.preview,
+        detail: node.detail,
+        parentId: parentId,
+        pinned: node.pinned,
+        ignored: node.ignored,
+        pathCost: node.pathCost,
+        turn: node.turn,
+      })
+    })
+    return { nodes: nodes, folded: folded }
+  }
+
   function TreeDock(props) {
     ensureStyles()
     // The dock slot is session-scoped, but which prop carries the session depends on
@@ -2823,31 +2840,11 @@ function visibleRows(rows, hideTools, hideAnswers) {
     // dock draws one box per exchange. Declared outside the `data !== null` branch:
     // the first render has no payload yet, and reading it there used to throw and
     // take the whole dock down.
-    var graphNodes = []
-    var folded = {}
-    if (data !== null) {
-      dockVisible.forEach(function (node) {
-        if (node.kind !== 'answer') return
-        var parent = node.parentId === null ? undefined : nodeById[node.parentId]
-        if (parent !== undefined && parent.kind === 'question') folded[node.id] = parent.id
-      })
-      dockVisible.forEach(function (node) {
-        if (folded[node.id] !== undefined) return
-        var parentId = node.parentId
-        while (parentId !== null && folded[parentId] !== undefined) parentId = folded[parentId]
-        graphNodes.push({
-          id: node.id,
-          kind: node.kind,
-          preview: node.preview,
-          detail: node.detail,
-          parentId: parentId,
-          pinned: node.pinned,
-          ignored: node.ignored,
-          pathCost: node.pathCost,
-          turn: node.turn,
-        })
-      })
-    }
+    var dockProjection = data !== null
+      ? graphProjection(nodes, dockHideTools, dockHideAnswers)
+      : { nodes: [], folded: {} }
+    var graphNodes = dockProjection.nodes
+    var folded = dockProjection.folded
 
     var pickedNode = picked === null ? undefined : nodeById[picked]
 
@@ -3573,6 +3570,7 @@ function visibleRows(rows, hideTools, hideAnswers) {
 
   // Testing hook: the re-attachment rule is pure and worth unit-testing directly.
   exports.__visibleRows = visibleRows
+  exports.__graphProjection = graphProjection
 
   return module.exports
 } })

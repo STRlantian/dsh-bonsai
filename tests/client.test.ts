@@ -588,6 +588,31 @@ test('hiding a kind re-attaches its children to the nearest visible ancestor', {
   assert.equal(withoutTools.find(row => row.id === 'q2').parentId, 'a1', 'answers are still there to parent it')
 })
 
+test('the graph projection honours both hide switches', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  const rows = [
+    { id: 'q1', kind: 'question', parentId: null, depth: 0, preview: 'q1' },
+    { id: 'a1', kind: 'answer', parentId: 'q1', depth: 1, preview: 'a1' },
+    { id: 'tool', kind: 'tool_result', parentId: 'a1', depth: 2, preview: 't' },
+    { id: 'q2', kind: 'question', parentId: 'a1', depth: 2, preview: 'q2' },
+  ]
+
+  // Default: the answer folds into its question, so one box per exchange.
+  const normal = client.bundle.__graphProjection(rows, false, false)
+  assert.deepEqual(normal.nodes.map(node => node.id), ['q1', 'tool', 'q2'])
+  assert.equal(normal.folded.a1, 'q1', 'the answer became the question body')
+
+  // Hiding answers must remove them, not turn them into boxes.
+  const noAnswers = client.bundle.__graphProjection(rows, false, true)
+  assert.ok(!noAnswers.nodes.some(node => node.kind === 'answer'), 'no answer box survives')
+  assert.equal(noAnswers.nodes.find(node => node.id === 'q2').parentId, 'q1', 'children re-point')
+
+  // And hiding tool results removes those boxes.
+  const noTools = client.bundle.__graphProjection(rows, true, false)
+  assert.ok(!noTools.nodes.some(node => node.id === 'tool'), 'no tool box survives')
+})
+
 test('the settings panel can switch the interface language', { timeout: 30000 }, async t => {
   const client = await mountClient('header', 'en')
   t.after(client.cleanup)
