@@ -48,6 +48,12 @@ rmSync(target, { recursive: true, force: true })
 mkdirSync(target, { recursive: true })
 
 const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
+// The registry shows `package.json.readme` when the publisher sends one, and publishing a folder
+// does not pick the README file up on its own - so carry the English text in the manifest of the
+// staged package only. The repository's package.json stays free of it.
+if (existsSync(join(root, 'README.en.md'))) {
+  manifest.readme = readFileSync(join(root, 'README.en.md'), 'utf8')
+}
 writeFileSync(join(target, 'package.json'), `${JSON.stringify(manifest, undefined, 2)}\n`)
 for (const entry of ['dist', 'lib', 'cordis']) {
   cpSync(join(root, entry), join(target, entry), { recursive: true })
