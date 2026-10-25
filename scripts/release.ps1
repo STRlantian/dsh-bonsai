@@ -84,7 +84,15 @@ try {
   Set-Version $stable
   Write-Host "publishing $stable ..." -ForegroundColor Cyan
 
-  $arguments = @('publish', '--registry', $registry, '--access', 'public', '--tag', 'latest')
+  # Publish the staged package, not the repository root: plugin/ carries the built files and the
+  # English README that npm renders (GitHub keeps the Chinese one), and it is exactly what a
+  # `file:` install uses.
+  & node scripts/stage.mjs
+  if ($LASTEXITCODE -ne 0) { throw "staging failed with exit code $LASTEXITCODE" }
+
+  # --ignore-scripts: the staged package is already built, and npm would otherwise run the root's
+  # prepublishOnly inside plugin/, where scripts/ does not exist.
+  $arguments = @('publish', './plugin', '--ignore-scripts', '--registry', $registry, '--access', 'public', '--tag', 'latest')
   if ($DryRun) { $arguments += '--dry-run' }
   if ($Otp) { $arguments += '--otp', $Otp }
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.8] — 2026-10-25
+
+Documentation only: the npm page now speaks English.
+
+### Changed
+
+- `README.en.md` is the English translation. The repository's `README.md` stays Chinese (what
+  GitHub shows) and links to it; the English one links back to the Chinese file on GitHub.
+- The published package ships the English README as `README.md`, next to `README.zh-CN.md`, so the
+  registry page renders English while the repository keeps Chinese. Releases now publish the staged
+  `plugin/` directory — the same tree a `file:` install uses — instead of the repository root.
+
 ## [0.1.7] — 2026-10-25
 
 One exchange per turn, a switch for the answers, and a graph that keeps up with a long session.

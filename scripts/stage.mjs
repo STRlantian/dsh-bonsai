@@ -52,7 +52,10 @@ writeFileSync(join(target, 'package.json'), `${JSON.stringify(manifest, undefine
 for (const entry of ['dist', 'lib', 'cordis']) {
   cpSync(join(root, entry), join(target, entry), { recursive: true })
 }
-if (existsSync(join(root, 'README.md'))) copyFileSync(join(root, 'README.md'), join(target, 'README.md'))
+// npm renders the tarball's README.md, and the registry page should be English: GitHub keeps the
+// Chinese one, the package ships the English one with a link back to it.
+if (existsSync(join(root, 'README.en.md'))) copyFileSync(join(root, 'README.en.md'), join(target, 'README.md'))
+if (existsSync(join(root, 'README.md'))) copyFileSync(join(root, 'README.md'), join(target, 'README.zh-CN.md'))
 
 console.log(`dsh-bonsai: staged ${target}`)
 console.log('Prefer the copy install (no linked root; the profile cannot scan this repository):')
