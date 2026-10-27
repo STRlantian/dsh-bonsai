@@ -21,8 +21,8 @@ Every number below is measured, not estimated. The raw records live in
 | Capability | Status | Measured |
 |---|---|---|
 | **Hide tools** | Optional (nothing hidden by default) | 37 → 28 tools: **10,453 → 7,076 tokens/turn (−32%)** |
-| **Fold history** | On by default, from 40,000 tokens | Controlled 4 turns: **15,341 → 12,906 tokens (−16%)**, zero model calls |
-| Effect of folding on the cache | — | Hit rate **98.2%** (98.5% unfolded): no collapse |
+| **Fold history** | On by default, from 40,000 tokens | Live A/B: prompt/step **−9.2%**, but new input **+202%** (cache invalidated); short sessions cost **more** |
+| Effect of folding on the cache | — | Every fold rewrites the prefix, so the cache misses: this is its real cost (experiment 23) |
 | Graphical tree editing / recycle bin | Done | Fork, re-parent, hide, restore, jump, compare branches; **cancelled turns leave the tree on their own** |
 | Rule editor | Done | Hand-written and auto-detected rules as chips, add/edit/delete, sent with the retrieval hint |
 | Exact token accounting | Done | Official tokenizer; falls back to the bill when no vocabulary is available |
@@ -76,6 +76,15 @@ host validates every tool name and rejects the whole set when one is unknown (th
 shows the raw error).
 
 ### 2. Fold history (on by default)
+
+> **Folding shrinks the prompt, not the bill.** Live A/B (same tools, same questions, ABBA twice each):
+> prompt/step 10,345 -> 9,392 (-9.2%), but new input 3,674 -> 11,112 (+202%) - each fold rewrites the
+> prompt prefix and drops the cache. At a cache-read price of 1/10 the input price, folding the same
+> six-turn session was about 23% **more expensive**.
+>
+> Folding pays off in **long sessions**, where folds are rare relative to turns and the folded content
+> is large. That is why the default threshold is 40,000 rather than lower. Details in
+> `docs/experiment-context-cache.md`, experiment 23.
 
 Session history is derived by the host from the log. The plugin appends one
 `surfaceOp: { op: 'replace', startSeq, endSeq }` event, and the covered range stops entering
