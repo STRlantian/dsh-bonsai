@@ -687,6 +687,21 @@ test('a jump only lands on the row of its own turn', { timeout: 30000 }, async t
   assert.ok(renumbered.style.outline.includes('6ea8fe'), 'and lands on the user-message row')
 })
 
+test('the settings panel offers a guided setup', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  await client.click('盆栽')
+  await client.click('设置')
+  const labels = [...client.document.querySelectorAll('.twt-guide button')].map(node => (node.textContent ?? '').trim())
+  assert.ok(labels.some(label => label.includes('工程')), 'an engineering option: ' + labels.join(','))
+  assert.ok(labels.some(label => label.includes('省 token')), 'a saving option')
+  const before = client.requests.filter(entry => entry.url.includes('/api/token-tree/settings') && entry.method === 'POST').length
+  await client.click('工程、反复改文件')
+  const posts = client.requests.filter(entry => entry.url.includes('/api/token-tree/settings') && entry.method === 'POST')
+  assert.ok(posts.length > before, 'the choice writes a settings patch')
+  assert.ok(String(posts.at(-1).body).includes('foldScope'), 'and the patch carries the scenario keys')
+})
+
 test('the settings panel can switch the interface language', { timeout: 30000 }, async t => {
   const client = await mountClient('header', 'en')
   t.after(client.cleanup)

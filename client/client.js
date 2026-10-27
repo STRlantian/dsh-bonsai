@@ -106,6 +106,14 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "保留最近轮数": "Keep recent turns",
   "折叠范围": "Fold scope",
   "每轮折叠全部历史": "Fold all history every turn",
+  "按需求设置": "Set up by need",
+  "选一个最接近你用法的情况，只改这一页的开关，随时可以再换": "Pick the situation closest to how you work; this only changes the switches on this page",
+  "长对话、概念问答": "Long chats, concept Q&A",
+  "工程、反复改文件": "Engineering, editing the same files",
+  "尽量省 token": "Save as many tokens as possible",
+  "先全关掉": "Turn it all off",
+  "已按这个情况设置好": "Applied",
+  "详细说明见仓库 README 的「设置」与「两个省 token 的开关」": "See the README sections Settings and The two token switches for details",
   "文件区（检索返回文件内容）": "File region (retrieval returns file content)",
   "自动：预算够就给全文，不够给开头；也可以只给开头、总给全文，或关闭": "Auto: the whole file when it fits, the head when it does not; or always head, always full, or off",
   "自动（按预算）": "Auto (by budget)",
@@ -552,6 +560,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-dockactions-vertical .twt-action{width:100%;text-align:center}',
     // Settings tab: one row per switch, control on the right.
     '.twt-settings{flex:1;min-height:0;overflow:auto;padding:10px 14px;display:flex;flex-direction:column;gap:10px}',
+    '.twt-guide{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--twt-border);border-radius:8px}',
+    '.twt-guide-buttons{display:flex;flex-wrap:wrap;gap:6px}',
     '.twt-srow{display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:8px;',
     'border:1px solid var(--twt-border);background:rgba(255,255,255,.02)}',
     '.twt-slabel{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}',
@@ -1320,6 +1330,26 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       }).then(function (response) { return response.json() })
     }
 
+    /**
+     * Apply a whole situation at once.
+     *
+     * A guided choice is several keys, and writing them one by one would leave the page showing a
+     * half-applied state between requests.
+     * @param {object} patch - settings to write.
+     */
+    function applyGuided(patch) {
+      setBusy(true)
+      setNote('')
+      settingsPost(patch)
+        .then(function () {
+          setNote(t('已按这个情况设置好'))
+          return settingsGet()
+        })
+        .then(function (payload) { setSettings(payload) })
+        .catch(function (error) { setNote(tf('保存失败：{}', error.message)) })
+        .finally(function () { setBusy(false) })
+    }
+
     function saveSetting(key, value) {
       setBusy(true)
       setNote('')
@@ -1467,6 +1497,24 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       settingsPanel = h('div', { className: 'twt-settings' },
         h('p', { className: 'twt-hint' },
           tf('这些开关立即生效，写入 {}，重启后仍然有效。', settings.path === null ? t('（未配置）') : settings.path)),
+        h('div', { className: 'twt-guide' },
+          h('span', { className: 'twt-dtitle' }, t('按需求设置')),
+          h('p', { className: 'twt-hint' }, t('选一个最接近你用法的情况，只改这一页的开关，随时可以再换')),
+          h('div', { className: 'twt-guide-buttons' },
+            [
+              { id: 'chat', label: '长对话、概念问答', patch: { foldAboveTokens: 20000, foldKeepTurns: 2, foldScope: 'turns', fileRegion: 'auto', mandatoryContext: true } },
+              { id: 'code', label: '工程、反复改文件', patch: { foldAboveTokens: 20000, foldKeepTurns: 3, foldScope: 'tools', fileRegion: 'auto', mandatoryContext: true } },
+              { id: 'save', label: '尽量省 token', patch: { foldAboveTokens: 10000, foldKeepTurns: 1, foldScope: 'turns', fileRegion: 'digest', mandatoryContext: true, toolDeny: ['workflow', 'schedule_create', 'schedule_update', 'schedule_delete', 'schedule_list', 'subagent_fork', 'ask_user_question', 'update_goal', 'get_goal'] } },
+              { id: 'off', label: '先全关掉', patch: { foldAboveTokens: 0, fileRegion: 'off', mandatoryContext: false } },
+            ].map(function (option) {
+              return h('button', {
+                key: option.id,
+                className: 'twt-action',
+                disabled: busy,
+                onClick: function () { applyGuided(option.patch) },
+              }, t(option.label))
+            })),
+          h('p', { className: 'twt-hint' }, t('详细说明见仓库 README 的「设置」与「两个省 token 的开关」'))),
         h('div', { className: 'twt-presets' },
           h('span', { className: 'twt-dtitle' }, t('预设')),
           PRESET_LIST.map(function (preset) {
