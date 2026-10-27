@@ -40,6 +40,7 @@ import type { Classification, Constraint } from './requirements.ts'
 import { activeConstraints, applyConstraint, applyRuleEdit, classifyTurn } from './requirements.ts'
 import { FileRegion, digestOf, shortLabel, type FileRegionMode } from './file-region.ts'
 import { anaphoraScore } from '../core/anaphora.ts'
+import { excerptFor, reductionNote, referentLine } from '../core/excerpt.ts'
 import type { RuleEdit } from './requirements.ts'
 
 /**
@@ -123,6 +124,8 @@ export interface SessionState {
    * third or fourth "it" still reaches the answer that introduced the thing.
    */
   sticky: NodeId[]
+  /** Set when a long node was served as an excerpt or a referent line, so the hint can say so. */
+  sawReduction?: boolean
   /** Measured token count per message id, so a turn only pays for new messages. */
   readonly tokenCounts: Map<string, number>
   /** Tokens of the last measured prompt, until the provider reports its own number. */
@@ -1343,12 +1346,24 @@ export class TokenTreeService {
       seen.add(node.id)
       const times = (state.served.get(node.id) ?? 0) + 1
       state.served.set(node.id, times)
-      // The first serving is the introduction and stays whole, inside half the budget; a repeat is a
-      // leading extract at a sixth. One long answer used to arrive at full size and push the call
-      // past its own budget (measured 2,529 tokens against 2,000).
       const repeated = times > 1
       const share = Math.max(160, Math.floor(budget / (repeated ? 6 : 2)))
-      const body = node.tokens > share ? leadingSentences(node.content, share * 3) : node.content
+      const lines = node.content.split('\n').length
+      // Three tiers by size, and none of them paraphrases:
+      //   short  - the text as is;
+      //   medium - verbatim sentences, the ones matching the question first;
+      //   long   - one line saying what it is about, and a pointer to the tree, because code and
+      //            numbers must be read in place rather than summarised.
+      let body = node.content
+      if (node.tokens > 3000) {
+        body = referentLine(node.content) + '\n' + reductionNote('n' + node.id.replace(/^n/, ''), lines, 'referent')
+        state.sawReduction = true
+      } else if (node.tokens > 800) {
+        body = excerptFor(node.content, query, share, value => this.estimateTokens(value)) + '\n' + reductionNote('n' + node.id.replace(/^n/, ''), lines, 'excerpt')
+        state.sawReduction = true
+      } else if (node.tokens > share) {
+        body = leadingSentences(node.content, share * 3)
+      }
       mandatory.push({
         nodeId: node.id,
         kind: node.kind,
@@ -1524,6 +1539,9 @@ export class TokenTreeService {
     // Fold-everything mode: nothing but the current turn is visible, so retrieval is not optional.
     if (this.effective().foldPolicy === 'always') {
       return MANDATORY_HINT_TEXT
+    }
+    if (state.sawReduction === true) {
+      return '[token-tree] 长内容只给了标识或逐字节选；代码、数字、精确措辞请用 retrieve_context 取回原文，不要凭节选作答。'
     }
     // A compacted session has already lost history, so no further gate is needed. The first
     // hint after a compaction carries the map of what was folded away.
