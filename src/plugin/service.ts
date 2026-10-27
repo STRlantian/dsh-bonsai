@@ -39,6 +39,7 @@ import { asMessage, buildInjectedMessage, isInjected, reasoningOfContent, superv
 import type { Classification, Constraint } from './requirements.ts'
 import { activeConstraints, applyConstraint, applyRuleEdit, classifyTurn } from './requirements.ts'
 import { FileRegion, digestOf, shortLabel, type FileRegionMode } from './file-region.ts'
+import { anaphoraScore } from '../core/anaphora.ts'
 import type { RuleEdit } from './requirements.ts'
 
 /**
@@ -115,6 +116,13 @@ export interface SessionState {
    * and later servings are compressed to a leading extract.
    */
   readonly served: Map<NodeId, number>
+  /**
+   * The nodes a chain of anaphora ("it", "that one") keeps referring to.
+   *
+   * Held across turns until a question introduces a new content term: only then do they move, so a
+   * third or fourth "it" still reaches the answer that introduced the thing.
+   */
+  sticky: NodeId[]
   /** Measured token count per message id, so a turn only pays for new messages. */
   readonly tokenCounts: Map<string, number>
   /** Tokens of the last measured prompt, until the provider reports its own number. */
@@ -556,6 +564,7 @@ export class TokenTreeService {
     readPaths: new Map(),
     files: new FileRegion(),
     served: new Map(),
+    sticky: [],
       callArgs: new Map(),
       tokenCounts: new Map(),
       turn: 0,
@@ -1054,6 +1063,13 @@ export class TokenTreeService {
       }
     }
     const defaultId = this.visibleParent(tree, tree.currentId)
+    // A turn that only points back ("它怎么调") has nothing to match on: score it for anaphora and
+    // keep it where the dialogue stands. Without this the new-topic rule below sent it to the root,
+    // which is how a chain of "它" lost the answer it was about.
+    if (this.config.attachments !== 'linear' && defaultId !== tree.rootId && anaphoraScore(text) >= 0.6) {
+      this.logger.info('token-tree: anaphoric turn kept under the current node')
+      return { parentId: defaultId, score: this.attachmentScore(this.attachmentContext(state, text, embedding), tree.node(defaultId)) }
+    }
     if (this.config.attachments === 'linear') return { parentId: defaultId, score: 0 }
     const context = this.attachmentContext(state, text, embedding)
     const defaultNode = tree.node(defaultId)
@@ -1264,7 +1280,7 @@ export class TokenTreeService {
     // ("这里的 V 是指...") shares no words with the text it refers to - so it is put in the
     // buffer unconditionally, ahead of the scored hits.
     if (!this.effective().mandatoryContext || options.query.trim().length === 0) return result
-    return this.withMandatoryContext(state.tree, result, originId, budget, state.served)
+    return this.withMandatoryContext(state.tree, result, originId, budget, state, options.query)
   }
 
   /**
@@ -1284,62 +1300,79 @@ export class TokenTreeService {
     result: RetrieveResult,
     originId: NodeId,
     budget: number,
-    served: Map<NodeId, number>,
+    state: SessionState,
+    query: string,
   ): RetrieveResult {
-    const mandatory: SelectedNode[] = []
     const seen = new Set(result.selected.map(entry => entry.nodeId))
-    // The origin is usually the question that just arrived: it is already in the prompt, so the
-    // walk starts at its parent to reach the answer it depends on and the question behind that.
+    const stickyNodes = state.sticky
+      .map(id => tree.nodes.get(id))
+      .filter((node): node is NonNullable<typeof node> => node !== undefined)
+    // A short question that shares no word of two characters or more with the referent is pointing
+    // back at it ("它还有别的限制吗"). Counting single characters made almost everything "related",
+    // so the chain was dropped on the second "它".
+    const referentTerms = new Set<string>()
+    for (const node of stickyNodes) {
+      for (const term of contentFeatures(node.content)) if (term.length >= 2) referentTerms.add(term)
+    }
+    let shared = 0
+    for (const term of contentFeatures(query)) {
+      if (term.length >= 2 && referentTerms.has(term)) shared++
+    }
+    const shortQuestion = query.trim().length <= 24
+    const carryReferent = stickyNodes.length > 0 && shared === 0 && shortQuestion
+
     let cursor = tree.nodes.get(originId)
     if (cursor !== undefined && cursor.kind === 'question') {
       cursor = cursor.parentId === null ? undefined : tree.nodes.get(cursor.parentId)
     }
+    const pair: NodeId[] = []
     let guard = 0
-    // One answer and the question it answered; two hops covers "the thing this is about".
-    while (cursor !== undefined && mandatory.length < 2 && guard < 8) {
-      if (cursor.kind === 'answer' || cursor.kind === 'question') {
-        if (!seen.has(cursor.id)) {
-          seen.add(cursor.id)
-          const times = (served.get(cursor.id) ?? 0) + 1
-          served.set(cursor.id, times)
-          // The first serving is the full text: that is where the answer is introduced. From the
-          // second on the model has already read it once, so a leading extract is enough - and this
-          // is what keeps a long answer from eating the whole budget on every turn of a chain.
-          const repeated = times > 1
-          // Cap the first serving too: one long answer used to arrive at full size and push the
-          // call past its own budget (measured 2,529 tokens against a 2,000 budget).
-          const share = Math.max(160, Math.floor(budget / (repeated ? 6 : 2)))
-          const body = cursor.tokens > share ? leadingSentences(cursor.content, share * 3) : cursor.content
-          const tokens = this.estimateTokens(body)
-          mandatory.push({
-            nodeId: cursor.id,
-            kind: cursor.kind,
-            weight: 1,
-            tokens,
-            compressed: repeated,
-            text: body,
-            breakdown: {
-              relevance: 1,
-              pathCost: 0,
-              pathWeight: 1,
-              ancestorBoost: 1,
-              lengthPenalty: 1,
-              specificity: 1,
-              recency: 1,
-              total: 1,
-            } as unknown as SelectedNode['breakdown'],
-          })
-        }
-      }
+    while (cursor !== undefined && guard < 8) {
+      if ((cursor.kind === 'answer' || cursor.kind === 'question') && !pair.includes(cursor.id)) pair.push(cursor.id)
+      if (pair.length >= 2) break
       cursor = cursor.parentId === null ? undefined : tree.nodes.get(cursor.parentId)
       guard++
     }
+    const chosen = (carryReferent ? stickyNodes.map(node => node.id) : pair).slice(0, 2)
+    if (!carryReferent) state.sticky = [...pair]
+
+    const mandatory: SelectedNode[] = []
+    for (const id of chosen) {
+      const node = tree.nodes.get(id)
+      if (node === undefined || seen.has(node.id)) continue
+      seen.add(node.id)
+      const times = (state.served.get(node.id) ?? 0) + 1
+      state.served.set(node.id, times)
+      // The first serving is the introduction and stays whole, inside half the budget; a repeat is a
+      // leading extract at a sixth. One long answer used to arrive at full size and push the call
+      // past its own budget (measured 2,529 tokens against 2,000).
+      const repeated = times > 1
+      const share = Math.max(160, Math.floor(budget / (repeated ? 6 : 2)))
+      const body = node.tokens > share ? leadingSentences(node.content, share * 3) : node.content
+      mandatory.push({
+        nodeId: node.id,
+        kind: node.kind,
+        weight: 1,
+        tokens: this.estimateTokens(body),
+        compressed: repeated,
+        text: body,
+        breakdown: {
+          relevance: 1,
+          pathCost: 0,
+          pathWeight: 1,
+          ancestorBoost: 1,
+          lengthPenalty: 1,
+          specificity: 1,
+          recency: 1,
+          total: 1,
+        } as unknown as SelectedNode['breakdown'],
+      })
+    }
     if (mandatory.length === 0) return result
-    const reserved = mandatory.reduce((sum, entry) => sum + entry.tokens, 0)
     const kept: SelectedNode[] = []
-    let used = reserved
+    let used = mandatory.reduce((sum, entry) => sum + entry.tokens, 0)
     for (const entry of result.selected) {
-      if (seen.has(entry.nodeId) && mandatory.some(item => item.nodeId === entry.nodeId)) continue
+      if (mandatory.some(item => item.nodeId === entry.nodeId)) continue
       if (used + entry.tokens > budget) continue
       kept.push(entry)
       used += entry.tokens
