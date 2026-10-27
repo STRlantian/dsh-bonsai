@@ -107,6 +107,14 @@ export interface SessionState {
   readonly readPaths: Map<string, number>
   /** Current text of the files this session read, for the file half of retrieval. */
   readonly files: FileRegion
+  /**
+   * How often each node has been served as mandatory context.
+   *
+   * A follow-up chain ("it", "that value") keeps needing the same answer. Serving the full text
+   * every time costs thousands of tokens for a paragraph the model has already read, so the second
+   * and later servings are compressed to a leading extract.
+   */
+  readonly served: Map<NodeId, number>
   /** Measured token count per message id, so a turn only pays for new messages. */
   readonly tokenCounts: Map<string, number>
   /** Tokens of the last measured prompt, until the provider reports its own number. */
@@ -547,6 +555,7 @@ export class TokenTreeService {
       callNames: new Map(),
     readPaths: new Map(),
     files: new FileRegion(),
+    served: new Map(),
       callArgs: new Map(),
       tokenCounts: new Map(),
       turn: 0,
@@ -1255,7 +1264,7 @@ export class TokenTreeService {
     // ("这里的 V 是指...") shares no words with the text it refers to - so it is put in the
     // buffer unconditionally, ahead of the scored hits.
     if (!this.effective().mandatoryContext || options.query.trim().length === 0) return result
-    return this.withMandatoryContext(state.tree, result, originId, budget)
+    return this.withMandatoryContext(state.tree, result, originId, budget, state.served)
   }
 
   /**
@@ -1275,6 +1284,7 @@ export class TokenTreeService {
     result: RetrieveResult,
     originId: NodeId,
     budget: number,
+    served: Map<NodeId, number>,
   ): RetrieveResult {
     const mandatory: SelectedNode[] = []
     const seen = new Set(result.selected.map(entry => entry.nodeId))
@@ -1290,13 +1300,24 @@ export class TokenTreeService {
       if (cursor.kind === 'answer' || cursor.kind === 'question') {
         if (!seen.has(cursor.id)) {
           seen.add(cursor.id)
+          const times = (served.get(cursor.id) ?? 0) + 1
+          served.set(cursor.id, times)
+          // The first serving is the full text: that is where the answer is introduced. From the
+          // second on the model has already read it once, so a leading extract is enough - and this
+          // is what keeps a long answer from eating the whole budget on every turn of a chain.
+          const repeated = times > 1
+          // Cap the first serving too: one long answer used to arrive at full size and push the
+          // call past its own budget (measured 2,529 tokens against a 2,000 budget).
+          const share = Math.max(160, Math.floor(budget / (repeated ? 6 : 2)))
+          const body = cursor.tokens > share ? leadingSentences(cursor.content, share * 3) : cursor.content
+          const tokens = this.estimateTokens(body)
           mandatory.push({
             nodeId: cursor.id,
             kind: cursor.kind,
             weight: 1,
-            tokens: cursor.tokens,
-            compressed: false,
-            text: cursor.content,
+            tokens,
+            compressed: repeated,
+            text: body,
             breakdown: {
               relevance: 1,
               pathCost: 0,
