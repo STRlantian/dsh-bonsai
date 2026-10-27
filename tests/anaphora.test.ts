@@ -29,6 +29,9 @@ test('a pure back-reference scores high, a self-contained question does not', ()
   assert.ok(anaphoraScore('这个值为什么要乘二') >= 0.6)
   assert.equal(anaphoraScore('介绍一下红黑树的插入过程'), 0, 'a named topic is not anaphoric')
   assert.ok(anaphoraScore('为什么布隆过滤器的误判率会随元素增加而上升') < 0.6)
+  // English pronouns: the interface has an English mode too.
+  assert.ok(anaphoraScore('How does it work?') >= 0.6, 'english anaphora')
+  assert.ok(anaphoraScore('Explain the red-black tree insertion') < 0.6)
 })
 
 test('an anaphoric turn stays under the current node instead of jumping to the root', () => {

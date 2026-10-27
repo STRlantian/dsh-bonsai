@@ -46,3 +46,9 @@ test('the reduction note says the original is in the tree', () => {
   const note = reductionNote('n123', 47, 'referent')
   assert.ok(note.includes('n123') && note.includes('47') && note.includes('retrieve_context'))
 })
+
+test('an unclosed fence in the source is dropped, not emitted half-open', () => {
+  const source = '前文。\n' + '填充。'.repeat(200) + '\n```js\nconst a = 1\n'
+  const excerpt = excerptFor(source, 'const', 60, count)
+  assert.equal((excerpt.match(/```/g) ?? []).length % 2, 0, 'fences stay balanced: ' + excerpt.slice(-40))
+})

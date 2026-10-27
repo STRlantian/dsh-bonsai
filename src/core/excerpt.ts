@@ -80,7 +80,25 @@ export function excerptFor(
   budgetTokens: number,
   countTokens: (value: string) => number,
 ): string {
-  const sentences = sentencesOf(text)
+  // A fenced block is one unit: half a code block is a wrong instruction, and an unbalanced fence
+  // breaks the markdown around it. Units are rebuilt here so a block can only appear whole.
+  const units: string[] = []
+  let fence: string[] = []
+  let inFence = false
+  for (const part of sentencesOf(text)) {
+    if (/^\s*```/.test(part)) {
+      fence.push(part)
+      inFence = !inFence
+      if (!inFence) { units.push(fence.join('\n')); fence = [] }
+      continue
+    }
+    if (inFence) { fence.push(part); continue }
+    units.push(part)
+  }
+  if (fence.length > 0) units.push(fence.join('\n'))
+  // A source with an unclosed fence produces an odd unit; emitting it would break the markdown
+  // around the excerpt, so it is dropped instead of half-closed.
+  const sentences = units.filter(unit => ((unit.match(/```/g) ?? []).length % 2) === 0)
   const terms = termsOf(query)
   const head: string[] = []
   let used = 0

@@ -763,6 +763,7 @@ export class TokenTreeService {
         return
       }
       case 'turn/start': {
+        state.sawReduction = false
         state.pendingQuestionId = undefined
         state.turn = numberField(data.turn) ?? state.turn + 1
         state.step = 0
@@ -1369,7 +1370,9 @@ export class TokenTreeService {
         kind: node.kind,
         weight: 1,
         tokens: this.estimateTokens(body),
-        compressed: repeated,
+        // Any reduction counts, not just a repeat: an excerpt or a referent line is also less than
+        // the node, and the caller must be able to tell that it is not looking at the whole text.
+        compressed: body !== node.content,
         text: body,
         breakdown: {
           relevance: 1,
@@ -1384,6 +1387,27 @@ export class TokenTreeService {
       })
     }
     if (mandatory.length === 0) return result
+    // Two short nodes can still exceed a small budget; keep the first and shrink the rest.
+    while (mandatory.length > 1
+      && mandatory.reduce((sum, entry) => sum + entry.tokens, 0) > budget) {
+      const last: SelectedNode | undefined = mandatory.pop()
+      if (last === undefined) break
+      const node = tree.nodes.get(last.nodeId)
+      if (node === undefined) break
+      const room = budget - mandatory.reduce((sum, entry) => sum + entry.tokens, 0)
+      if (room < 80) break
+      const shortened = leadingSentences(node.content, room * 3)
+      mandatory.push({
+        nodeId: last.nodeId,
+        kind: last.kind,
+        weight: last.weight,
+        tokens: this.estimateTokens(shortened),
+        compressed: true,
+        text: shortened,
+        breakdown: last.breakdown,
+      })
+      break
+    }
     const kept: SelectedNode[] = []
     let used = mandatory.reduce((sum, entry) => sum + entry.tokens, 0)
     for (const entry of result.selected) {
@@ -1541,7 +1565,13 @@ export class TokenTreeService {
       return MANDATORY_HINT_TEXT
     }
     if (state.sawReduction === true) {
-      return '[token-tree] 长内容只给了标识或逐字节选；代码、数字、精确措辞请用 retrieve_context 取回原文，不要凭节选作答。'
+      // Appended, not returned: the compaction index and the size gate still apply in this turn.
+      // Clearing the flag for the recursive call is what keeps the two hints composable.
+      const reduced = '[token-tree] 长内容只给了标识或逐字节选；代码、数字、精确措辞请用 retrieve_context 取回原文，不要凭节选作答。'
+      state.sawReduction = false
+      const base = this.baseHint(sessionId)
+      state.sawReduction = true
+      return base === undefined ? reduced : base + '\n\n' + reduced
     }
     // A compacted session has already lost history, so no further gate is needed. The first
     // hint after a compaction carries the map of what was folded away.

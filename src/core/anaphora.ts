@@ -27,7 +27,10 @@ const ASKING = ['怎么', '为什么', '为何', '如何', '什么', '多少', '
 export function anaphoraScore(text: string): number {
   const trimmed = text.trim()
   if (trimmed.length === 0) return 0
-  const hasReference = BACK_REFERENCES.some(word => trimmed.includes(word))
+  // The interface has an English mode, and its pronouns work the same way: "how does it work"
+  // has one back-reference and no topic of its own.
+  const englishReference = /\b(it|this|that|these|those|they|them|its)\b/i.test(trimmed)
+  const hasReference = BACK_REFERENCES.some(word => trimmed.includes(word)) || englishReference
   const asks = ASKING.filter(word => trimmed.includes(word)).length
   // Content characters: what is left once the reference and asking words are removed.
   let rest = trimmed
@@ -38,6 +41,9 @@ export function anaphoraScore(text: string): number {
     return asks > 0 && contentChars <= 4 ? 0.5 : 0
   }
   // A reference plus almost no content of its own: "它还有别的限制吗".
+  // An English pronoun plus a short question is as anaphoric as a Chinese one, even though the
+  // remaining Latin letters look like "content" to the character share above.
+  if (englishReference && trimmed.length <= 60) return 0.7 + (asks > 0 ? 0.1 : 0)
   const referenceScore = contentShare <= 0.25 ? 1 : contentShare <= 0.5 ? 0.75 : 0.5
   return Math.min(1, referenceScore + (asks > 0 ? 0.1 : 0))
 }
