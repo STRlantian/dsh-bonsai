@@ -38,6 +38,7 @@ import type { SettingsStore } from './settings.ts'
 import { asMessage, buildInjectedMessage, isInjected, reasoningOfContent, supervisorMessage, textOfContent } from './messages.ts'
 import type { Classification, Constraint } from './requirements.ts'
 import { activeConstraints, applyConstraint, applyRuleEdit, classifyTurn } from './requirements.ts'
+import { FileRegion, digestOf, shortLabel, type FileRegionMode } from './file-region.ts'
 import type { RuleEdit } from './requirements.ts'
 
 /**
@@ -104,6 +105,8 @@ export interface SessionState {
    * already in the context is never marked stale. This map lets the hint say so.
    */
   readonly readPaths: Map<string, number>
+  /** Current text of the files this session read, for the file half of retrieval. */
+  readonly files: FileRegion
   /** Measured token count per message id, so a turn only pays for new messages. */
   readonly tokenCounts: Map<string, number>
   /** Tokens of the last measured prompt, until the provider reports its own number. */
@@ -357,6 +360,8 @@ export class TokenTreeService {
     foldKeepTurns: number
     foldScope: string
     foldPolicy: string
+  /** What the file region may return in retrieval: off, a digest, the whole text, or by budget. */
+  fileRegion: FileRegionMode
   } {
     const overrides = this.settings?.all() ?? {}
     return {
@@ -372,6 +377,7 @@ export class TokenTreeService {
       foldKeepTurns: overrides.foldKeepTurns ?? this.config.foldKeepTurns,
       foldScope: overrides.foldScope ?? this.config.foldScope,
       foldPolicy: overrides.foldPolicy ?? this.config.foldPolicy,
+      fileRegion: (overrides.fileRegion ?? this.config.fileRegion) as FileRegionMode,
     }
   }
 
@@ -496,6 +502,7 @@ export class TokenTreeService {
         foldKeepTurns: this.config.foldKeepTurns,
         foldScope: this.config.foldScope,
         foldPolicy: this.config.foldPolicy,
+        fileRegion: this.config.fileRegion as FileRegionMode,
         hintAboveTokens: this.config.hintAboveTokens,
         tokenizerPath: this.config.tokenizerPath ?? null,
       },
@@ -556,6 +563,7 @@ export class TokenTreeService {
       observations: [],
       callNames: new Map(),
     readPaths: new Map(),
+    files: new FileRegion(),
       callArgs: new Map(),
       tokenCounts: new Map(),
       turn: 0,
@@ -1133,6 +1141,19 @@ export class TokenTreeService {
       ? stringField(errorInfo?.reason) ?? stringField(errorInfo?.code) ?? (text.length === 0 ? 'no error detail' : text.slice(0, 200))
       : undefined
     const content = text.length === 0 ? `(${toolName} produced no text)` : text
+  // The file region caches what the model was just given, so a later retrieval can answer with the
+  // current text instead of the snapshot or a re-read.
+  const filePath = state.callArgs.get(callId) === undefined ? undefined : filePathOf(toolName, state.callArgs.get(callId) ?? '')
+  if (filePath !== undefined) {
+    if (toolName === 'read' && !failed) {
+      let mtimeMs = at
+      try { mtimeMs = statSync(filePath).mtimeMs } catch { /* indexed with the event time */ }
+      state.files.record(filePath, text, at, mtimeMs, value => this.estimateTokens(value))
+    } else if (toolName === 'write' || toolName === 'edit') {
+      // This session owns the change; the cached text is certainly older than the file.
+      state.files.forget(filePath)
+    }
+  }
     const summary = summarize(content)
     const node = state.tree.addNode({
       kind: 'tool_result',
@@ -1272,6 +1293,41 @@ export class TokenTreeService {
    * @param budgetTokens - optional budget override.
    * @returns The rendered block, or `undefined` when nothing qualified.
    */
+  /**
+   * Render current file content for a query.
+   *
+   * Files are addressed by path and can change at any time, so this half never returns a cached
+   * snapshot without saying so: a file whose mtime moved is dropped from the cache and re-read, and
+   * a hit says whether it is the whole file or its head.
+   * @param sessionId - session identity.
+   * @param query - the model's question.
+   * @param budget - token budget for this half.
+   * @returns A rendered block, or '' when nothing qualifies.
+   */
+  fileBlock(sessionId: string, query: string, budget: number): string {
+    const state = this.stateOf(sessionId)
+    const mode = this.effective().fileRegion
+    if (mode === 'off') return ''
+    // Drop what moved: the cached text is not what the file says any more.
+    for (const filePath of [...state.files.keys()]) {
+      try {
+        const info = statSync(filePath)
+        const cached = state.files.get(filePath)
+        if (cached !== undefined && info.mtimeMs > cached.mtimeMs + 1) state.files.forget(filePath)
+      } catch {
+        state.files.forget(filePath)
+      }
+    }
+    const hits = state.files.lookup(query, budget, mode, value => this.estimateTokens(value))
+    if (hits.length === 0) return ''
+    const lines = hits.map(hit => {
+      const when = new Date(hit.at).toISOString().slice(11, 19)
+      const scope = hit.complete ? 'whole file' : 'head only, read the rest if needed'
+      return `### ${shortLabel(hit.path)} (${scope}, current as of ${when})\n${hit.text}`
+    })
+    return `[file region] current content from the files this session read:\n${lines.join('\n\n')}`
+  }
+
   memoryBlock(sessionId: string, query: string, budgetTokens?: number): string | undefined {
     const result = this.retrieve(sessionId, {
       query,
@@ -1281,8 +1337,11 @@ export class TokenTreeService {
     const preamble = constraints.length === 0
       ? ''
       : `[token-tree constraints] still in force: ${constraints.map(entry => entry.text).join(' | ')}\n`
-    if (result.selected.length === 0) return preamble.length === 0 ? undefined : preamble.trimEnd()
-    return `${preamble}${renderContextBlock(result)}`
+    const fileSection = this.fileBlock(sessionId, query, Math.max(120, Math.floor((budgetTokens ?? this.config.injectBudgetTokens) / 2)))
+    const treeBlock = result.selected.length === 0 ? '' : renderContextBlock(result)
+    const body = [treeBlock, fileSection].filter(part => part !== '').join('\n\n')
+    if (body === '') return preamble.length === 0 ? undefined : preamble.trimEnd()
+    return `${preamble}${body}`
   }
 
   /**

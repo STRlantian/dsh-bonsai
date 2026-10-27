@@ -106,6 +106,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "保留最近轮数": "Keep recent turns",
   "折叠范围": "Fold scope",
   "每轮折叠全部历史": "Fold all history every turn",
+  "文件区（检索返回文件内容）": "File region (retrieval returns file content)",
+  "自动：预算够就给全文，不够给开头；也可以只给开头、总给全文，或关闭": "Auto: the whole file when it fits, the head when it does not; or always head, always full, or off",
+  "自动（按预算）": "Auto (by budget)",
+  "只给开头": "Head only",
+  "总是全文": "Always full",
+  "关闭": "Off",
   "只保留当前提问，强制模型先调用 retrieve_context": "Keep only the current question and make the model call retrieve_context first",
   "工具输出：只折叠旧的 tool/result。整轮：把整轮对话换成一个占位行（工具调用与结果一起消失，不会只剩一半）": "Tool output: fold old tool/result entries. Whole turns: replace an entire turn with one placeholder line (a tool call disappears together with its result, never half of a pair).",
   "工具输出": "Tool output",
@@ -1662,6 +1668,19 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               saveSetting('foldAboveTokens', Math.round(next))
             },
           }),
+        }),
+        settingRow({
+          key: 'fileRegion',
+          label: t('文件区（检索返回文件内容）'),
+          hint: t('自动：预算够就给全文，不够给开头；也可以只给开头、总给全文，或关闭'),
+          control: h('select', {
+            value: effective === undefined || effective.fileRegion === undefined ? 'auto' : effective.fileRegion,
+            onChange: function (event) { saveSetting('fileRegion', event.target.value) },
+          },
+            h('option', { value: 'auto' }, t('自动（按预算）')),
+            h('option', { value: 'digest' }, t('只给开头')),
+            h('option', { value: 'content' }, t('总是全文')),
+            h('option', { value: 'off' }, t('关闭'))),
         }),
         settingRow({
           key: 'foldPolicy',
