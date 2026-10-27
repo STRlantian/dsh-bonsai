@@ -101,10 +101,25 @@ Three presets sit at the top of the settings page, and every value is adjustable
 | `foldAboveTokens` | `40000` | Fold past this; `0` turns it off |
 | `foldKeepTurns` | `3` | Keep this many recent turns verbatim |
 | `foldScope` | `turns` | `turns` folds whole turns, `tools` folds only tool output |
+| `mandatoryContext` | `true` | Retrieval always includes the answer a turn hangs under plus its question: measured dependency recall 43% → 99% |
+| `fileRegion` | `auto` | Retrieval returns the current text of files this session read: `auto` by budget, `digest` head only, `content` always full, `off` |
 
 The placeholder left behind tells the model where the text went:
 
 > `[folded] The previous turn was removed from the context to save tokens; the full text is kept in the conversation tree — call retrieve_context when you need the details.`
+
+## How long content is served
+
+Long answers are never summarised (a summary rewrites code and numbers), and are served by size:
+
+```text
+<= 800 tokens   the text as is
+800-3000        verbatim excerpt: the head plus sentences matching the question
+> 3000          one line saying what it is about, the line count, and a pointer to the tree
+```
+
+The long tier giving only a referent line is deliberate: code, numbers and exact wording must be read
+from the tree with `retrieve_context`, and the hint says that an excerpt is not the original.
 
 ## Settings
 

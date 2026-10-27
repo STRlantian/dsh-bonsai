@@ -87,10 +87,25 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 | `foldAboveTokens` | `40000` | 超过就折叠；`0` 关闭 |
 | `foldKeepTurns` | `3` | 最近这么多轮原样保留 |
 | `foldScope` | `turns` | `turns` 整轮折叠，`tools` 只折叠工具输出 |
+| `mandatoryContext` | `true` | 检索必然包含"问题所挂的回答 + 它的提问"，实测依赖命中 43%→99% |
+| `fileRegion` | `auto` | 检索返回本会话读过的文件当前内容：`auto` 按预算、`digest` 只给开头、`content` 总给全文、`off` 关闭 |
 
 折叠后的占位行会告诉模型原文在哪：
 
 > `[已折叠] 之前的 1 轮对话已从上下文移除以节省 token；原文完整保存在对话树中，需要细节时调用 retrieve_context 取回。`
+
+## 长内容怎么给
+
+长回答不摘要（摘要会改写代码与数字），按大小分三档：
+
+```text
+≤ 800 token    原文
+800–3000       逐字节选：开头 + 与问题匹配的整句（不重写）
+> 3000         一行"它是什么" + 原文行数 + 指向树
+```
+
+长档只给标识是**有意的**：代码、数字、原文措辞必须回树里读（`retrieve_context`），
+提示里也会告诉模型"节选不等于原文"。
 
 ## 设置
 
@@ -141,7 +156,7 @@ tool/result   ─┘
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 164 个用例（后端 140 + 浏览器端 24）
+pnpm test           # 188 个用例（后端 163 + 浏览器端 25）
 pnpm run check      # 类型检查 + 测试
 ```
 
@@ -175,7 +190,7 @@ powershell -File scripts/release.ps1           # 发布并推进到下一个测�
 | `src/core/` | 纯算法：图、边权、路径成本、加权检索、评估与回溯 |
 | `src/plugin/` | DSH 接线：`Config`、会话服务、工具、事件订阅、HTTP 路由、折叠规划 |
 | `client/client.js` | 浏览器端：dock、编辑器、图形视图、回收站、规则栏、设置面板、预设选择器 |
-| `tests/` | 164 个用例，含 jsdom 挂载真实 React 的客户端测试 |
+| `tests/` | 188 个用例，含 jsdom 挂载真实 React 的客户端测试 |
 | `docs/experiment-context-cache.md` | 全部实测记录（1–15） |
 
 ## License

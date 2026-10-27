@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.1.12] — 2026-10-27
+
+Long nodes are served safely, and an anaphoric turn stays where it belongs.
+
+### Added
+
+- **Three tiers for long content**: under 800 tokens the text is served whole, 800–3000 as a
+  verbatim excerpt (head plus the sentences that match the question), over 3000 as a referent line
+  with the line count and a pointer to the tree. Nothing is paraphrased: code and numbers must be
+  read from the tree, and the hint says so.
+- **Anaphora guard**: "它怎么调" / "how does it work" is scored for reference; at 0.6 or above the
+  turn attaches to the current node instead of starting a new branch at the root.
+- **Sticky referent**: the mandatory pair is reused while the question shares no content word with
+  it, so a third and fourth "它" still reach the answer that introduced the thing.
+
+### Fixed
+
+- An excerpt could emit a code block half-open when the head stopped inside a fence; fence units are
+  now kept whole and an unclosed block in the source is dropped.
+- A first-time excerpt or referent line was not marked as reduced, so it looked like the whole text.
+- Two short mandatory nodes could exceed a small budget; the pair is now trimmed to fit.
+- The reduction hint replaced the size gate and compaction index instead of adding to them, and it
+  persisted for the whole session instead of the current turn.
+
 ## [0.1.11] — 2026-10-27
 
 A chain of "它" keeps its referent, and repeats cost less.
