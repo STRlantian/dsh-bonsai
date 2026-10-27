@@ -27,7 +27,7 @@ import { resolveTokenizer, defaultTokenizerDir, discoverTokenizers } from './tok
 import { presetOf } from './presets.ts'
 import type { Tokenize } from '../core/tokenizer.ts'
 import { contentFeatures, cosine, embedText } from '../core/embedding.ts'
-import type { RetrieveOptions, RetrieveResult } from '../core/retrieve.ts'
+import type { RetrieveOptions, RetrieveResult, SelectedNode } from '../core/retrieve.ts'
 import { renderContextBlock, retrieveContext } from '../core/retrieve.ts'
 import type { BacktrackPlan, BranchScore, Evaluation, Observation } from '../core/reflect.ts'
 import { chooseBacktrack, describeBacktrack, describeFailure, evaluateProgress } from '../core/reflect.ts'
@@ -362,6 +362,8 @@ export class TokenTreeService {
     foldPolicy: string
   /** What the file region may return in retrieval: off, a digest, the whole text, or by budget. */
   fileRegion: FileRegionMode
+  /** Put the answer a turn depends on in front of the scored hits. */
+  mandatoryContext: boolean
   } {
     const overrides = this.settings?.all() ?? {}
     return {
@@ -378,6 +380,7 @@ export class TokenTreeService {
       foldScope: overrides.foldScope ?? this.config.foldScope,
       foldPolicy: overrides.foldPolicy ?? this.config.foldPolicy,
       fileRegion: (overrides.fileRegion ?? this.config.fileRegion) as FileRegionMode,
+      mandatoryContext: overrides.mandatoryContext ?? this.config.mandatoryContext,
     }
   }
 
@@ -503,6 +506,7 @@ export class TokenTreeService {
         foldScope: this.config.foldScope,
         foldPolicy: this.config.foldPolicy,
         fileRegion: this.config.fileRegion as FileRegionMode,
+        mandatoryContext: this.config.mandatoryContext,
         hintAboveTokens: this.config.hintAboveTokens,
         tokenizerPath: this.config.tokenizerPath ?? null,
       },
@@ -1256,15 +1260,86 @@ export class TokenTreeService {
     const overrides = this.settings?.all() ?? {}
     const admitRelevance = options.admitRelevance ?? overrides.admitRelevance ?? this.config.weights.admitRelevance
     const summaryMatch = options.summaryMatch ?? overrides.summaryMatch ?? this.config.weights.summaryMatch
-    return retrieveContext(state.tree, {
-      originId: state.tree.currentId,
+    const originId = options.originId ?? state.tree.currentId
+    const budget = this.safeBudget(options.budgetTokens ?? this.config.weights.tokenBudget)
+    const result = retrieveContext(state.tree, {
+      originId,
       admitRelevance,
       summaryMatch,
       ...options,
       // Only the budget is scaled: the caller's own budget is respected, then discounted
       // when the token counts are estimates rather than measurements.
-      budgetTokens: this.safeBudget(options.budgetTokens ?? this.config.weights.tokenBudget),
+      budgetTokens: budget,
     })
+    // The question was asked *about* something, and the tree knows what: the answer it hangs
+    // under. Scoring alone returned that answer in only a third of measured turns - anaphora
+    // ("这里的 V 是指...") shares no words with the text it refers to - so it is put in the
+    // buffer unconditionally, ahead of the scored hits.
+    if (!this.effective().mandatoryContext || options.query.trim().length === 0) return result
+    return this.withMandatoryContext(state.tree, result, originId, budget)
+  }
+
+  /**
+   * Put the answer a turn depends on (and the question that asked for it) at the front.
+   *
+   * The pair is the smallest context that makes a follow-up legible: the answer states the
+   * content, the question states what it was answering. Tail hits are dropped to stay inside the
+   * budget, so the scored part shrinks rather than the total growing.
+   * @param tree - session graph.
+   * @param result - scored retrieval.
+   * @param originId - node the question hangs under.
+   * @param budget - token budget already applied.
+   * @returns The result with the mandatory nodes in front.
+   */
+  private withMandatoryContext(
+    tree: MemoryTree,
+    result: RetrieveResult,
+    originId: NodeId,
+    budget: number,
+  ): RetrieveResult {
+    const mandatory: SelectedNode[] = []
+    const seen = new Set(result.selected.map(entry => entry.nodeId))
+    let cursor = tree.nodes.get(originId)
+    let guard = 0
+    // One answer and the question it answered; two hops covers "the thing this is about".
+    while (cursor !== undefined && mandatory.length < 2 && guard < 8) {
+      if (cursor.kind === 'answer' || cursor.kind === 'question') {
+        if (!seen.has(cursor.id)) {
+          seen.add(cursor.id)
+          mandatory.push({
+            nodeId: cursor.id,
+            kind: cursor.kind,
+            weight: 1,
+            tokens: cursor.tokens,
+            compressed: false,
+            text: cursor.content,
+            breakdown: {
+              relevance: 1,
+              pathCost: 0,
+              pathWeight: 1,
+              ancestorBoost: 1,
+              lengthPenalty: 1,
+              specificity: 1,
+              recency: 1,
+              total: 1,
+            } as unknown as SelectedNode['breakdown'],
+          })
+        }
+      }
+      cursor = cursor.parentId === null ? undefined : tree.nodes.get(cursor.parentId)
+      guard++
+    }
+    if (mandatory.length === 0) return result
+    const reserved = mandatory.reduce((sum, entry) => sum + entry.tokens, 0)
+    const kept: SelectedNode[] = []
+    let used = reserved
+    for (const entry of result.selected) {
+      if (seen.has(entry.nodeId) && mandatory.some(item => item.nodeId === entry.nodeId)) continue
+      if (used + entry.tokens > budget) continue
+      kept.push(entry)
+      used += entry.tokens
+    }
+    return { ...result, selected: [...mandatory, ...kept], tokensUsed: used, dropped: result.dropped }
   }
 
   /**

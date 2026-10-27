@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** Keys the settings surface may override. */
-const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'autoCompactAboveTokens', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldScope', 'foldPolicy', 'fileRegion', 'admitRelevance', 'summaryMatch'] as const
+const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'autoCompactAboveTokens', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'admitRelevance', 'summaryMatch'] as const
 
 export interface SettingsOverrides {
   /** Push a memory block every turn instead of the one-line hint. */
@@ -49,6 +49,8 @@ export interface SettingsOverrides {
   foldPolicy?: string
   /** What retrieval may return from files the session read: off, digest, content, or auto by budget. */
   fileRegion?: string
+  /** Always include the answer a turn depends on. */
+  mandatoryContext?: boolean
   /**
    * Raw-relevance floor for admitting a node into the retrieval buffer (0–1).
    * Ranking still uses the blended score; this only decides who is allowed in.
@@ -97,6 +99,9 @@ function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number 
     if (typeof value !== 'string') return undefined
     const scope = value.trim().toLowerCase()
     return scope === 'tools' || scope === 'turns' ? scope : undefined
+  }
+  if (key === 'mandatoryContext') {
+    return typeof value === 'boolean' ? value : undefined
   }
   if (key === 'fileRegion') {
     if (typeof value !== 'string') return undefined

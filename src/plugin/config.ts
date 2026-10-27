@@ -151,6 +151,8 @@ export interface ResolvedConfig {
   foldPolicy: string
   /** What the file region may return: `off`, `digest`, `content`, or `auto` by budget. */
   fileRegion: string
+  /** Whether retrieval always includes the answer a turn depends on. */
+  mandatoryContext: boolean
   /** Whether to supervise failures. */
   autoReflect: boolean
   /** Whether subagent sessions are tracked. */
@@ -373,6 +375,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         autoCompactCooldownMs: scalar(source, 'autoCompactCooldownMs', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 600000,
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 40000,
+    mandatoryContext: scalar(source, 'mandatoryContext', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
     fileRegion: (() => {
       const mode = scalar(source, 'fileRegion', (input): input is string => typeof input === 'string', issues, 'a string')
       return mode === 'off' || mode === 'digest' || mode === 'content' ? mode : 'auto'
