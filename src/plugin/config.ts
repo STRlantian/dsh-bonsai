@@ -143,6 +143,12 @@ export interface ResolvedConfig {
   foldKeepTurns: number
   /** What folding removes: tool output only (`tools`) or whole turns (`turns`). */
   foldScope: string
+  /**
+   * When to fold: `threshold` waits for `foldAboveTokens`, `always` folds every finished turn
+   * except the keep window. `always` with `foldKeepTurns: 0` leaves only the current turn, which
+   * forces the model through `retrieve_context` for anything older.
+   */
+  foldPolicy: string
   /** Whether to supervise failures. */
   autoReflect: boolean
   /** Whether subagent sessions are tracked. */
@@ -365,6 +371,10 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         autoCompactCooldownMs: scalar(source, 'autoCompactCooldownMs', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 600000,
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 40000,
+    foldPolicy: (() => {
+      const policy = scalar(source, 'foldPolicy', (input): input is string => typeof input === 'string', issues, 'a string')
+      return policy === 'always' ? 'always' : 'threshold'
+    })(),
         foldKeepTurns: scalar(source, 'foldKeepTurns', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 3,
         foldScope: (() => {
           const scope = scalar(source, 'foldScope', (input): input is string => typeof input === 'string', issues, 'a string')

@@ -261,6 +261,9 @@ function summarize(text: string): string | undefined {
  * The one-line reminder appended when injection is off and the context is big enough
  * that older turns may already be gone from it.
  */
+const MANDATORY_HINT_TEXT =
+  '[token-tree] 本轮只保留了当前提问：之前的对话已全部折叠。回答任何需要前文的问题前，必须先调用 retrieve_context 取回原文；不要假定自己记得被折叠的内容。'
+
 const HINT_TEXT = '[token-tree] Older turns may be summarised or trimmed. Before answering anything that '
   + 'depends on earlier details, call retrieve_context (weighted over this conversation\'s tree) '
   + 'to pull them back; do not guess from the summary.'
@@ -322,6 +325,7 @@ export class TokenTreeService {
     foldAboveTokens: number
     foldKeepTurns: number
     foldScope: string
+    foldPolicy: string
   } {
     const overrides = this.settings?.all() ?? {}
     return {
@@ -336,6 +340,7 @@ export class TokenTreeService {
       foldAboveTokens: overrides.foldAboveTokens ?? this.config.foldAboveTokens,
       foldKeepTurns: overrides.foldKeepTurns ?? this.config.foldKeepTurns,
       foldScope: overrides.foldScope ?? this.config.foldScope,
+      foldPolicy: overrides.foldPolicy ?? this.config.foldPolicy,
     }
   }
 
@@ -459,6 +464,7 @@ export class TokenTreeService {
         foldAboveTokens: this.config.foldAboveTokens,
         foldKeepTurns: this.config.foldKeepTurns,
         foldScope: this.config.foldScope,
+        foldPolicy: this.config.foldPolicy,
         hintAboveTokens: this.config.hintAboveTokens,
         tokenizerPath: this.config.tokenizerPath ?? null,
       },
@@ -1273,6 +1279,10 @@ export class TokenTreeService {
   private baseHint(sessionId: string): string | undefined {
     const state = this.stateOf(sessionId)
     const tree = state.tree
+    // Fold-everything mode: nothing but the current turn is visible, so retrieval is not optional.
+    if (this.effective().foldPolicy === 'always') {
+      return MANDATORY_HINT_TEXT
+    }
     // A compacted session has already lost history, so no further gate is needed. The first
     // hint after a compaction carries the map of what was folded away.
     if (state.compacted === true) {

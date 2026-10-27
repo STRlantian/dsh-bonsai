@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** Keys the settings surface may override. */
-const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'autoCompactAboveTokens', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldScope', 'admitRelevance', 'summaryMatch'] as const
+const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'autoCompactAboveTokens', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldScope', 'foldPolicy', 'admitRelevance', 'summaryMatch'] as const
 
 export interface SettingsOverrides {
   /** Push a memory block every turn instead of the one-line hint. */
@@ -45,6 +45,8 @@ export interface SettingsOverrides {
   foldKeepTurns?: number
   /** What to fold: tool output only, or whole turns. */
   foldScope?: string
+  /** When to fold: `threshold` waits for the size gate, `always` folds every finished turn. */
+  foldPolicy?: string
   /**
    * Raw-relevance floor for admitting a node into the retrieval buffer (0–1).
    * Ranking still uses the blended score; this only decides who is allowed in.
@@ -93,6 +95,11 @@ function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number 
     if (typeof value !== 'string') return undefined
     const scope = value.trim().toLowerCase()
     return scope === 'tools' || scope === 'turns' ? scope : undefined
+  }
+  if (key === 'foldPolicy') {
+    if (typeof value !== 'string') return undefined
+    const policy = value.trim().toLowerCase()
+    return policy === 'always' || policy === 'threshold' ? policy : undefined
   }
   if (key === 'foldKeepTurns') {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined

@@ -105,6 +105,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "超过这个 token 数就把旧的工具输出从模型视野里折叠掉（0 = 关闭）。用 surfaceOp replace，不调模型；原文留在日志与树里": "Above this many tokens, old tool output is folded out of the model view (0 disables). Uses surfaceOp replace with no model call; the original stays in the log and the tree.",
   "保留最近轮数": "Keep recent turns",
   "折叠范围": "Fold scope",
+  "每轮折叠全部历史": "Fold all history every turn",
+  "只保留当前提问，强制模型先调用 retrieve_context": "Keep only the current question and make the model call retrieve_context first",
   "工具输出：只折叠旧的 tool/result。整轮：把整轮对话换成一个占位行（工具调用与结果一起消失，不会只剩一半）": "Tool output: fold old tool/result entries. Whole turns: replace an entire turn with one placeholder line (a tool call disappears together with its result, never half of a pair).",
   "工具输出": "Tool output",
   "整轮对话": "Whole turns",
@@ -1659,6 +1661,16 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               }
               saveSetting('foldAboveTokens', Math.round(next))
             },
+          }),
+        }),
+        settingRow({
+          key: 'foldPolicy',
+          label: t('每轮折叠全部历史'),
+          hint: t('只保留当前提问，强制模型先调用 retrieve_context'),
+          control: h('input', {
+            type: 'checkbox',
+            checked: effective !== undefined && effective.foldPolicy === 'always',
+            onChange: function (event) { saveSetting('foldPolicy', event.target.checked ? 'always' : 'threshold') },
           }),
         }),
         settingRow({

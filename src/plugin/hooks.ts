@@ -230,12 +230,15 @@ export function installCompactionHook(ctx: ContextLike, service: TokenTreeServic
  */
 function maybeFold(session: SessionLike, service: TokenTreeService, ctx: ContextLike): void {
   const settings = service.effective()
-  const threshold = settings.foldAboveTokens
-  if (threshold <= 0) return
+  // `always` folds every finished turn outside the keep window, whatever the size: the experiment
+  // "fold everything, force the model to consult the tree" needs no threshold at all.
+  const always = settings.foldPolicy === 'always'
+  const threshold = always ? 0 : settings.foldAboveTokens
+  if (!always && threshold <= 0) return
   if (typeof session.append !== 'function') return
   // The whole session, not the current branch: the next request carries all of it.
   const tokens = service.historyTokens(session.id)
-  if (tokens < threshold) return
+  if (!always && tokens < threshold) return
   const events = (session.snapshotEvents?.() ?? []).map(event => ({
     type: event.type,
     seq: event.seq,
