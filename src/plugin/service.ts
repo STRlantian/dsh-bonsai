@@ -1278,7 +1278,12 @@ export class TokenTreeService {
   ): RetrieveResult {
     const mandatory: SelectedNode[] = []
     const seen = new Set(result.selected.map(entry => entry.nodeId))
+    // The origin is usually the question that just arrived: it is already in the prompt, so the
+    // walk starts at its parent to reach the answer it depends on and the question behind that.
     let cursor = tree.nodes.get(originId)
+    if (cursor !== undefined && cursor.kind === 'question') {
+      cursor = cursor.parentId === null ? undefined : tree.nodes.get(cursor.parentId)
+    }
     let guard = 0
     // One answer and the question it answered; two hops covers "the thing this is about".
     while (cursor !== undefined && mandatory.length < 2 && guard < 8) {
