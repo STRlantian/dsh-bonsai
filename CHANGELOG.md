@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.1.11] — 2026-10-27
+
+A chain of "它" keeps its referent, and repeats cost less.
+
+### Added
+
+- **Anaphora guard**: a turn that only points back ("它怎么调", "这个值为什么乘二") is scored for
+  reference (`core/anaphora.ts`); at 0.6 or above attachment stays on the current node instead of
+  starting a new branch at the root, which is how a chain of "它" used to lose its thread.
+- **Sticky referent**: the mandatory pair is remembered across turns and reused while the question
+  shares no word of two characters or more with it - so the third and fourth "它" still reach the
+  answer that introduced the thing.
+
+### Changed
+
+- A mandatory node served a second time is a leading extract (a sixth of the budget) instead of the
+  full text, and even the first serving is capped at half the budget: 2,529 tokens against a 2,000
+  budget is no longer possible.
 ## [0.1.10] — 2026-10-27
 
 Retrieval now guarantees the context a follow-up depends on, files get their own region, and the

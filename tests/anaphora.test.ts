@@ -42,3 +42,21 @@ test('an anaphoric turn stays under the current node instead of jumping to the r
   assert.equal(answer?.kind, 'answer', 'the follow-up hangs under an answer, not the root: ' + followUp.parentId)
   assert.notEqual(followUp.parentId, tree.rootId, 'and not under the root')
 })
+
+test('a chain of three back-references keeps the first answer mandatory', () => {
+  const run = conversation()
+  run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小 m、哈希函数个数 k 和元素个数 n 共同决定，公式接近 (1 - e^(-kn/m))^k。')
+  const first = [...run.tree().nodes.values()].filter(node => node.kind === 'answer')[0]
+  // The real loop retrieves on every turn; sticky is learned from that, so the test must too.
+  const second = [...run.tree().nodes.values()].filter(node => node.kind === 'question').at(-1)
+  run.service.retrieve('anaphora', { query: second.content })
+  run.turn('它怎么调', 2, '调 k：k ≈ (m/n) ln2。')
+  const thirdQuestion = [...run.tree().nodes.values()].filter(node => node.kind === 'question').at(-1)
+  run.service.retrieve('anaphora', { query: thirdQuestion.content })
+  run.turn('它还有别的限制吗', 3, '不支持删除，只能重建。')
+
+  const third = [...run.tree().nodes.values()].filter(node => node.kind === 'question').at(-1)
+  const result = run.service.retrieve('anaphora', { query: third.content })
+  const ids = (result.selected ?? []).map(entry => entry.nodeId)
+  assert.ok(ids.includes(first.id), 'the first answer is still served: ' + ids.join(',') + ' (first=' + first.id + ')')
+})
