@@ -1,0 +1,276 @@
+{
+  "arms": {
+    "A": {
+      "runs": 2,
+      "steps": 18,
+      "input": 3674,
+      "cacheRead": 182528,
+      "output": 7999,
+      "folds": 0,
+      "correct": 6,
+      "asked": 6,
+      "inputPerStep": 204,
+      "promptPerStep": 10345
+    },
+    "B": {
+      "runs": 2,
+      "steps": 18,
+      "input": 11112,
+      "cacheRead": 157952,
+      "output": 8049,
+      "folds": 12,
+      "correct": 6,
+      "asked": 6,
+      "inputPerStep": 617,
+      "promptPerStep": 9392
+    }
+  },
+  "plan": "ABBA",
+  "turns": 6,
+  "runs": [
+    {
+      "position": 0,
+      "arm": "A",
+      "label": "fold-off",
+      "sessionId": "session-7c68d15f-672d-4bfc-a41a-cc7e717b2574",
+      "steps": 9,
+      "input": 1888,
+      "cacheRead": 89344,
+      "output": 3730,
+      "folds": 0,
+      "toolCount": 28,
+      "tools": [
+        "create_goal",
+        "edit",
+        "exit_plan_mode",
+        "glob",
+        "grep",
+        "interrupt_agent",
+        "job_kill",
+        "job_list",
+        "job_output",
+        "list_agents",
+        "present",
+        "pwsh",
+        "read",
+        "read_image",
+        "retrieve_context",
+        "send_message",
+        "skill",
+        "subagent",
+        "todo_write",
+        "tree_backtrack",
+        "tree_focus",
+        "tree_mark",
+        "tree_query",
+        "tree_reflect",
+        "web_fetch",
+        "web_search",
+        "working_directory",
+        "write"
+      ],
+      "correct": 3,
+      "asked": 3,
+      "answers": [
+        {
+          "expect": "4107",
+          "answer": "4107",
+          "hit": true
+        },
+        {
+          "expect": "4114",
+          "answer": "4114",
+          "hit": true
+        },
+        {
+          "expect": "4121",
+          "answer": "4121",
+          "hit": true
+        }
+      ]
+    },
+    {
+      "position": 1,
+      "arm": "B",
+      "label": "fold-on",
+      "sessionId": "session-2a1910f7-f74f-40e5-a6e5-6cdf65eb5ceb",
+      "steps": 9,
+      "input": 5379,
+      "cacheRead": 78336,
+      "output": 4121,
+      "folds": 6,
+      "toolCount": 28,
+      "tools": [
+        "create_goal",
+        "edit",
+        "exit_plan_mode",
+        "glob",
+        "grep",
+        "interrupt_agent",
+        "job_kill",
+        "job_list",
+        "job_output",
+        "list_agents",
+        "present",
+        "pwsh",
+        "read",
+        "read_image",
+        "retrieve_context",
+        "send_message",
+        "skill",
+        "subagent",
+        "todo_write",
+        "tree_backtrack",
+        "tree_focus",
+        "tree_mark",
+        "tree_query",
+        "tree_reflect",
+        "web_fetch",
+        "web_search",
+        "working_directory",
+        "write"
+      ],
+      "correct": 3,
+      "asked": 3,
+      "answers": [
+        {
+          "expect": "4107",
+          "answer": "4107",
+          "hit": true
+        },
+        {
+          "expect": "4114",
+          "answer": "4114",
+          "hit": true
+        },
+        {
+          "expect": "4121",
+          "answer": "4121",
+          "hit": true
+        }
+      ]
+    },
+    {
+      "position": 2,
+      "arm": "B",
+      "label": "fold-on",
+      "sessionId": "session-66aab4be-8fd9-4f04-9a98-7204d8f63617",
+      "steps": 9,
+      "input": 5733,
+      "cacheRead": 79616,
+      "output": 3928,
+      "folds": 6,
+      "toolCount": 28,
+      "tools": [
+        "create_goal",
+        "edit",
+        "exit_plan_mode",
+        "glob",
+        "grep",
+        "interrupt_agent",
+        "job_kill",
+        "job_list",
+        "job_output",
+        "list_agents",
+        "present",
+        "pwsh",
+        "read",
+        "read_image",
+        "retrieve_context",
+        "send_message",
+        "skill",
+        "subagent",
+        "todo_write",
+        "tree_backtrack",
+        "tree_focus",
+        "tree_mark",
+        "tree_query",
+        "tree_reflect",
+        "web_fetch",
+        "web_search",
+        "working_directory",
+        "write"
+      ],
+      "correct": 3,
+      "asked": 3,
+      "answers": [
+        {
+          "expect": "4107",
+          "answer": "4107",
+          "hit": true
+        },
+        {
+          "expect": "4114",
+          "answer": "4114",
+          "hit": true
+        },
+        {
+          "expect": "4121",
+          "answer": "4121",
+          "hit": true
+        }
+      ]
+    },
+    {
+      "position": 3,
+      "arm": "A",
+      "label": "fold-off",
+      "sessionId": "session-f4d61f22-3c5e-411b-a148-554ea1a8a6ab",
+      "steps": 9,
+      "input": 1786,
+      "cacheRead": 93184,
+      "output": 4269,
+      "folds": 0,
+      "toolCount": 28,
+      "tools": [
+        "create_goal",
+        "edit",
+        "exit_plan_mode",
+        "glob",
+        "grep",
+        "interrupt_agent",
+        "job_kill",
+        "job_list",
+        "job_output",
+        "list_agents",
+        "present",
+        "pwsh",
+        "read",
+        "read_image",
+        "retrieve_context",
+        "send_message",
+        "skill",
+        "subagent",
+        "todo_write",
+        "tree_backtrack",
+        "tree_focus",
+        "tree_mark",
+        "tree_query",
+        "tree_reflect",
+        "web_fetch",
+        "web_search",
+        "working_directory",
+        "write"
+      ],
+      "correct": 3,
+      "asked": 3,
+      "answers": [
+        {
+          "expect": "4107",
+          "answer": "4107",
+          "hit": true
+        },
+        {
+          "expect": "4114",
+          "answer": "4114",
+          "hit": true
+        },
+        {
+          "expect": "4121",
+          "answer": "4121",
+          "hit": true
+        }
+      ]
+    }
+  ]
+}
