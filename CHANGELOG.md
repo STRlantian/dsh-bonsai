@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.10] — 2026-10-27
+
+Retrieval now guarantees the context a follow-up depends on, files get their own region, and the
+settings page explains itself.
+
+### Added
+
+- **Mandatory context**: the answer a question hangs under, plus the question it answered, now go
+  into the retrieval buffer ahead of the scored hits. Measured on 176 real questions: the
+  dependency went from 32% to 85% present, at 974 → 1,909 tokens per call.
+- **File region**: the text of files this session read, indexed by path, served by retrieval with
+  the current content (`auto` answers whole when it fits, head when it does not; `off` / `digest` /
+  `content` also available). Revalidation by mtime, dropped on the session's own write.
+- **Stale-read hint**: names up to three files that changed after they were read, since the host
+  guards writes (`FS_STALE_VERSION`) but never marks what is already in the context.
+- **Guided setup** in settings: four situations that each write the keys that fit them.
+
+### Removed
+
+- Auto-compaction (`autoCompactAboveTokens`, the `maybeCompact` hook and its diagnostics). Folding
+  does the same work without a model call; the host still compacts on its own, and
+  `compactionIndex` keeps describing what it removed.
 ## [0.1.8] — 2026-10-25
 
 Documentation only: the npm page now speaks English.
