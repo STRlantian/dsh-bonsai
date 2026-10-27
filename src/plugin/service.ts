@@ -18,7 +18,7 @@
 import type { MemoryNode, NodeId, NodeKind } from '../core/types.ts'
 import { MemoryTree } from '../core/graph.ts'
 import { dirname, join } from 'node:path'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, statSync, writeFileSync } from 'node:fs'
 import { estimateTokens, leadingSentences } from '../core/tokens.ts'
 import { loadTokenizerFile } from '../core/tokenizer.ts'
 import { TokenRatio } from '../core/ratio.ts'
@@ -97,6 +97,13 @@ export interface SessionState {
   readonly callNames: Map<string, string>
   /** Argument renderings by call id, used to detect an identical retry. */
   readonly callArgs: Map<string, string>
+  /**
+   * Paths read through a file tool, with the time of that read.
+   *
+   * The host blocks a write when a file changed since it was read (FS_STALE_VERSION), but the copy
+   * already in the context is never marked stale. This map lets the hint say so.
+   */
+  readonly readPaths: Map<string, number>
   /** Measured token count per message id, so a turn only pays for new messages. */
   readonly tokenCounts: Map<string, number>
   /** Tokens of the last measured prompt, until the provider reports its own number. */
@@ -263,6 +270,30 @@ function summarize(text: string): string | undefined {
  */
 const MANDATORY_HINT_TEXT =
   '[token-tree] 本轮只保留了当前提问：之前的对话已全部折叠。回答任何需要前文的问题前，必须先调用 retrieve_context 取回原文；不要假定自己记得被折叠的内容。'
+
+/**
+ * The file path a filesystem tool was given, if it names one.
+ *
+ * @param name - tool name.
+ * @param argumentsText - raw JSON arguments of the call.
+ * @returns The path, or undefined for a tool that does not touch one file.
+ */
+function filePathOf(name: string, argumentsText: string): string | undefined {
+  if (name !== 'read' && name !== 'write' && name !== 'edit') return undefined
+  try {
+    const parsed = JSON.parse(argumentsText) as Record<string, unknown>
+    const candidate = parsed.file_path ?? parsed.path
+    return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** The last two path segments, enough to recognise a file in one hint line. */
+function relativeLabel(filePath: string): string {
+  const parts = filePath.split(/[\\/]+/).filter(part => part.length > 0)
+  return parts.slice(-2).join('/')
+}
 
 const HINT_TEXT = '[token-tree] Older turns may be summarised or trimmed. Before answering anything that '
   + 'depends on earlier details, call retrieve_context (weighted over this conversation\'s tree) '
@@ -524,6 +555,7 @@ export class TokenTreeService {
       lastSeq: -1,
       observations: [],
       callNames: new Map(),
+    readPaths: new Map(),
       callArgs: new Map(),
       tokenCounts: new Map(),
       turn: 0,
@@ -748,7 +780,15 @@ export class TokenTreeService {
         const name = stringField(data.name)
         if (callId !== undefined && name !== undefined) {
           state.callNames.set(callId, name)
-          state.callArgs.set(callId, stringField(data.arguments) ?? '')
+          const argumentsText = stringField(data.arguments) ?? ''
+          state.callArgs.set(callId, argumentsText)
+          const filePath = filePathOf(name, argumentsText)
+          if (filePath !== undefined) {
+            // A read records when the content entered the context; the session's own write makes
+            // the context current again.
+            if (name === 'read') state.readPaths.set(filePath, at)
+            else state.readPaths.delete(filePath)
+          }
         }
         return
       }
@@ -1256,13 +1296,43 @@ export class TokenTreeService {
    * @param sessionId - session identity.
    * @returns The line, or `undefined` while retrieval cannot matter yet.
    */
+  /**
+   * Files read in this session whose disk content has moved on since.
+   *
+   * The host refuses a *write* when a file changed after the read (FS_STALE_VERSION), but the copy
+   * sitting in the context is never marked. This is the only place the model gets told; it costs
+   * one stat per path that was read, once per turn.
+   * @param sessionId - session identity.
+   * @returns Paths now newer than their recorded read, newest first.
+   */
+  staleReads(sessionId: string): { path: string; readAt: number; mtimeMs: number }[] {
+    const state = this.stateOf(sessionId)
+    const stale: { path: string; readAt: number; mtimeMs: number }[] = []
+    for (const [filePath, readAt] of state.readPaths) {
+      try {
+        const info = statSync(filePath)
+        if (info.mtimeMs > readAt + 1) stale.push({ path: filePath, readAt, mtimeMs: info.mtimeMs })
+      } catch {
+        // The file is gone; a later read or write will surface that, not the hint.
+      }
+    }
+    return stale.sort((left, right) => right.mtimeMs - left.mtimeMs)
+  }
+
   retrievalHint(sessionId: string): string | undefined {
+    const stale = this.staleReads(sessionId)
+    const staleLine = stale.length === 0
+      ? ''
+      : `[盆栽] 这些文件在你读过之后被改动过（上下文里是旧内容，用前重读）：${stale.slice(0, 3).map(entry => relativeLabel(entry.path)).join('、')}${stale.length > 3 ? ` 等 ${stale.length} 个` : ''}`
     const rules = activeConstraints(this.stateOf(sessionId).constraints)
     const ruleLine = rules.length === 0
       ? ''
       : `[盆栽] 仍然生效的规则：${rules.map(entry => entry.text).join(' | ')}`
     const hint = this.baseHint(sessionId)
-    if (ruleLine === '') return hint
+    if (ruleLine === '' && staleLine === '') return hint
+    const extra = [staleLine, ruleLine].filter(line => line !== '').join('\n')
+    if (hint === undefined) return extra + '\n' + HINT_TEXT
+    return hint + '\n\n' + extra
     // Rules are the one thing a user writes by hand and expects to see take effect, so they ride
     // along with the hint instead of waiting for the (off by default) full injection.
     return hint === undefined ? ruleLine + '\n' + HINT_TEXT : hint + '\n\n' + ruleLine
