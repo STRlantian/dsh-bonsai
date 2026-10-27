@@ -122,7 +122,6 @@ changed); precedence is **settings file > profile config**.
 | `foldAboveTokens` | `40000` | Fold threshold, `0` = off |
 | `foldKeepTurns` | `3` | Turns kept verbatim |
 | `foldScope` | `turns` | Fold scope |
-| `autoCompactAboveTokens` | `0` | Automatic compaction; costs one model call over the whole history |
 | `tokenizerVersion` | `auto` | `auto` / `3` / `4` / `off` (estimate + calibrate against the bill) |
 | `locale` | `auto` | Interface language: `auto` / `zh` / `en` |
 
@@ -208,3 +207,4 @@ It validates, sets `x.y.z`, publishes `./plugin` with `--tag latest`, advances t
 ## License
 
 MIT © 2026 STRlantian
+

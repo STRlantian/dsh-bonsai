@@ -65,14 +65,12 @@ export interface Config {
    * `0` disables it. Compaction is the only lever that reduces prompt size instead of
    * growing it, so this is off by default: losing detail is a decision for the user.
    */
-  autoCompactAboveTokens?: number
   /**
    * Minimum delay between two automatic compactions, in milliseconds.
    *
    * Compaction is a model call whose input is the entire conversation (measured: 11k–727k
    * tokens, 99% cached), so an eager cooldown pays it repeatedly for little gain.
    */
-  autoCompactCooldownMs?: number
   /** Fraction of the token budget to trust when the counts are estimates rather than measurements. */
   conservativeBudgetRatio?: number
   /** Reflect on failures and backtrack automatically at turn boundaries. */
@@ -132,9 +130,7 @@ export interface ResolvedConfig {
   /** Budget factor applied while token counts are estimates. */
   conservativeBudgetRatio: number
   /** Conversation size that triggers an automatic compaction; `0` disables it. */
-  autoCompactAboveTokens: number
   /** Minimum gap between automatic compactions. */
-  autoCompactCooldownMs: number
   /** Whether the first hint after a compaction lists the folded nodes. */
   compactionIndex: boolean
   /** Conversation tokens above which old tool results are folded; `0` disables it. */
@@ -371,8 +367,6 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
           : undefined,
         ...(typeof source.modelId === 'string' && source.modelId.trim() !== '' ? { modelId: source.modelId.trim() } : {}),
         conservativeBudgetRatio: scalar(source, 'conservativeBudgetRatio', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input > 0 && input <= 1, issues, 'a number within (0, 1]') ?? 0.85,
-        autoCompactAboveTokens: scalar(source, 'autoCompactAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
-        autoCompactCooldownMs: scalar(source, 'autoCompactCooldownMs', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 600000,
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 40000,
     mandatoryContext: scalar(source, 'mandatoryContext', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,

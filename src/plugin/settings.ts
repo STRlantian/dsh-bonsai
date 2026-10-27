@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** Keys the settings surface may override. */
-const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'autoCompactAboveTokens', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'admitRelevance', 'summaryMatch'] as const
+const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'admitRelevance', 'summaryMatch'] as const
 
 export interface SettingsOverrides {
   /** Push a memory block every turn instead of the one-line hint. */
@@ -34,7 +34,6 @@ export interface SettingsOverrides {
   /** Interface language: `auto` follows the system, or `zh` / `en`. */
   locale?: string
   /** Conversation tokens that trigger an automatic compaction; `0` disables it. */
-  autoCompactAboveTokens?: number
   /** Whether the first hint after a compaction lists the folded nodes. */
   compactionIndex?: boolean
   /** Tool names to hide from the agent; the schemas are a large part of every prompt. */
@@ -124,10 +123,6 @@ function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number 
   }
   if (key === 'compactionIndex') {
     if (typeof value !== 'boolean') return undefined
-    return value
-  }
-  if (key === 'autoCompactAboveTokens') {
-    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined
     return value
   }
   if (key === 'locale') {

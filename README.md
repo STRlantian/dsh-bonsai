@@ -107,7 +107,6 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 | `foldAboveTokens` | `40000` | 折叠阈值，`0` = 关闭 |
 | `foldKeepTurns` | `3` | 保留最近轮数 |
 | `foldScope` | `turns` | 折叠范围 |
-| `autoCompactAboveTokens` | `0` | 自动压缩；会产生一次全量历史的模型调用 |
 | `tokenizerVersion` | `auto` | `auto` / `3` / `4` / `off`（估算 + 账单校准） |
 | `locale` | `auto` | 界面语言：`auto` / `zh` / `en` |
 
@@ -182,3 +181,4 @@ powershell -File scripts/release.ps1           # 发布并推进到下一个测�
 ## License
 
 MIT © 2026 STRlantian
+

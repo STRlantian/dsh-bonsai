@@ -208,8 +208,7 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
 export function installCompactionHook(ctx: ContextLike, service: TokenTreeService): void {
   ctx.on('agent/turn-stopping', (payload) => {
     try {
-      maybeCompact(ctx, service, payload.agent)
-    } catch (error) {
+        } catch (error) {
       ctx.logger.warn(`token-tree: auto-compaction failed for session ${payload.agent?.session?.id}: ${describe(error)}`)
     }
   })
@@ -305,78 +304,6 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
  * @param service - tree service holding the measurement.
  * @param agent - agent whose session would be compacted.
  */
-function maybeCompact(ctx: ContextLike, service: TokenTreeService, agent: AgentLike): void {
-  const sessionId = agent?.session?.id
-  if (typeof sessionId !== 'string') return
-  const due = service.autoCompactDue(sessionId)
-  let compaction: { compactNow?: (agent: unknown, signal?: AbortSignal, commandId?: string) => Promise<unknown> } | undefined
-  try {
-    compaction = ctx.get?.('compaction') as typeof compaction
-  } catch {
-    compaction = undefined
-  }
-  const compactNow = compaction?.compactNow
-  const hasService = typeof compactNow === 'function'
-  const tokens = service.conversationTokens(sessionId)
-  const threshold = service.effective().autoCompactAboveTokens
-  const estimate = service.compactionEstimate(sessionId)
-  // Recorded even when nothing happens, so the settings route can explain why.
-  service.noteAutoCompactProbe(sessionId, {
-    tokens,
-    threshold,
-    due: due !== null,
-    hasService,
-    fired: false,
-    at: Date.now(),
-    estimate: estimate === null
-      ? null
-      : {
-        readTokens: estimate.readTokens,
-        summaryTokens: estimate.summaryTokens,
-        savedPerTurn: estimate.savedPerTurn,
-        turnsToBreakEven: estimate.turnsToBreakEven,
-      },
-  })
-  if (due === null) return
-  if (!hasService) {
-    ctx.logger.warn('token-tree: auto-compaction is configured but the host exposes no compaction service')
-    return
-  }
-  service.noteCompacted(sessionId)
-  service.noteAutoCompactProbe(sessionId, {
-    tokens,
-    threshold,
-    due: true,
-    hasService: true,
-    fired: true,
-    at: Date.now(),
-    estimate: estimate === null
-      ? null
-      : {
-        readTokens: estimate.readTokens,
-        summaryTokens: estimate.summaryTokens,
-        savedPerTurn: estimate.savedPerTurn,
-        turnsToBreakEven: estimate.turnsToBreakEven,
-      },
-  })
-  if (estimate !== null) {
-    ctx.logger.info(
-      `token-tree: compaction will read ${estimate.readTokens} tokens and save ${estimate.savedPerTurn}/turn, paying off after ${estimate.turnsToBreakEven} turn(s)`,
-    )
-  }
-  ctx.logger.info(
-    `token-tree: auto-compacting session ${sessionId} (${due.tokens} tokens over the ${due.threshold} threshold)`,
-  )
-  // Fire and forget: the turn is ending, and a failed compaction must not surface as a turn error.
-  void Promise.resolve()
-    .then(() => compactNow(agent, undefined, `auto-compact-${Date.now()}`))
-    .then(result => {
-      ctx.logger.info(`token-tree: auto-compaction result for ${sessionId}: ${JSON.stringify(result ?? null).slice(0, 200)}`)
-    })
-    .catch(error => {
-      ctx.logger.warn(`token-tree: auto-compaction failed for session ${sessionId}: ${describe(error)}`)
-    })
-}
 
 export function describe(error: unknown): string {
   if (error instanceof Error) return error.message

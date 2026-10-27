@@ -1607,27 +1607,6 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               settings.autoCompact.estimate.turnsToBreakEven))
           : null,
         settingRow({
-          key: 'autoCompactAboveTokens',
-          label: t('自动压缩阈值'),
-          hint: t('对话超过这个 token 数就调用一次模型，把旧历史压成摘要（0 = 关闭）。会产生一次全量历史的费用；想更便宜就用下面的「折叠历史」'),
-          control: h('input', {
-            type: 'number',
-            min: 0,
-            step: 1000,
-            defaultValue: String(effective.autoCompactAboveTokens === undefined ? 0 : effective.autoCompactAboveTokens),
-            disabled: busy,
-            style: { width: '92px' },
-            onBlur: function (event) {
-              var next = Number(event.target.value)
-              if (!Number.isFinite(next) || next < 0) {
-                event.target.value = String(effective.autoCompactAboveTokens === undefined ? 0 : effective.autoCompactAboveTokens)
-                return
-              }
-              saveSetting('autoCompactAboveTokens', Math.round(next))
-            },
-          }),
-        }),
-        settingRow({
           key: 'toolDeny',
           label: t('隐藏工具'),
           hint: t('从清单里挑不需要的工具，模型就看不到它们。工具定义占 prompt 的大头，隐藏几个用得少的能明显省钱；默认一个都不藏'),
