@@ -124,6 +124,8 @@ export interface SessionState {
    * third or fourth "it" still reaches the answer that introduced the thing.
    */
   sticky: NodeId[]
+  /** Candidate ids offered to the model this turn, so a marker can only name one of them. */
+  offered: NodeId[]
   /** Set when a long node was served as an excerpt or a referent line, so the hint can say so. */
   sawReduction?: boolean
   /** Measured token count per message id, so a turn only pays for new messages. */
@@ -366,6 +368,8 @@ export class TokenTreeService {
   fileRegion: FileRegionMode
   /** Put the answer a turn depends on in front of the scored hits. */
   mandatoryContext: boolean
+  /** How many candidate nodes the hint offers the model. */
+  attachChoices: number
   } {
     const overrides = this.settings?.all() ?? {}
     return {
@@ -381,6 +385,7 @@ export class TokenTreeService {
       foldScope: overrides.foldScope ?? this.config.foldScope,
       foldPolicy: overrides.foldPolicy ?? this.config.foldPolicy,
       fileRegion: (overrides.fileRegion ?? this.config.fileRegion) as FileRegionMode,
+      attachChoices: overrides.attachChoices ?? this.config.attachChoices,
       mandatoryContext: overrides.mandatoryContext ?? this.config.mandatoryContext,
     }
   }
@@ -505,6 +510,7 @@ export class TokenTreeService {
         foldScope: this.config.foldScope,
         foldPolicy: this.config.foldPolicy,
         fileRegion: this.config.fileRegion as FileRegionMode,
+        attachChoices: this.config.attachChoices,
         mandatoryContext: this.config.mandatoryContext,
         hintAboveTokens: this.config.hintAboveTokens,
         tokenizerPath: this.config.tokenizerPath ?? null,
@@ -568,6 +574,7 @@ export class TokenTreeService {
     files: new FileRegion(),
     served: new Map(),
     sticky: [],
+    offered: [],
       callArgs: new Map(),
       tokenCounts: new Map(),
       turn: 0,
@@ -1113,7 +1120,7 @@ export class TokenTreeService {
   /** Turn one assistant message into an answer node. */
   private ingestAssistantMessage(state: SessionState, data: Record<string, unknown>, at: number): void {
     const message = asMessage(data.message) ?? {}
-    const text = textOfContent(message.content)
+    const text = this.applyAttachMarker(state, textOfContent(message.content))
     if (text.length === 0) return
     if (state.skipNextAnswer) {
       state.skipNextAnswer = false
@@ -1528,6 +1535,91 @@ export class TokenTreeService {
       }
     }
     return stale.sort((left, right) => right.mtimeMs - left.mtimeMs)
+  }
+
+  /**
+   * Offer the model a short list of nodes this turn could hang under.
+   *
+   * Local scoring still picks the default; the list is for the cases it cannot judge - "它" across
+   * several plausible threads. Every row is the *question* that a candidate answer replied to, never
+   * the generated text: ten questions cost a few hundred tokens, ten answers would cost thousands.
+   * The model answers with a marker, and only ids on this list are accepted back.
+   * @param sessionId - session identity.
+   * @param query - the question the user just sent.
+   * @param limit - how many rows (0 disables the block).
+   * @returns The block, or '' when there is nothing worth offering.
+   */
+  attachChoices(sessionId: string, query: string, limit = this.effective().attachChoices): string {
+    const state = this.stateOf(sessionId)
+    state.offered = []
+    if (limit <= 0 || query.trim().length === 0) return ''
+    const tree = state.tree
+    const embedding = embedText(query, this.config.embeddingDimension)
+    const context = this.attachmentContext(state, query, embedding)
+    const scored: { id: NodeId; score: number }[] = []
+    for (const node of tree.nodes.values()) {
+      if (node.kind !== 'answer' || tree.hidden(node.id)) continue
+      scored.push({ id: node.id, score: this.attachmentScore(context, node) })
+    }
+    scored.sort((left, right) => right.score - left.score)
+    const picked = scored.slice(0, limit)
+    if (picked.length === 0) return ''
+    state.offered = picked.map(entry => entry.id)
+    const rows = picked.map(entry => '- ' + entry.id + ' · ' + this.candidateLabel(tree, entry.id))
+    return [
+      '[token-tree] 若本轮是在追问下面某一条，请在回答最后单独一行写 [attach:nX]（X 取自列表）；',
+      '若只是延续上一条，或都不是，就不要写。只给问题，回答内容按需用 retrieve_context 取。',
+      ...rows,
+    ].join('\n')
+  }
+
+  /**
+   * A short label for a candidate: the question that produced that answer.
+   * @param tree - session graph.
+   * @param answerId - candidate answer.
+   * @returns Up to 48 characters of the question it replied to.
+   */
+  private candidateLabel(tree: MemoryTree, answerId: NodeId): string {
+    let cursor = tree.nodes.get(answerId)
+    let guard = 0
+    while (cursor !== undefined && cursor.kind !== 'question' && guard < 4) {
+      cursor = cursor.parentId === null ? undefined : tree.nodes.get(cursor.parentId)
+      guard++
+    }
+    const source = cursor ?? tree.nodes.get(answerId)
+    const text = (source?.summary ?? source?.content ?? '').replace(/\s+/g, ' ').trim()
+    return text.length > 48 ? text.slice(0, 48) + '…' : text
+  }
+
+  /**
+   * Read a trailing `[attach:nX]` marker, move the question, and remove the marker.
+   *
+   * Only an id offered this turn is honoured: a model that invents a node cannot re-parent anything,
+   * and the marker is always stripped so it never lands in the tree or the next prompt.
+   * @param state - session state.
+   * @param text - assistant text.
+   * @returns The text without the marker.
+   */
+  private applyAttachMarker(state: SessionState, text: string): string {
+    const match = /\[attach:(n\d+)\]/.exec(text)
+    if (match === null) return text
+    const cleaned = text.replace(match[0], '').trim()
+    const target = match[1]
+    const questionId = state.pendingQuestionId
+    if (!state.offered.includes(target)) {
+      this.logger.debug('token-tree: attach marker named a node that was not offered; ignored')
+      return cleaned
+    }
+    if (questionId === undefined || questionId === target) return cleaned
+    if (!state.tree.nodes.has(target) || state.tree.hidden(target)) return cleaned
+    try {
+      state.tree.reparent(questionId, target)
+      this.remember({ session: state.sessionId, action: 'reparent', nodeId: questionId, parentId: target, at: Date.now() })
+      this.logger.info(`token-tree: model moved ${questionId} under ${target}`)
+    } catch (error) {
+      this.logger.debug('token-tree: attach marker could not be applied: ' + String(error))
+    }
+    return cleaned
   }
 
   retrievalHint(sessionId: string): string | undefined {

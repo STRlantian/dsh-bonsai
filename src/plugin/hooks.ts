@@ -91,19 +91,23 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     service.notePromptShape(payload.agent.session.id, decision.messages)
     service.noteDecisionShape(payload.agent.session.id, decision)
     const settings = service.effective()
-    if (!settings.autoInject) {
-      if (!settings.retrievalHint) return decision
-      const hint = service.retrievalHint(payload.agent.session.id)
-      if (hint === undefined) return decision
-      return { ...decision, messages: [...decision.messages, buildInjectedMessage(hint)] }
-    }
     const query = queryOf(decision.messages)
+    // The choices block rides along whatever else is injected: ten questions cost a few hundred
+    // tokens, while a separate request to ask the model the same thing would cost a whole prompt.
+    const choices = query === undefined ? '' : service.attachChoices(payload.agent.session.id, query)
+    if (!settings.autoInject) {
+      const hint = settings.retrievalHint ? service.retrievalHint(payload.agent.session.id) : undefined
+      const body = [hint, choices].filter(part => part !== undefined && part !== '').join('\n\n')
+      if (body === '') return decision
+      return { ...decision, messages: [...decision.messages, buildInjectedMessage(body)] }
+    }
     if (query === undefined) return decision
     try {
       const block = service.memoryBlock(payload.agent.session.id, query, config.injectBudgetTokens)
-      if (block === undefined) return decision
+      const body = [block, choices].filter(part => part !== undefined && part !== '').join('\n\n')
+      if (body === '') return decision
       ctx.logger.info(`token-tree: injecting memory block for session ${payload.agent.session.id} (turn ${payload.turn})`)
-      return { ...decision, messages: [...decision.messages, buildInjectedMessage(block)] }
+      return { ...decision, messages: [...decision.messages, buildInjectedMessage(body)] }
     } catch (error) {
       ctx.logger.warn(`token-tree: recall failed for session ${payload.agent.session.id}: ${describe(error)}`)
       return decision

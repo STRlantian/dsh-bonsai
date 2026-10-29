@@ -148,6 +148,8 @@ export interface ResolvedConfig {
   /** What the file region may return: `off`, `digest`, `content`, or `auto` by budget. */
   fileRegion: string
   /** Whether retrieval always includes the answer a turn depends on. */
+  /** How many candidate nodes the hint offers the model (0 = no choices block). */
+  attachChoices: number
   mandatoryContext: boolean
   /** Whether to supervise failures. */
   autoReflect: boolean
@@ -369,6 +371,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         conservativeBudgetRatio: scalar(source, 'conservativeBudgetRatio', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input > 0 && input <= 1, issues, 'a number within (0, 1]') ?? 0.85,
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 40000,
+    attachChoices: scalar(source, 'attachChoices', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 10,
     mandatoryContext: scalar(source, 'mandatoryContext', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
     fileRegion: (() => {
       const mode = scalar(source, 'fileRegion', (input): input is string => typeof input === 'string', issues, 'a string')

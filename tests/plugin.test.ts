@@ -519,7 +519,23 @@ test('with injection off the hook appends one short retrieval hint instead', asy
     { agent: harness.agent, messages: [userMessage], turn: 2, step: 1 },
     async () => ({ kind: 'enter', messages: [userMessage] }),
   ) as { messages: UserMessageLike[] }
-  assert.equal(shortConversation.messages.length, 1, 'no hint while the history still fits')
+  // The retrieval hint still waits for the history to grow, but the choices block does not: it is
+  // what the model needs to answer "which thread is this?" on every turn that has candidates.
+  assert.equal(shortConversation.messages.length, 2, 'the choices block rides along')
+  assert.ok(JSON.stringify(shortConversation.messages[1]).includes('[attach:'), 'and asks for a marker')
+
+  const withoutChoices = mount({ ...defaults(), autoInject: false, retrievalHint: true, attachChoices: 0 })
+  const plainState = withoutChoices.service.stateOf('session-1')
+  for (let index = 0; index < 3; index += 1) {
+    plainState.tree.addNode({ kind: 'question', content: 'q' + index, timestamp: 1_000 + index })
+    plainState.tree.addNode({ kind: 'answer', content: 'a' + index, timestamp: 1_500 + index })
+  }
+  const bare = await withoutChoices.harness.waterfall(
+    'agent/pre-step',
+    { agent: withoutChoices.harness.agent, messages: [userMessage], turn: 2, step: 1 },
+    async () => ({ kind: 'enter', messages: [userMessage] }),
+  ) as { messages: UserMessageLike[] }
+  assert.equal(bare.messages.length, 1, 'attachChoices: 0 keeps the step untouched')
 
   // A compaction is the moment the hint starts to earn its tokens.
   state.compacted = true

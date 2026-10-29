@@ -1,0 +1,75 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+
+import { Config } from '../src/plugin/config.ts'
+import { TokenTreeService } from '../src/plugin/service.ts'
+
+const logger = { info: () => {}, warn: () => {}, debug: () => {}, error: () => {} }
+
+function conversation() {
+  const config = Config['~standard'].validate({ logEdgeUpdates: false }).value
+  const current = { attachChoices: 5, mandatoryContext: false, autoInject: false, retrievalHint: false, hintMinNodes: 99 }
+  const settings = {
+    path: 'memory',
+    all: () => ({ ...current }),
+    apply: patch => { Object.assign(current, patch); return { ...current } },
+  }
+  const service = new TokenTreeService({ config, logger, settings })
+  const events = []
+  const session = { id: 'choices', snapshotEvents: () => events }
+  let seq = 0
+  const push = (type, data) => { const event = { type, seq: ++seq, time: ++seq * 1000, data }; events.push(event); service.handleEvent(session, event) }
+  const turn = (text, n, answer) => {
+    push('turn/start', { turn: n })
+    push('user/message', { role: 'user', id: 'q' + n, source: { kind: 'user' }, content: [{ type: 'text', text }] })
+    push('assistant/message', { message: { role: 'assistant', content: [{ type: 'text', text: answer }] } })
+    push('turn/end', { turn: n, reason: { kind: 'completed' } })
+  }
+  return { service, turn, push, tree: () => service.stateOf('choices').tree }
+}
+
+test('the choices block lists questions, not answers', () => {
+  const run = conversation()
+  run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小 m、哈希函数个数 k 和元素个数 n 共同决定，公式接近 (1 - e^(-kn/m))^k。')
+  run.turn('红黑树怎么插入', 2, '红黑树插入先按二叉查找树插入，再做变色与旋转。')
+  const block = run.service.attachChoices('choices', '它的误判率怎么算')
+  assert.ok(block.includes('布隆过滤器的误判率由什么决定'), 'the question is the label: ' + block)
+  assert.ok(!block.includes('位数组大小'), 'the generated answer text is not included')
+  assert.ok(block.includes('若本轮是在追问'), 'the instruction is there')
+  const rows = block.split('\n').filter(line => line.startsWith('- '))
+  assert.ok(rows.length <= 5 && rows.length >= 1, 'within the limit: ' + rows.length)
+})
+
+test('a marker naming an offered node moves the question', () => {
+  const run = conversation()
+  run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小和哈希函数个数决定。')
+  run.turn('红黑树怎么插入', 2, '先按二叉查找树插入，再变色与旋转。')
+  const tree = run.tree()
+  const firstAnswer = [...tree.nodes.values()].find(node => node.kind === 'answer' && node.content.includes('位数组'))
+  assert.ok(firstAnswer !== undefined)
+  const block = run.service.attachChoices('choices', '它的插入过程呢')
+  assert.ok(block.includes(firstAnswer.id), 'the first answer is offered: ' + block)
+
+  run.turn('它的插入过程呢', 3, '它指红黑树：插入后需要修复红黑性质。[attach:' + firstAnswer.id + ']')
+  const question = [...run.tree().nodes.values()].filter(node => node.kind === 'question').at(-1)
+  assert.equal(question.parentId, firstAnswer.id, 'the question moved under the offered node')
+  assert.ok(!question.content.includes('[attach:'), 'and the marker is not part of the question')
+})
+
+test('a marker for a node that was never offered is ignored and stripped', () => {
+  const run = conversation()
+  run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小决定。')
+  run.service.attachChoices('choices', '它的误判率怎么算')
+  const before = [...run.tree().nodes.values()].filter(node => node.kind === 'question').at(-1)
+  run.turn('它的误判率怎么算', 2, '约 1%。[attach:n999]')
+  const question = [...run.tree().nodes.values()].filter(node => node.kind === 'question').at(-1)
+  assert.notEqual(question.parentId, 'n999', 'an invented id changes nothing')
+  const answer = [...run.tree().nodes.values()].filter(node => node.kind === 'answer').at(-1)
+  assert.ok(!answer.content.includes('[attach:'), 'the marker never reaches the tree: ' + answer.content)
+})
+
+test('setting the count to zero disables the block', () => {
+  const run = conversation()
+  run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小决定。')
+  assert.equal(run.service.attachChoices('choices', '它的误判率怎么算', 0), '', 'no block when the count is 0')
+})

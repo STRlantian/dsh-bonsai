@@ -106,6 +106,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "保留最近轮数": "Keep recent turns",
   "折叠范围": "Fold scope",
   "每轮折叠全部历史": "Fold all history every turn",
+  "挂接候选数": "Attach candidates",
+  "每轮给模型看的候选问题数量（只给问题，不给回答正文）；0 关闭": "How many candidate questions the model sees each turn (questions only, never the answer text); 0 turns it off",
   "按需求设置": "Set up by need",
   "选一个最接近你用法的情况，只改这一页的开关，随时可以再换": "Pick the situation closest to how you work; this only changes the switches on this page",
   "长对话、概念问答": "Long chats, concept Q&A",
@@ -1708,6 +1710,23 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             h('option', { value: 'digest' }, t('只给开头')),
             h('option', { value: 'content' }, t('总是全文')),
             h('option', { value: 'off' }, t('关闭'))),
+        }),
+        settingRow({
+          key: 'attachChoices',
+          label: t('挂接候选数'),
+          hint: t('每轮给模型看的候选问题数量（只给问题，不给回答正文）；0 关闭'),
+          control: h('input', {
+            type: 'number',
+            min: '0',
+            step: '1',
+            style: { width: '72px' },
+            defaultValue: String(effective === undefined || effective.attachChoices === undefined ? 10 : effective.attachChoices),
+            onChange: function (event) {
+              var next = Number(event.target.value)
+              if (!Number.isFinite(next) || next < 0) return
+              saveSetting('attachChoices', Math.round(next))
+            },
+          }),
         }),
         settingRow({
           key: 'foldPolicy',
