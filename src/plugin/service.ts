@@ -124,6 +124,8 @@ export interface SessionState {
    * third or fourth "it" still reaches the answer that introduced the thing.
    */
   sticky: NodeId[]
+  /** Content features per node, computed once: node content is immutable. */
+  featureCache: Map<NodeId, Set<string>>
   /** Candidate ids offered to the model this turn, so a marker can only name one of them. */
   offered: NodeId[]
   /** Whether `[attach:root]` was on the table this turn. */
@@ -581,6 +583,7 @@ export class TokenTreeService {
     served: new Map(),
     sticky: [],
     offered: [],
+    featureCache: new Map(),
     offeredRoot: false,
       callArgs: new Map(),
       tokenCounts: new Map(),
@@ -993,7 +996,11 @@ export class TokenTreeService {
     const documentFrequency = new Map<string, number>()
     let nodeCount = 0
     for (const node of state.tree.nodes.values()) {
-      const features = contentFeatures(node.content)
+      let features = state.featureCache.get(node.id)
+      if (features === undefined) {
+        features = contentFeatures(node.content)
+        state.featureCache.set(node.id, features)
+      }
       nodeFeatures.set(node.id, features)
       // A question repeats the topic it asks about; counting it made "凸包" look common in the
       // very tree where it was the subject. Frequency describes the nodes that can own a topic.
