@@ -1,0 +1,150 @@
+{
+  "sessionId": "session-582dab4a-b2cd-4ef3-b6bc-6f277dd41c9d",
+  "rows": [
+    {
+      "turn": 1,
+      "expected": "root",
+      "marker": null,
+      "answer": "注意力机制让模型按相关性给各输入分配权重，聚焦关键信息、忽略噪声。\n\n不过，我在本轮上下文中没有找到任何“注入的提示”或",
+      "actual": "n1",
+      "ok": false
+    },
+    {
+      "turn": 2,
+      "expected": "n3",
+      "marker": null,
+      "answer": "把X乘三个可学矩阵得到Q、K、V；S=QKᵀ/√d只是矩阵乘法，对每行做exp再归一化就得到权重A，输出A·V。仍未见到",
+      "actual": "n3",
+      "ok": false
+    },
+    {
+      "turn": 3,
+      "expected": "n5",
+      "marker": null,
+      "answer": "我上一条回复里没有 y。如果你指的是输出，那么 y=A·V 就是该位置按权重 A 汇总得到的向量，每行一个。我仍未见到注",
+      "actual": "n5",
+      "ok": false
+    },
+    {
+      "turn": 4,
+      "expected": "n7",
+      "marker": null,
+      "answer": "不对：注意力权重是 A，y 只是加权求和得到的向量（y=A·V，也可以单指一行）；下标 i 表示序列中的位置，也就是上下",
+      "actual": "n7",
+      "ok": false
+    },
+    {
+      "turn": 5,
+      "expected": "n10",
+      "marker": "n3",
+      "answer": "y 会被送入后面的层：先经过前馈，再用线性层和 softmax 处理，用来预测下一个词。我没提过“n 轮查询”；如果你指",
+      "actual": "n9",
+      "ok": false
+    },
+    {
+      "turn": 6,
+      "expected": "n3",
+      "marker": "here",
+      "answer": "固定向量无法按需聚焦不同位置，这就是问题所在；自然思路是让每个位置算出与其他位置的相关度，再按相关度加权求和。\n\n[at",
+      "actual": "n11",
+      "ok": false
+    },
+    {
+      "turn": 7,
+      "expected": "n14",
+      "marker": "n7",
+      "answer": "内积=|a||b|cosθ，同时混合了长度和方向；要纯方向相似度就用余弦。注意力里 W 可以吸收长度，且每行 softm",
+      "actual": "n13",
+      "ok": false
+    },
+    {
+      "turn": 8,
+      "expected": "n14",
+      "marker": "here",
+      "answer": "基本对。补充两点：每个词需投成 Q、K、V 三份；“关联程度”就是 softmax 后的权重，最终含义是 V 的加权和。",
+      "actual": "n3",
+      "ok": false
+    },
+    {
+      "turn": 9,
+      "expected": "n18",
+      "marker": "n11",
+      "answer": "可以，但两点要注意：用 Q·K（各自乘可学矩阵）而不是原向量；排序后不要丢掉分数，要用 softmax 把分数变成权重，",
+      "actual": "root",
+      "ok": false
+    },
+    {
+      "turn": 10,
+      "expected": "n20",
+      "marker": "n13",
+      "answer": "对，你的直觉没问题。q、k、v 三者都从同一个 x 出发，只是各自乘以不同的矩阵；q·k 决定权重，v 被加权，这些矩阵",
+      "actual": "root",
+      "ok": false
+    },
+    {
+      "turn": 11,
+      "expected": "n22",
+      "marker": "n13",
+      "answer": "大体正确：QKV 矩阵和其他权重都可以学习；但 x 并不是逐句自由调整的，它是由词嵌入表按词查出的，整张表一起训练。\n\n",
+      "actual": "root",
+      "ok": false
+    },
+    {
+      "turn": 12,
+      "expected": "n24",
+      "marker": "n13",
+      "answer": "对，相加后得到 x_i，作为该词的输入；位置向量可以用可学向量或正弦函数，两者维度相同，逐元素相加。\n\n[attach:",
+      "actual": "root",
+      "ok": false
+    },
+    {
+      "turn": 13,
+      "expected": "n26",
+      "marker": "n15",
+      "answer": "差不多，但 s_ij 只是原始分数，还要对每个 j 做 softmax 归一化，才能得到“重视程度”，而且每行权重之和都",
+      "actual": "root",
+      "ok": false
+    },
+    {
+      "turn": 14,
+      "expected": "n28",
+      "marker": "n3",
+      "answer": "这一步就是把各个词的 V 按权重加起来，其中权重表示该词对其他词的关注程度；相加后得到该词的新表示，也就是按相关度把其他",
+      "actual": "root",
+      "ok": false
+    },
+    {
+      "turn": 15,
+      "expected": "n28",
+      "marker": "n17",
+      "answer": "我指的是拼接成的大矩阵，并非参数矩阵：W_V 是参数矩阵，v_i=x_iW_V，所有 v_i 拼成的矩阵才是被 A 乘的",
+      "actual": "root",
+      "ok": false
+    },
+    {
+      "turn": 16,
+      "expected": "n32",
+      "marker": "n17",
+      "answer": "对，Y 是每个词的新表示：A 决定“取多少”，V 提供“取什么”，相乘后相加，就得到混合后的内容。\n\n[attach:n",
+      "actual": "root",
+      "ok": false
+    },
+    {
+      "turn": 17,
+      "expected": "n34",
+      "marker": "n13",
+      "answer": "这个类比合理但不精确：乘 W 之后，各维已经混在一起，不再是“可食用”这类原特征。另外，Q 是我要找什么，K 是我亮出什",
+      "actual": "root",
+      "ok": false
+    },
+    {
+      "turn": 18,
+      "expected": "n36",
+      "marker": "n13",
+      "answer": "不能一对一引申：那一栏会按 W 各行的权重分摊到多个 Q 维。粗略说，它让 Q 偏向“寻找与吃/食物相关”的方向，但具体",
+      "actual": "root",
+      "ok": false
+    }
+  ],
+  "correct": 0
+}

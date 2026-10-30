@@ -1,0 +1,150 @@
+{
+  "sessionId": "session-4f2d66a7-893c-4dc7-a591-ea3fb3d9720a",
+  "rows": [
+    {
+      "turn": 1,
+      "expected": "root",
+      "marker": null,
+      "answer": "注意力机制就是加权求和：用 Q 和 K 算相似度得到权重，经 softmax 归一化后再加权 V，这是 Transfor",
+      "actual": "root",
+      "ok": true
+    },
+    {
+      "turn": 2,
+      "expected": "n3",
+      "marker": "n4",
+      "answer": "把每个词对应的 V 按相关性加权平均：注意力权重 = softmax(QKᵀ/√d)，Q、K 和 V 都由输入矩阵 X ",
+      "actual": "n4",
+      "ok": false
+    },
+    {
+      "turn": 3,
+      "expected": "n5",
+      "marker": "n6",
+      "answer": "y_i = Σ_j a_ij·v_j，它是第 i 个词的新向量，也是把各分词对应的 v 按注意力权重 a_ij 混合得到",
+      "actual": "n6",
+      "ok": false
+    },
+    {
+      "turn": 4,
+      "expected": "n7",
+      "marker": "n8",
+      "answer": "不对：这里的 i 指序列中的位置，不是词表里的词。分配权重是 a_ij，而 y_i 是对分配后的结果做汇总得到的表示。\n",
+      "actual": "n8",
+      "ok": false
+    },
+    {
+      "turn": 5,
+      "expected": "n10",
+      "marker": "n10",
+      "answer": "y 会输入 FFN 和残差连接，并层层堆叠，最后接到输出头；n 是序列长度，每个位置各产生一个 query。\n\n[att",
+      "actual": "n10",
+      "ok": false
+    },
+    {
+      "turn": 6,
+      "expected": "n3",
+      "marker": "here",
+      "answer": "问题：固定长度的向量记不住远距离依赖。思路：按需检索——用相似度选出相关位置，再加权取信息。\n\n[attach:here",
+      "actual": "n12",
+      "ok": false
+    },
+    {
+      "turn": 7,
+      "expected": "n14",
+      "marker": "n14",
+      "answer": "内积 = ‖a‖‖b‖cosθ，它会把模长也混进相似度；若要衡量纯相似度，可以用余弦，或对向量归一化、除以 √d。\n\n[",
+      "actual": "n14",
+      "ok": false
+    },
+    {
+      "turn": 8,
+      "expected": "n14",
+      "marker": "n8",
+      "answer": "对，但有两点：token 是子词，不是词；关联度只是中间权重，最终要得到的是包含语境的新向量。\n\n[attach:n8]",
+      "actual": "n8",
+      "ok": false
+    },
+    {
+      "turn": 9,
+      "expected": "n18",
+      "marker": "n18",
+      "answer": "思路对，但有两个地方要改：第 i 个词的向量要乘 Wq 得到 query，其他词的向量要乘 Wk 得到 key；算出的分",
+      "actual": "n18",
+      "ok": false
+    },
+    {
+      "turn": 10,
+      "expected": "n20",
+      "marker": "n20",
+      "answer": "对。补充一句：Q、K、V 都是通过学习得到的投影，并非现成的含义；真正被传递下去的是 v，q 和 k 只负责计算分数。\n",
+      "actual": "n20",
+      "ok": false
+    },
+    {
+      "turn": 11,
+      "expected": "n22",
+      "marker": "n22",
+      "answer": "基本对，但 x 并非每个词私有：它来自共享的 embedding 表；训练时更新的是这张表和 QKV 矩阵，推理时 x ",
+      "actual": "n22",
+      "ok": false
+    },
+    {
+      "turn": 12,
+      "expected": "n24",
+      "marker": "n24",
+      "answer": "对。p_i 只由位置决定；e(w) 和 p_i 相加后合进同一个向量，不同维度分别承载内容信息和位置信息。\n\n[atta",
+      "actual": "n24",
+      "ok": false
+    },
+    {
+      "turn": 13,
+      "expected": "n26",
+      "marker": "n20",
+      "answer": "对。但 s 要先除以 √d，再对 j 做 softmax，才是重视程度；编码器能看全句，解码器必须遮住未来。\n\n[att",
+      "actual": "n20",
+      "ok": false
+    },
+    {
+      "turn": 14,
+      "expected": "n28",
+      "marker": "n28",
+      "answer": "把各词的 v 按权重混合：y_i=Σ a_ij·v_j，即第 i 个词吸收相关词信息，得到含语境的新向量。\n\n[atta",
+      "actual": "n28",
+      "ok": false
+    },
+    {
+      "turn": 15,
+      "expected": "n28",
+      "marker": "n30",
+      "answer": "V 是 X 乘以 Wv 后的矩阵（由各词的 value 向量堆叠而成）；它既不是原始 x，也不是 Wv 本身。\n\n[at",
+      "actual": "n30",
+      "ok": false
+    },
+    {
+      "turn": 16,
+      "expected": "n32",
+      "marker": "n32",
+      "answer": "对，但 Y 的每一行都是 dv 维向量，而不是一个数量；它还需要乘 Wo、加上残差，使用多头时再拼接。\n\n[attach",
+      "actual": "n32",
+      "ok": false
+    },
+    {
+      "turn": 17,
+      "expected": "n34",
+      "marker": "n22",
+      "answer": "方向对，但别把各维度当成真实的语义标签：q 是“我在找什么”，k 是“我适合被谁匹配”，v 是“我实际给出的内容”。\n\n",
+      "actual": "n22",
+      "ok": false
+    },
+    {
+      "turn": 18,
+      "expected": "n36",
+      "marker": "n36",
+      "answer": "它被重新组合成检索方向：WQ 的每一列都把“可食用”和别的维度混合起来，变成“该找谁”的权重，不再保留“可食用”的含义。",
+      "actual": "n36",
+      "ok": false
+    }
+  ],
+  "correct": 1
+}
