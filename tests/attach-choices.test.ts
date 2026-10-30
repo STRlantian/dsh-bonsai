@@ -81,5 +81,5 @@ test('the instruction follows the attachPrompt mode', () => {
   assert.ok(run.service.attachChoices('choices', '它的误判率怎么算').includes('追问'), 'follow mode asks about follow-ups')
   run.service.updateSettings({ attachPrompt: 'any' })
   const anyBlock = run.service.attachChoices('choices', '它的误判率怎么算')
-  assert.ok(anyBlock.includes('不限于代词指代'), 'any mode widens the question: ' + anyBlock)
+  assert.ok(anyBlock.includes('[attach:root]') && anyBlock.includes('[attach:here]'), 'any mode offers all three: ' + anyBlock)
 })

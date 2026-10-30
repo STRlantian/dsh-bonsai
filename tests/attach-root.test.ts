@@ -61,3 +61,15 @@ test('a root marker is ignored when the turn did not offer it', () => {
   assert.notEqual(question.parentId, run.tree().rootId, 'follow mode cannot send it to the root')
   assert.notEqual(question.id, before?.id)
 })
+
+test('[attach:here] keeps a requirement turn on the current line instead of opening a branch', () => {
+  const run = conversation()
+  run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小决定。')
+  run.service.attachChoices('root-marker', '接下来我来问，你只判断对错')
+  run.turn('接下来我来问，你只判断对错', 2, '好。[attach:here]')
+  const tree = run.tree()
+  const question = [...tree.nodes.values()].filter(node => node.kind === 'question').at(-1)
+  assert.notEqual(question.parentId, tree.rootId, 'a requirement turn does not open a root branch')
+  const answer = [...tree.nodes.values()].filter(node => node.kind === 'answer' && node.parentId === question.id)[0]
+  assert.ok(answer !== undefined && !answer.content.includes('[attach:'), 'the marker is stripped')
+})

@@ -145,6 +145,8 @@ export interface SessionState {
   offered: NodeId[]
   /** Whether `[attach:root]` was on the table this turn. */
   offeredRoot?: boolean
+  /** Where the question would sit without the new-topic gate, for `[attach:here]`. */
+  defaultParentId?: NodeId
   /** Set when a long node was served as an excerpt or a referent line, so the hint can say so. */
   sawReduction?: boolean
   /** Measured token count per message id, so a turn only pays for new messages. */
@@ -913,6 +915,9 @@ export class TokenTreeService {
     const embedding = embedText(text, this.config.embeddingDimension)
     const placement = this.pickQuestionParent(state, text, embedding)
     const parentId = placement.parentId
+    // The node the turn would extend if it were not for the new-topic gate: [attach:here] means
+    // "stay on this line", which is this node rather than the root.
+    state.defaultParentId = this.visibleParent(state.tree, state.tree.currentId)
     const attached = placement.manual === true || parentId !== state.tree.currentId
     const node = state.tree.addNode({
       kind: 'question',
@@ -1615,8 +1620,9 @@ export class TokenTreeService {
     state.offeredRoot = anyMode
     const instruction = anyMode
       ? [
-        '[token-tree] 本轮的落点由你判：若依赖下面某一条（不限于代词指代），在回答最后单独一行写 [attach:nX]（X 取自列表）；',
-        '若是新话题（与下面都无关），写 [attach:root]。只给问题，回答内容按需用 retrieve_context 取。',
+        '[token-tree] 本轮的落点由你判，在回答最后单独一行写一种：',
+        '  [attach:nX]  依赖下面某一条（含代词指代）；[attach:root] 新话题；[attach:here] 要求/元指令（让我换个方式来问），留在当前这条线上。',
+        '只给问题，回答内容按需用 retrieve_context 取。',
       ]
       : [
         '[token-tree] 若本轮是在追问下面某一条，请在回答最后单独一行写 [attach:nX]（X 取自列表）；',
@@ -1653,11 +1659,24 @@ export class TokenTreeService {
    * @returns The text without the marker.
    */
   private applyAttachMarker(state: SessionState, text: string): string {
-    const match = /\[attach:(n\d+|root)\]/.exec(text)
+    const match = /\[attach:(n\d+|root|here)\]/.exec(text)
     if (match === null) return text
     const cleaned = text.replace(match[0], '').trim()
     const target = match[1]
     const questionId = state.pendingQuestionId
+    if (target === 'here') {
+      if (state.offeredRoot !== true || questionId === undefined) return cleaned
+      const home = state.defaultParentId
+      if (home === undefined || questionId === home || !state.tree.nodes.has(home)) return cleaned
+      try {
+        state.tree.reparent(questionId, home)
+        this.remember({ session: state.sessionId, action: 'reparent', nodeId: questionId, parentId: home, at: Date.now() })
+        this.logger.info(`token-tree: model treated ${questionId} as a requirement turn`)
+      } catch (error) {
+        this.logger.debug('token-tree: here marker could not be applied: ' + String(error))
+      }
+      return cleaned
+    }
     if (target === 'root') {
       if (state.offeredRoot !== true || questionId === undefined) return cleaned
       const rootId = state.tree.rootId
