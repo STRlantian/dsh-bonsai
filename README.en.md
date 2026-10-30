@@ -112,7 +112,7 @@ Three presets sit at the top of the settings page, and every value is adjustable
 | `foldScope` | `turns` | `turns` folds whole turns, `tools` folds only tool output |
 | `attachChoices` | `10` | How many candidate questions the model sees each turn (questions only); `0` turns it off |
 | `attachPrompt` | `any` | `any`: dependency is `[attach:nX]`, new topic is `[attach:root]`; `follow`: anaphora only |
-| `mandatoryContext` | `true` | Retrieval always includes the answer a turn hangs under plus its question |
+| `mandatoryContext` | `true` | Force-injects the answer a turn hangs under plus its question; this is a wiring guarantee (~99%), not a scoring gain |
 | `fileRegion` | `auto` | Retrieval returns the current text of files this session read (auto/digest/content/off) |
 
 The placeholder left behind tells the model where the text went:
@@ -200,7 +200,7 @@ tool/result   ─┘
 
 ## Honest limits
 
-- **The retrieval gain is not proven.** Several experiments found no recall benefit from
+- **Retrieval has not shown a gain.** Replaying 219 questions in production order: the parent answer appears in the result 23% of the time and ranks first 11%; in experiment 2 the injected and plain arms both scored 5/5. `mandatoryContext` reaches ~99% by force, not by ranking.
   “tree + retrieve_context” at a 20k context, so the default configuration does not inject.
 - **Folding hides the folded text from the model.** In the experiment it answered honestly (“that
   is not in this conversation”) instead of making something up — but it does not always call

@@ -49,23 +49,38 @@ const session = { id, snapshotEvents: () => events }
 
 const samples = []
 for (const event of events) {
-  if (event.type === 'user/message') {
-    const content = (event.data?.content ?? []).filter(part => part?.type === 'text').map(part => part.text).join('\n')
-    const isContext = /^Current runtime context|^Time sampled|^\[/.test(content.trim())
+  const isUserMessage = event.type === 'user/message'
+  const content = isUserMessage
+    ? (event.data?.content ?? []).filter(part => part?.type === 'text').map(part => part.text).join('\n')
+    : ''
+  const isContext = /^Current runtime context|^Time sampled|^\[/.test(content.trim())
+  // Ingest first: this is the order the model sees (agent/pre-step runs after the message lands).
+  if (isUserMessage) service.handleEvent(session, event)
+  if (isUserMessage) {
     if (!isContext && content.trim().length > 0 && service.stateOf(id).tree.nodes.size > 1) {
       const result = service.retrieve(id, { query: content })
+      // The question node does not exist yet: this runs before the message is ingested, so the
+      // query is remembered and matched to its node after the replay.
       samples.push({
         text: content.replace(/\s+/g, ' ').slice(0, 30),
+        query: content,
         selected: (result.selected ?? []).map(entry => entry.nodeId),
         tokens: result.tokensUsed ?? 0,
       })
     }
+  } else {
+    service.handleEvent(session, event)
   }
-  service.handleEvent(session, event)
 }
 
 const tree = service.stateOf(id).tree
 const questions = [...tree.nodes.values()].filter(node => node.kind === 'question')
+// Match a sample to the question node carrying the same text, not by list position.
+const byText = new Map()
+for (const node of questions) {
+  const key = node.content.replace(/\s+/g, ' ').slice(0, 30)
+  if (!byText.has(key)) byText.set(key, node)
+}
 const answerOf = question => {
   const parent = question.parentId === null ? undefined : tree.nodes.get(question.parentId)
   if (parent === undefined) return undefined
@@ -84,9 +99,8 @@ let compared = 0
 let rank1 = 0
 let inTop = 0
 let missing = 0
-for (let index = 0; index < samples.length; index++) {
-  const sample = samples[index]
-  const question = questions[index + 1]
+for (const sample of samples) {
+  const question = byText.get(sample.text)
   if (question === undefined) continue
   const answer = answerOf(question)
   if (answer === undefined) continue
