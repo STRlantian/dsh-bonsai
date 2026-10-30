@@ -1,0 +1,24 @@
+{
+  "session": "2ba794ae",
+  "note": "Learning session (attention mechanism). expected = the answer node that introduced the concept the question asks about; root = new topic. Ambiguous entries are marked so they can be excluded from a strict score.",
+  "labels": [
+    { "question": "n2", "expected": "root", "confidence": "high", "why": "开场，新话题" },
+    { "question": "n4", "expected": "n3", "confidence": "high", "why": "换一种讲法讲上一轮的内容" },
+    { "question": "n6", "expected": "n5", "confidence": "high", "why": "第一部分指 n5 的结构，y 在 n5 里出现" },
+    { "question": "n8", "expected": "n7", "confidence": "high", "why": "y_i 是在 n7 详细展开的" },
+    { "question": "n11", "expected": "n10", "confidence": "high", "why": "追问 n10 里提到的 n 轮" },
+    { "question": "n13", "expected": "n3", "confidence": "high", "why": "回到最初的动机，重新推一遍" },
+    { "question": "n15", "expected": "n14", "confidence": "high", "why": "质疑 n14 里的断言" },
+    { "question": "n17", "expected": "n14", "confidence": "medium", "why": "开始苏格拉底式提问，仍属于 n14 那条推理线" },
+    { "question": "n19", "expected": "n18", "confidence": "high", "why": "接着 n18 的修正继续" },
+    { "question": "n21", "expected": "n20", "confidence": "high", "why": "q/k/v 在 n20 里被引入" },
+    { "question": "n23", "expected": "n22", "confidence": "medium", "why": "优化对象承接 n22 的 QKV 讨论" },
+    { "question": "n25", "expected": "n24", "confidence": "high", "why": "e(w)+p 承接 n24 的 x 讨论" },
+    { "question": "n27", "expected": "n26", "confidence": "high", "why": "接着 n26 的 x_i 定义" },
+    { "question": "n29", "expected": "n28", "confidence": "high", "why": "A 在 n28 里被定义" },
+    { "question": "n31", "expected": "n28", "confidence": "medium", "why": "V 的指代对象在 n28 引入" },
+    { "question": "n33", "expected": "n32", "confidence": "high", "why": "接着 n32 的 A*V 讨论" },
+    { "question": "n35", "expected": "n34", "confidence": "high", "why": "接着 n34 的 Y 继续推" },
+    { "question": "n37", "expected": "n36", "confidence": "high", "why": "苹果的例子接 n36 的特征讨论" }
+  ]
+}

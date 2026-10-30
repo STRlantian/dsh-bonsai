@@ -1,4 +1,17 @@
 /**
+ * Record an event's sequence, ignoring envelopes that carry none.
+ *
+ * `Math.max(-1, undefined)` is NaN, and every later `seq <= lastSeq` then evaluates false: that is
+ * how one snapshot event replayed a whole session twice.
+ * @param state - session state to advance.
+ * @param seq - sequence of the event just applied, if any.
+ */
+function advanceSeq(state: { lastSeq: number }, seq: number | undefined): void {
+  if (typeof seq !== 'number' || !Number.isFinite(seq)) return
+  if (seq > state.lastSeq) state.lastSeq = seq
+}
+
+/**
  * The session-scoped memory service.
  *
  * One `TokenTreeService` instance holds one tree per session. It is the only
@@ -94,6 +107,8 @@ export interface SessionState {
   backfilled: boolean
   /** Highest event sequence already folded, so a replay cannot double-apply. */
   lastSeq: number
+  /** Envelopes already applied, so a replay that re-delivers them cannot duplicate nodes. */
+  applied: WeakSet<object>
   /** Observations of the current turn, oldest first. */
   observations: Observation[]
   /** Tool names by call id, filled on `tool/call`. */
@@ -576,6 +591,7 @@ export class TokenTreeService {
       skipNextAnswer: false,
       backfilled: false,
       lastSeq: -1,
+    applied: new WeakSet(),
       observations: [],
       callNames: new Map(),
     readPaths: new Map(),
@@ -638,16 +654,21 @@ export class TokenTreeService {
       const history = session.snapshotEvents?.() ?? []
       if (history.length > 0) {
         for (const entry of history) {
+          if (state.applied.has(entry)) continue
           this.applyEvent(state, entry)
-          state.lastSeq = Math.max(state.lastSeq, entry.seq)
+          state.applied.add(entry)
+          advanceSeq(state, entry.seq)
         }
         this.logger.info(`token-tree: replayed ${history.length} event(s) for session ${session.id}`)
-        // The triggering event is normally the last one in that replay already.
-        if (event.seq <= state.lastSeq) return
       }
     }
+    // A replay can hand back events the snapshot already contained. Applying one again duplicates
+    // nodes (a doubled first turn), so a re-delivered envelope is dropped. Identity, not sequence:
+    // a snapshot event carries no seq, and tests reuse seq values.
+    if (state.applied.has(event)) return
     this.applyEvent(state, event)
-    state.lastSeq = Math.max(state.lastSeq, event.seq)
+    state.applied.add(event)
+    advanceSeq(state, event.seq)
   }
 
   /**
