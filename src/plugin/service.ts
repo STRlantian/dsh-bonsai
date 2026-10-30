@@ -370,6 +370,8 @@ export class TokenTreeService {
   mandatoryContext: boolean
   /** How many candidate nodes the hint offers the model. */
   attachChoices: number
+  /** What the choices block asks for. */
+  attachPrompt: string
   } {
     const overrides = this.settings?.all() ?? {}
     return {
@@ -385,6 +387,7 @@ export class TokenTreeService {
       foldScope: overrides.foldScope ?? this.config.foldScope,
       foldPolicy: overrides.foldPolicy ?? this.config.foldPolicy,
       fileRegion: (overrides.fileRegion ?? this.config.fileRegion) as FileRegionMode,
+      attachPrompt: overrides.attachPrompt ?? this.config.attachPrompt,
       attachChoices: overrides.attachChoices ?? this.config.attachChoices,
       mandatoryContext: overrides.mandatoryContext ?? this.config.mandatoryContext,
     }
@@ -510,6 +513,7 @@ export class TokenTreeService {
         foldScope: this.config.foldScope,
         foldPolicy: this.config.foldPolicy,
         fileRegion: this.config.fileRegion as FileRegionMode,
+        attachPrompt: this.config.attachPrompt,
         attachChoices: this.config.attachChoices,
         mandatoryContext: this.config.mandatoryContext,
         hintAboveTokens: this.config.hintAboveTokens,
@@ -1566,11 +1570,17 @@ export class TokenTreeService {
     if (picked.length === 0) return ''
     state.offered = picked.map(entry => entry.id)
     const rows = picked.map(entry => '- ' + entry.id + ' · ' + this.candidateLabel(tree, entry.id))
-    return [
-      '[token-tree] 若本轮是在追问下面某一条，请在回答最后单独一行写 [attach:nX]（X 取自列表）；',
-      '若只是延续上一条，或都不是，就不要写。只给问题，回答内容按需用 retrieve_context 取。',
-      ...rows,
-    ].join('\n')
+    const anyMode = this.effective().attachPrompt === 'any'
+    const instruction = anyMode
+      ? [
+        '[token-tree] 若本轮的意图明确依赖下面某一条（不限于代词指代），请在回答最后单独一行写 [attach:nX]（X 取自列表）；',
+        '若与它们都无关，就不要写。只给问题，回答内容按需用 retrieve_context 取。',
+      ]
+      : [
+        '[token-tree] 若本轮是在追问下面某一条，请在回答最后单独一行写 [attach:nX]（X 取自列表）；',
+        '若只是延续上一条，或都不是，就不要写。只给问题，回答内容按需用 retrieve_context 取。',
+      ]
+    return [...instruction, ...rows].join('\n')
   }
 
   /**
@@ -2020,7 +2030,10 @@ export class TokenTreeService {
   /** The tool names the user asked to hide. */
   toolDeny(): string[] {
     const override = this.settings?.all().toolDeny
-    return override ?? []
+    // Measured across 201 sessions: tree_mark and tree_focus were never called, while their schemas
+    // cost about 570 tokens per request. The supervisor prompt names tree_query/tree_reflect, so
+    // those stay.
+    return override ?? ['tree_mark', 'tree_focus']
   }
 
   /**

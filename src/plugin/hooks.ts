@@ -209,15 +209,6 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
  * @param ctx - context scoped to the compaction service.
  * @param service - tree service holding the measurement.
  */
-export function installCompactionHook(ctx: ContextLike, service: TokenTreeService): void {
-  ctx.on('agent/turn-stopping', (payload) => {
-    try {
-        } catch (error) {
-      ctx.logger.warn(`token-tree: auto-compaction failed for session ${payload.agent?.session?.id}: ${describe(error)}`)
-    }
-  })
-  ctx.logger.info('token-tree: auto-compaction listener mounted')
-}
 
 
 /**

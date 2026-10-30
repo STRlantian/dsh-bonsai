@@ -1,0 +1,200 @@
+{
+  "mode": "follow",
+  "sessions": 2,
+  "turns": 20,
+  "continuation": {
+    "total": 10,
+    "marked": 10,
+    "correct": 0
+  },
+  "newTopic": {
+    "total": 10,
+    "marked": 4
+  },
+  "tokens": {
+    "input": 13150,
+    "cacheRead": 432384,
+    "output": 16295,
+    "steps": 30
+  },
+  "runs": [
+    {
+      "sessionId": "session-61f9bca3-47ce-4f67-989c-d1c70872ca09",
+      "rows": [
+        {
+          "kind": "continuation",
+          "expected": "n7",
+          "marker": "n3",
+          "valid": true,
+          "correct": false,
+          "offered": 5
+        },
+        {
+          "kind": "new-topic",
+          "expected": null,
+          "marker": null,
+          "valid": null,
+          "correct": true,
+          "offered": 6
+        },
+        {
+          "kind": "continuation",
+          "expected": "n9",
+          "marker": "n5",
+          "valid": true,
+          "correct": false,
+          "offered": 7
+        },
+        {
+          "kind": "new-topic",
+          "expected": null,
+          "marker": null,
+          "valid": null,
+          "correct": true,
+          "offered": 8
+        },
+        {
+          "kind": "continuation",
+          "expected": "n11",
+          "marker": "n7",
+          "valid": true,
+          "correct": false,
+          "offered": 9
+        },
+        {
+          "kind": "new-topic",
+          "expected": null,
+          "marker": null,
+          "valid": null,
+          "correct": true,
+          "offered": 10
+        },
+        {
+          "kind": "continuation",
+          "expected": "n13",
+          "marker": "n9",
+          "valid": true,
+          "correct": false,
+          "offered": 10
+        },
+        {
+          "kind": "new-topic",
+          "expected": null,
+          "marker": null,
+          "valid": null,
+          "correct": true,
+          "offered": 10
+        },
+        {
+          "kind": "continuation",
+          "expected": "n15",
+          "marker": "n11",
+          "valid": true,
+          "correct": false,
+          "offered": 10
+        },
+        {
+          "kind": "new-topic",
+          "expected": null,
+          "marker": null,
+          "valid": null,
+          "correct": true,
+          "offered": 10
+        }
+      ],
+      "steps": 15,
+      "input": 7815,
+      "cacheRead": 216832,
+      "output": 8060
+    },
+    {
+      "sessionId": "session-3ebb4d49-cd76-4528-a675-eec1510d4744",
+      "rows": [
+        {
+          "kind": "continuation",
+          "expected": "n7",
+          "marker": "n3",
+          "valid": true,
+          "correct": false,
+          "offered": 5
+        },
+        {
+          "kind": "new-topic",
+          "expected": null,
+          "marker": null,
+          "valid": null,
+          "correct": true,
+          "offered": 6
+        },
+        {
+          "kind": "continuation",
+          "expected": "n9",
+          "marker": "n5",
+          "valid": true,
+          "correct": false,
+          "offered": 7
+        },
+        {
+          "kind": "new-topic",
+          "expected": null,
+          "marker": "n3",
+          "valid": true,
+          "correct": false,
+          "offered": 8
+        },
+        {
+          "kind": "continuation",
+          "expected": "n11",
+          "marker": "n7",
+          "valid": true,
+          "correct": false,
+          "offered": 9
+        },
+        {
+          "kind": "new-topic",
+          "expected": null,
+          "marker": "n7",
+          "valid": true,
+          "correct": false,
+          "offered": 10
+        },
+        {
+          "kind": "continuation",
+          "expected": "n13",
+          "marker": "n9",
+          "valid": true,
+          "correct": false,
+          "offered": 10
+        },
+        {
+          "kind": "new-topic",
+          "expected": null,
+          "marker": "n9",
+          "valid": true,
+          "correct": false,
+          "offered": 10
+        },
+        {
+          "kind": "continuation",
+          "expected": "n15",
+          "marker": "n11",
+          "valid": true,
+          "correct": false,
+          "offered": 10
+        },
+        {
+          "kind": "new-topic",
+          "expected": null,
+          "marker": "n29",
+          "valid": true,
+          "correct": false,
+          "offered": 10
+        }
+      ],
+      "steps": 15,
+      "input": 5335,
+      "cacheRead": 215552,
+      "output": 8235
+    }
+  ]
+}

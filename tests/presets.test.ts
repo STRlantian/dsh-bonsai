@@ -36,8 +36,9 @@ test('the presets differ in exactly the knobs they advertise', () => {
   assert.equal(conservative.settings.foldAboveTokens, 60000)
   assert.equal(balanced.settings.foldAboveTokens, 40000)
   assert.equal(aggressive.settings.foldAboveTokens, 20000)
-  assert.equal(conservative.settings.toolDeny, null, 'conservative hides nothing')
-  assert.equal(balanced.settings.toolDeny, null, 'balanced hides nothing either')
+  // An empty list is the explicit "show every tool"; only undefined falls back to the default.
+  assert.deepEqual(conservative.settings.toolDeny, [], 'conservative hides nothing')
+  assert.deepEqual(balanced.settings.toolDeny, [], 'balanced hides nothing either')
   assert.ok(Array.isArray(aggressive.settings.toolDeny), 'aggressive hides tools')
   assert.ok((aggressive.settings.toolDeny as string[]).includes('workflow'))
   assert.equal(presetOf('nope'), undefined)

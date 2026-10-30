@@ -107,6 +107,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "折叠范围": "Fold scope",
   "每轮折叠全部历史": "Fold all history every turn",
   "挂接候选数": "Attach candidates",
+  "挂接提示范围": "Attach prompt scope",
+  "任何明确依赖（默认）": "Any clear dependency (default)",
+  "仅追问": "Follow-ups only",
+  "仅追问：只在指代时请模型点名；任何明确依赖：任何依赖都点名（实测误标更少）": "follow: ask the model only for anaphora; any: ask whenever the dependency is clear (fewer false marks measured)",
   "每轮给模型看的候选问题数量（只给问题，不给回答正文）；0 关闭": "How many candidate questions the model sees each turn (questions only, never the answer text); 0 turns it off",
   "按需求设置": "Set up by need",
   "选一个最接近你用法的情况，只改这一页的开关，随时可以再换": "Pick the situation closest to how you work; this only changes the switches on this page",
@@ -1710,6 +1714,17 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             h('option', { value: 'digest' }, t('只给开头')),
             h('option', { value: 'content' }, t('总是全文')),
             h('option', { value: 'off' }, t('关闭'))),
+        }),
+        settingRow({
+          key: 'attachPrompt',
+          label: t('挂接提示范围'),
+          hint: t('仅追问：只在指代时请模型点名；任何明确依赖：任何依赖都点名（实测误标更少）'),
+          control: h('select', {
+            value: effective === undefined || effective.attachPrompt === undefined ? 'any' : effective.attachPrompt,
+            onChange: function (event) { saveSetting('attachPrompt', event.target.value) },
+          },
+            h('option', { value: 'any' }, t('任何明确依赖（默认）')),
+            h('option', { value: 'follow' }, t('仅追问'))),
         }),
         settingRow({
           key: 'attachChoices',

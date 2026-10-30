@@ -35,7 +35,7 @@ test('the choices block lists questions, not answers', () => {
   const block = run.service.attachChoices('choices', '它的误判率怎么算')
   assert.ok(block.includes('布隆过滤器的误判率由什么决定'), 'the question is the label: ' + block)
   assert.ok(!block.includes('位数组大小'), 'the generated answer text is not included')
-  assert.ok(block.includes('若本轮是在追问'), 'the instruction is there')
+  assert.ok(block.includes('[attach:nX]'), 'the instruction is there')
   const rows = block.split('\n').filter(line => line.startsWith('- '))
   assert.ok(rows.length <= 5 && rows.length >= 1, 'within the limit: ' + rows.length)
 })
@@ -72,4 +72,14 @@ test('setting the count to zero disables the block', () => {
   const run = conversation()
   run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小决定。')
   assert.equal(run.service.attachChoices('choices', '它的误判率怎么算', 0), '', 'no block when the count is 0')
+})
+
+test('the instruction follows the attachPrompt mode', () => {
+  const run = conversation()
+  run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小决定。')
+  run.service.updateSettings({ attachPrompt: 'follow' })
+  assert.ok(run.service.attachChoices('choices', '它的误判率怎么算').includes('追问'), 'follow mode asks about follow-ups')
+  run.service.updateSettings({ attachPrompt: 'any' })
+  const anyBlock = run.service.attachChoices('choices', '它的误判率怎么算')
+  assert.ok(anyBlock.includes('不限于代词指代'), 'any mode widens the question: ' + anyBlock)
 })

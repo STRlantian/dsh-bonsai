@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** Keys the settings surface may override. */
-const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'attachChoices', 'admitRelevance', 'summaryMatch'] as const
+const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'attachChoices', 'attachPrompt', 'admitRelevance', 'summaryMatch'] as const
 
 export interface SettingsOverrides {
   /** Push a memory block every turn instead of the one-line hint. */
@@ -49,6 +49,8 @@ export interface SettingsOverrides {
   /** What retrieval may return from files the session read: off, digest, content, or auto by budget. */
   fileRegion?: string
   /** Candidate count offered to the model (0 = off). */
+  /** `follow` asks for follow-ups only; `any` also accepts a new turn with a clear dependency. */
+  attachPrompt?: string
   attachChoices?: number
   /** Always include the answer a turn depends on. */
   mandatoryContext?: boolean
@@ -101,6 +103,11 @@ function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number 
     const scope = value.trim().toLowerCase()
     return scope === 'tools' || scope === 'turns' ? scope : undefined
   }
+  if (key === 'attachPrompt') {
+    if (typeof value !== 'string') return undefined
+    const mode = value.trim().toLowerCase()
+    return mode === 'any' || mode === 'follow' ? mode : undefined
+  }
   if (key === 'attachChoices') {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined
     return value
@@ -125,7 +132,9 @@ function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number 
   if (key === 'toolDeny') {
     if (!Array.isArray(value)) return undefined
     const names = value.filter((entry): entry is string => typeof entry === 'string' && entry.trim() !== '').map(entry => entry.trim())
-    return names.length === 0 ? undefined : [...new Set(names)]
+    // An explicit empty list means "hide nothing"; leaving the key out means "no opinion", which
+    // falls back to the shipped default. Clearing is done with null, not with [].
+    return [...new Set(names)]
   }
   if (key === 'compactionIndex') {
     if (typeof value !== 'boolean') return undefined

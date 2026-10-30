@@ -1,0 +1,77 @@
+{
+  "sessionId": "session-2e084630-74fc-498e-9770-13ae11c9b7e5",
+  "turns": 6,
+  "markers": 3,
+  "validMarkers": 3,
+  "reparents": 1,
+  "rows": [
+    {
+      "step": "topic-a",
+      "marker": null,
+      "offeredCount": 0,
+      "offered": [],
+      "valid": null,
+      "answer": "已记下：服务 A 的端口是 4107。 这类服务通常是常驻的后端进程，监听固定端口，等待客户端接入。常见职责包括：接收并校验请求，执行业务逻辑（查询、计算、写库"
+    },
+    {
+      "step": "topic-b",
+      "marker": null,
+      "offeredCount": 1,
+      "offered": [
+        "n3"
+      ],
+      "valid": null,
+      "answer": "已记下：服务 B 的端口是 5108。 若 B 与缓存层相连，典型结构是：B 在自己的上游和数据库之间加一层缓存。读请求先查缓存，命中就直接返回；未命中再回源读"
+    },
+    {
+      "step": "anaphora-1",
+      "marker": "n5",
+      "offeredCount": 2,
+      "offered": [
+        "n3",
+        "n5"
+      ],
+      "valid": true,
+      "answer": "5108 [attach:n5]"
+    },
+    {
+      "step": "anaphora-2",
+      "marker": "n5",
+      "offeredCount": 3,
+      "offered": [
+        "n5",
+        "n3",
+        "n7"
+      ],
+      "valid": true,
+      "answer": "仅凭端口号无法判断，需要看它的调用链与配置；如果读多写少且能容忍短暂不一致，它对缓存的依赖通常偏强。 [attach:n5]"
+    },
+    {
+      "step": "new-topic",
+      "marker": null,
+      "offeredCount": 4,
+      "offered": [
+        "n9",
+        "n5",
+        "n3",
+        "n7"
+      ],
+      "valid": null,
+      "answer": "虚拟节点是把每个物理节点映射成哈希环上的多个副本点，例如每个节点对应 100–1000 个，使数据分布更均匀，避免节点较少时出现明显倾斜。节点增减时，只迁移其虚"
+    },
+    {
+      "step": "anaphora-3",
+      "marker": "n11",
+      "offeredCount": 5,
+      "offered": [
+        "n11",
+        "n9",
+        "n5",
+        "n3",
+        "n7"
+      ],
+      "valid": true,
+      "answer": "主要缺点是虚拟节点数量多会放大路由表与元数据，节点变更时的重平衡、迁移和心跳维护开销也随之上升。 [attach:n11]"
+    }
+  ]
+}

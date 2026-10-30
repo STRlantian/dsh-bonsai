@@ -149,6 +149,8 @@ export interface ResolvedConfig {
   fileRegion: string
   /** Whether retrieval always includes the answer a turn depends on. */
   /** How many candidate nodes the hint offers the model (0 = no choices block). */
+  /** What the choices block asks for: follow-ups only, or any turn with a clear dependency. */
+  attachPrompt: string
   attachChoices: number
   mandatoryContext: boolean
   /** Whether to supervise failures. */
@@ -371,6 +373,11 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         conservativeBudgetRatio: scalar(source, 'conservativeBudgetRatio', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input > 0 && input <= 1, issues, 'a number within (0, 1]') ?? 0.85,
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 40000,
+    attachPrompt: (() => {
+      const mode = scalar(source, 'attachPrompt', (input): input is string => typeof input === 'string', issues, 'a string')
+      // Measured: `any` wrongly marked 0/10 new topics, `follow` 4/10.
+      return mode === 'follow' ? 'follow' : 'any'
+    })(),
     attachChoices: scalar(source, 'attachChoices', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 10,
     mandatoryContext: scalar(source, 'mandatoryContext', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
     fileRegion: (() => {
