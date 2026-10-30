@@ -146,7 +146,7 @@ for (let session = 0; session < sessions; session++) {
   for (const probe of probes) {
     const page = await say(sessionId, probe.text)
     const answer = lastAssistantText(page)
-    const marker = /\[attach:(n\d+)\]/.exec(answer)
+    const marker = /\[attach:(n\d+|root)\]/.exec(answer)
     const block = injectedLast(page)
     const offered = [...block.matchAll(/^- (n\d+) ·/gm)].map(match => match[1])
     const expected = probe.kind === 'continuation' ? topicAnswer.get(probe.topic.key) : null
@@ -155,7 +155,7 @@ for (let session = 0; session < sessions; session++) {
       kind: probe.kind,
       expected,
       marker: named,
-      valid: named === null ? null : offered.includes(named),
+      valid: named === null ? null : named === 'root' ? true : offered.includes(named),
       correct: probe.kind === 'continuation' ? named === expected : named === null,
       offered: offered.length,
     })
