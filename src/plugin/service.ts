@@ -126,6 +126,8 @@ export interface SessionState {
   sticky: NodeId[]
   /** Candidate ids offered to the model this turn, so a marker can only name one of them. */
   offered: NodeId[]
+  /** Whether `[attach:root]` was on the table this turn. */
+  offeredRoot?: boolean
   /** Set when a long node was served as an excerpt or a referent line, so the hint can say so. */
   sawReduction?: boolean
   /** Measured token count per message id, so a turn only pays for new messages. */
@@ -579,6 +581,7 @@ export class TokenTreeService {
     served: new Map(),
     sticky: [],
     offered: [],
+    offeredRoot: false,
       callArgs: new Map(),
       tokenCounts: new Map(),
       turn: 0,
@@ -1124,7 +1127,11 @@ export class TokenTreeService {
   /** Turn one assistant message into an answer node. */
   private ingestAssistantMessage(state: SessionState, data: Record<string, unknown>, at: number): void {
     const message = asMessage(data.message) ?? {}
+    // The marker needs the pending question to move it; the answer then belongs to that question
+    // even after it moved, so the id is kept until the node is created.
+    const questionParent = state.pendingQuestionId
     const text = this.applyAttachMarker(state, textOfContent(message.content))
+    // `pendingQuestionId` stays set: `settleTurn` uses it to drop the question of an aborted turn.
     if (text.length === 0) return
     if (state.skipNextAnswer) {
       state.skipNextAnswer = false
@@ -1139,6 +1146,9 @@ export class TokenTreeService {
     const reasoningTokens = reasoning.length === 0 ? 0 : this.countTokens(reasoning)
     state.tree.addNode({
       kind: 'answer',
+      ...(questionParent === undefined || !state.tree.nodes.has(questionParent)
+        ? {}
+        : { parentId: questionParent }),
       content: text,
       tokens: this.countTokens(text) + reasoningTokens,
       timestamp: at,
@@ -1556,6 +1566,7 @@ export class TokenTreeService {
   attachChoices(sessionId: string, query: string, limit = this.effective().attachChoices): string {
     const state = this.stateOf(sessionId)
     state.offered = []
+    state.offeredRoot = false
     if (limit <= 0 || query.trim().length === 0) return ''
     const tree = state.tree
     const embedding = embedText(query, this.config.embeddingDimension)
@@ -1571,10 +1582,13 @@ export class TokenTreeService {
     state.offered = picked.map(entry => entry.id)
     const rows = picked.map(entry => '- ' + entry.id + ' · ' + this.candidateLabel(tree, entry.id))
     const anyMode = this.effective().attachPrompt === 'any'
+    // `any` owns the whole decision: a dependency is named as [attach:nX], a new topic as
+    // [attach:root]. There is no third switch: this is what the mode means.
+    state.offeredRoot = anyMode
     const instruction = anyMode
       ? [
-        '[token-tree] 若本轮的意图明确依赖下面某一条（不限于代词指代），请在回答最后单独一行写 [attach:nX]（X 取自列表）；',
-        '若与它们都无关，就不要写。只给问题，回答内容按需用 retrieve_context 取。',
+        '[token-tree] 本轮的落点由你判：若依赖下面某一条（不限于代词指代），在回答最后单独一行写 [attach:nX]（X 取自列表）；',
+        '若是新话题（与下面都无关），写 [attach:root]。只给问题，回答内容按需用 retrieve_context 取。',
       ]
       : [
         '[token-tree] 若本轮是在追问下面某一条，请在回答最后单独一行写 [attach:nX]（X 取自列表）；',
@@ -1611,11 +1625,24 @@ export class TokenTreeService {
    * @returns The text without the marker.
    */
   private applyAttachMarker(state: SessionState, text: string): string {
-    const match = /\[attach:(n\d+)\]/.exec(text)
+    const match = /\[attach:(n\d+|root)\]/.exec(text)
     if (match === null) return text
     const cleaned = text.replace(match[0], '').trim()
     const target = match[1]
     const questionId = state.pendingQuestionId
+    if (target === 'root') {
+      if (state.offeredRoot !== true || questionId === undefined) return cleaned
+      const rootId = state.tree.rootId
+      if (questionId === rootId || !state.tree.nodes.has(rootId)) return cleaned
+      try {
+        state.tree.reparent(questionId, rootId)
+        this.remember({ session: state.sessionId, action: 'reparent', nodeId: questionId, parentId: rootId, at: Date.now() })
+        this.logger.info(`token-tree: model treated ${questionId} as a new topic`)
+      } catch (error) {
+        this.logger.debug('token-tree: root marker could not be applied: ' + String(error))
+      }
+      return cleaned
+    }
     if (!state.offered.includes(target)) {
       this.logger.debug('token-tree: attach marker named a node that was not offered; ignored')
       return cleaned
