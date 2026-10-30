@@ -94,8 +94,6 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 | `foldAboveTokens` | `40000` | 超过就折叠；`0` 关闭 |
 | `foldKeepTurns` | `3` | 最近这么多轮原样保留 |
 | `foldScope` | `turns` | `turns` 整轮折叠，`tools` 只折叠工具输出 |
-| `mandatoryContext` | `true` | 检索必然包含"问题所挂的回答 + 它的提问"，实测依赖命中 43%→99% |
-| `fileRegion` | `auto` | 检索返回本会话读过的文件当前内容：`auto` 按预算、`digest` 只给开头、`content` 总给全文、`off` 关闭 |
 
 折叠后的占位行会告诉模型原文在哪：
 
@@ -125,10 +123,14 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 | `hintAboveTokens` | `12000` | 对话达到这个 token 数才发提示 |
 | `autoReflect` | `true` | 回合结束评估失败、写反思、回溯更优兄弟分支 |
 | `admitRelevance` | `0.3` | 检索准入阈值，空手时自动放宽一次 |
-| `toolDeny` | `[]` | 要隐藏的工具名（用勾选面板填） |
+| `toolDeny` | `[tree_mark, tree_focus]` | 要隐藏的工具名（用勾选面板填）；这两个在 201 个会话里从未被调用 |
 | `foldAboveTokens` | `40000` | 折叠阈值，`0` = 关闭 |
 | `foldKeepTurns` | `3` | 保留最近轮数 |
 | `foldScope` | `turns` | 折叠范围 |
+| `attachChoices` | `10` | 每轮给模型看的候选问题数量（只给问题，不给正文）；`0` 关闭 |
+| `attachPrompt` | `any` | `any`：依赖写 `[attach:nX]`、新话题写 `[attach:root]`；`follow`：只问指代 |
+| `mandatoryContext` | `true` | 检索必含"问题所挂的回答 + 它的提问" |
+| `fileRegion` | `auto` | 检索返回本会话读过文件的当前内容（auto/digest/content/off） |
 | `tokenizerVersion` | `auto` | `auto` / `3` / `4` / `off`（估算 + 账单校准） |
 | `locale` | `auto` | 界面语言：`auto` / `zh` / `en` |
 
@@ -138,14 +140,27 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 ## 它怎么工作
 
 ```text
-user/message ─┐
-assistant/message ├─▶ TokenTreeService ─▶ MemoryTree（节点 / 边权 / current）
-tool/result   ─┘
-                          │
-              新问题挂到哪个节点？
-              ├ 具体词（≤1/3 节点共有）+ 语义相似 → 挂回"引入该名词的回答"
-              └ 只有通用词 → 在根下开新分支
+用户提问
+  │
+  ├─ 本地：打分 + 指代闸 + 新话题闸 → 给出默认父节点
+  │
+  ├─ 注入（每轮第一步）：检索提示（体积达标才出现）+ 候选问题块（≤10 条，只给问题）
+  │
+  ├─ 模型回答；可以在最后写：
+  │     [attach:nX]   依赖候选里的某一条
+  │     [attach:root] 这是新话题，挂到根
+  │
+  └─ 插件：有标记就改挂（只接受本轮发过的 id），没有就用本地默认
 ```
+
+**模型每轮实际看到什么**
+
+- 宿主发来的对话历史（回答全文），直到折叠/压缩把它削短；
+- 折叠：估算 prompt 超过 `foldAboveTokens`（默认 40,000）时，把"保留最近 3 轮"之外的历史换成占位行；
+- 候选块的 10 条**问题**（不含回答正文）；
+- 需要别处的正文时，调 `retrieve_context` 从树里取。
+
+所以"模型只看得到上一轮正文"只在**折叠已经触发**的长会话里成立；短会话里它看到的是完整历史。
 
 - 树完全由 `user/message`、`assistant/message`、`tool/result` 重放得到，不追加自定义事件；
 - 推理内容**计入 token 但不保存**（一个回答实测 9,454 输出 token 对 369 字符正文，只存后者会让所有阈值失真）；

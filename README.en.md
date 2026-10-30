@@ -110,8 +110,10 @@ Three presets sit at the top of the settings page, and every value is adjustable
 | `foldAboveTokens` | `40000` | Fold past this; `0` turns it off |
 | `foldKeepTurns` | `3` | Keep this many recent turns verbatim |
 | `foldScope` | `turns` | `turns` folds whole turns, `tools` folds only tool output |
-| `mandatoryContext` | `true` | Retrieval always includes the answer a turn hangs under plus its question: measured dependency recall 43% → 99% |
-| `fileRegion` | `auto` | Retrieval returns the current text of files this session read: `auto` by budget, `digest` head only, `content` always full, `off` |
+| `attachChoices` | `10` | How many candidate questions the model sees each turn (questions only); `0` turns it off |
+| `attachPrompt` | `any` | `any`: dependency is `[attach:nX]`, new topic is `[attach:root]`; `follow`: anaphora only |
+| `mandatoryContext` | `true` | Retrieval always includes the answer a turn hangs under plus its question |
+| `fileRegion` | `auto` | Retrieval returns the current text of files this session read (auto/digest/content/off) |
 
 The placeholder left behind tells the model where the text went:
 
@@ -130,6 +132,30 @@ Long answers are never summarised (a summary rewrites code and numbers), and are
 The long tier giving only a referent line is deliberate: code, numbers and exact wording must be read
 from the tree with `retrieve_context`, and the hint says that an excerpt is not the original.
 
+## How a turn flows
+
+```text
+user message
+  |
+  +- local: scoring + anaphora gate + new-topic gate -> default parent
+  |
+  +- injected at the first step: retrieval hint (only past the size gate) + up to 10 candidate
+  |  questions, never their answer text
+  |
+  +- the model answers and may end with:
+  |     [attach:nX]   this depends on one of the candidates
+  |     [attach:root] this is a new topic, put it under the root
+  |
+  +- the plugin moves the question only to an id it offered this turn; otherwise the local default
+     stands
+```
+
+**What the model actually sees**: the host's conversation history (full answer text) until folding or
+compaction trims it; folding replaces everything outside the last three turns once the estimated
+prompt passes `foldAboveTokens` (40,000 by default); the ten candidate *questions*; and whatever it
+pulls with `retrieve_context`. "Only the previous turn" is true in long, already-folded sessions,
+not in short ones.
+
 ## Settings
 
 Everything is editable at runtime and stored in `~/.dsh/token-tree/settings.json` (only keys you
@@ -142,7 +168,7 @@ changed); precedence is **settings file > profile config**.
 | `hintAboveTokens` | `12000` | Send the hint only once the conversation reaches this size |
 | `autoReflect` | `true` | At turn end, grade the failure, write a reflection, retry a better sibling branch |
 | `admitRelevance` | `0.3` | Retrieval admission threshold; relaxes once when it comes back empty |
-| `toolDeny` | `[]` | Tool names to hide (filled by the checklist) |
+| `toolDeny` | `[tree_mark, tree_focus]` | Tool names to hide (the picker fills it); neither was called in 201 sessions |
 | `foldAboveTokens` | `40000` | Fold threshold, `0` = off |
 | `foldKeepTurns` | `3` | Turns kept verbatim |
 | `foldScope` | `turns` | Fold scope |
