@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** Keys the settings surface may override. */
-const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'attachChoices', 'attachPrompt', 'admitRelevance', 'summaryMatch'] as const
+const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'attachChoices', 'attachPrompt', 'attachGate', 'admitRelevance', 'summaryMatch'] as const
 
 export interface SettingsOverrides {
   /** Push a memory block every turn instead of the one-line hint. */
@@ -51,6 +51,8 @@ export interface SettingsOverrides {
   /** Candidate count offered to the model (0 = off). */
   /** `follow` asks for follow-ups only; `any` also accepts a new turn with a clear dependency. */
   attachPrompt?: string
+  /** `always` or `uncertain`. */
+  attachGate?: string
   attachChoices?: number
   /** Always include the answer a turn depends on. */
   mandatoryContext?: boolean
@@ -102,6 +104,11 @@ function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number 
     if (typeof value !== 'string') return undefined
     const scope = value.trim().toLowerCase()
     return scope === 'tools' || scope === 'turns' ? scope : undefined
+  }
+  if (key === 'attachGate') {
+    if (typeof value !== 'string') return undefined
+    const mode = value.trim().toLowerCase()
+    return mode === 'uncertain' || mode === 'always' ? mode : undefined
   }
   if (key === 'attachPrompt') {
     if (typeof value !== 'string') return undefined

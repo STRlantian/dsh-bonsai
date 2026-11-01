@@ -147,6 +147,8 @@ export interface SessionState {
   offeredRoot?: boolean
   /** Where the question would sit without the new-topic gate, for `[attach:here]`. */
   defaultParentId?: NodeId
+  /** Whether the placement was a confident one, decided when the question is ingested. */
+  uncertain?: boolean
   /** Set when a long node was served as an excerpt or a referent line, so the hint can say so. */
   sawReduction?: boolean
   /** Measured token count per message id, so a turn only pays for new messages. */
@@ -393,6 +395,8 @@ export class TokenTreeService {
   attachChoices: number
   /** What the choices block asks for. */
   attachPrompt: string
+  /** When the candidate block is offered. */
+  attachGate: string
   } {
     const overrides = this.settings?.all() ?? {}
     return {
@@ -409,6 +413,7 @@ export class TokenTreeService {
       foldPolicy: overrides.foldPolicy ?? this.config.foldPolicy,
       fileRegion: (overrides.fileRegion ?? this.config.fileRegion) as FileRegionMode,
       attachPrompt: overrides.attachPrompt ?? this.config.attachPrompt,
+      attachGate: overrides.attachGate ?? this.config.attachGate,
       attachChoices: overrides.attachChoices ?? this.config.attachChoices,
       mandatoryContext: overrides.mandatoryContext ?? this.config.mandatoryContext,
     }
@@ -535,6 +540,7 @@ export class TokenTreeService {
         foldPolicy: this.config.foldPolicy,
         fileRegion: this.config.fileRegion as FileRegionMode,
         attachPrompt: this.config.attachPrompt,
+        attachGate: this.config.attachGate,
         attachChoices: this.config.attachChoices,
         mandatoryContext: this.config.mandatoryContext,
         hintAboveTokens: this.config.hintAboveTokens,
@@ -962,6 +968,27 @@ export class TokenTreeService {
    * @param node - candidate parent.
    * @returns Score in `[0, 1]`.
    */
+  /**
+   * The evidence behind an attachment score: how many specific terms matched, and the longest.
+   * @param input - precomputed term statistics.
+   * @param node - candidate node.
+   * @returns Match counts; `strong` mirrors the discount rule in {@link attachmentScore}.
+   */
+  private evidenceOf(input: AttachmentContext, node: MemoryNode): { shared: number; longest: number; strong: boolean } {
+    const features = input.nodeFeatures.get(node.id) ?? contentFeatures(node.content)
+    let shared = 0
+    let longest = 0
+    for (const feature of input.questionFeatures) {
+      if (!features.has(feature)) continue
+      const frequency = input.documentFrequency.get(feature) ?? 0
+      const isSpecific = input.nodeCount <= 2 || frequency <= Math.max(2, Math.floor(input.nodeCount / 10))
+      if (!isSpecific) continue
+      shared++
+      if (feature.length > longest) longest = feature.length
+    }
+    return { shared, longest, strong: shared >= 2 || longest >= 3 }
+  }
+
   private attachmentScore(input: AttachmentContext, node: MemoryNode): number {
     const semantic = Math.max(0, cosine(input.embedding, node.embedding))
     const features = input.nodeFeatures.get(node.id) ?? contentFeatures(node.content)
@@ -1106,6 +1133,7 @@ export class TokenTreeService {
       const anchor = state.manualAnchor
       state.manualAnchor = undefined
       if (tree.nodes.has(anchor)) {
+        state.uncertain = false
         const visible = this.visibleParent(tree, anchor)
         if (visible !== anchor) {
           this.logger.info(`token-tree: anchor ${anchor} is hidden; attaching under ${visible} instead`)
@@ -1119,6 +1147,8 @@ export class TokenTreeService {
     // which is how a chain of "它" lost the answer it was about.
     if (this.config.attachments !== 'linear' && defaultId !== tree.rootId && anaphoraScore(text) >= 0.6) {
       this.logger.info('token-tree: anaphoric turn kept under the current node')
+      // An anaphoric stay is a heuristic about a pronoun: worth a candidate list to confirm.
+      state.uncertain = true
       return { parentId: defaultId, score: this.attachmentScore(this.attachmentContext(state, text, embedding), tree.node(defaultId)) }
     }
     if (this.config.attachments === 'linear') return { parentId: defaultId, score: 0 }
@@ -1141,6 +1171,7 @@ export class TokenTreeService {
     if (bestId !== defaultId
       && bestScore >= this.config.attachThreshold
       && bestScore >= defaultScore + this.config.attachMargin) {
+      state.uncertain = false
       return { parentId: this.visibleParent(tree, bestId), score: bestScore }
     }
     // A turn that has nothing in common with where the dialogue currently stands
@@ -1152,8 +1183,13 @@ export class TokenTreeService {
     const substantive = defaultNode.kind === 'answer' && contentFeatures(defaultNode.content).size >= NEW_TOPIC_MIN_FEATURES
     if (defaultId !== tree.rootId && substantive && defaultScore < this.config.newTopicBelow) {
       this.logger.info(`token-tree: new topic branch under the root (score ${defaultScore.toFixed(3)} below ${this.config.newTopicBelow})`)
+      // A deliberate new topic: there is nothing for a candidate list to decide.
+      state.uncertain = false
       return { parentId: tree.rootId, score: defaultScore }
     }
+    // Staying on the default line with thin evidence is exactly the case the model can improve on.
+    const evidence = this.evidenceOf(context, defaultNode)
+    state.uncertain = !evidence.strong || defaultScore < this.config.attachThreshold
     return { parentId: defaultId, score: defaultScore }
   }
 
@@ -1601,6 +1637,11 @@ export class TokenTreeService {
     state.offered = []
     state.offeredRoot = false
     if (limit <= 0 || query.trim().length === 0) return ''
+    // Confidence gating: a question the local rules placed confidently does not need ten options.
+    if (this.effective().attachGate === 'uncertain' && state.uncertain !== true) {
+      this.logger.debug('token-tree: confident placement, no candidate block')
+      return ''
+    }
     const tree = state.tree
     const embedding = embedText(query, this.config.embeddingDimension)
     const context = this.attachmentContext(state, query, embedding)

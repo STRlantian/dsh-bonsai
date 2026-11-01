@@ -151,6 +151,8 @@ export interface ResolvedConfig {
   /** How many candidate nodes the hint offers the model (0 = no choices block). */
   /** What the choices block asks for: follow-ups only, or any turn with a clear dependency. */
   attachPrompt: string
+  /** When the candidate block is offered: every turn, or only when the local placement was unsure. */
+  attachGate: string
   attachChoices: number
   mandatoryContext: boolean
   /** Whether to supervise failures. */
@@ -373,6 +375,10 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         conservativeBudgetRatio: scalar(source, 'conservativeBudgetRatio', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input > 0 && input <= 1, issues, 'a number within (0, 1]') ?? 0.85,
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 40000,
+    attachGate: (() => {
+      const mode = scalar(source, 'attachGate', (input): input is string => typeof input === 'string', issues, 'a string')
+      return mode === 'uncertain' ? 'uncertain' : 'always'
+    })(),
     attachPrompt: (() => {
       const mode = scalar(source, 'attachPrompt', (input): input is string => typeof input === 'string', issues, 'a string')
       // Measured: `any` wrongly marked 0/10 new topics, `follow` 4/10.
