@@ -107,7 +107,10 @@ const STOPWORDS = new Set([
 export function contentFeatures(text: string): Set<string> {
   const features = new Set<string>()
   for (const feature of tokenize(text)) {
-    if (feature.length < 2) continue
+    // A single Latin letter or digit is a name here ("K", "V", "q"), not noise: dropping every
+    // one-character feature is why "那 K 是什么" could not see the answer that introduced K.
+    const shortName = feature.length === 1 && /^[a-z0-9]$/i.test(feature)
+    if (feature.length < 2 && !shortName) continue
     if (STOPWORDS.has(feature)) continue
     if (isFunctionBigram(feature)) continue
     features.add(feature)

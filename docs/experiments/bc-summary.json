@@ -1,0 +1,77 @@
+{
+  "sessionId": "session-319d8a7c-dd73-471d-b382-b04de6ebee1b",
+  "summaryMode": true,
+  "rows": [
+    {
+      "turn": 1,
+      "kind": "seed",
+      "expectParentTurn": 0,
+      "marker": "root",
+      "summary": "[summary: 注意力原理,Q/K/V 作用,权重计算]"
+    },
+    {
+      "turn": 2,
+      "kind": "sibling",
+      "expectParentTurn": 1,
+      "marker": "n5",
+      "summary": "[summary: Q 的定义,匹配 K 定权重]",
+      "parentTurn": null,
+      "expectedAnswer": "n3",
+      "actualParent": "n1",
+      "ok": false
+    },
+    {
+      "turn": 3,
+      "kind": "sibling",
+      "expectParentTurn": 1,
+      "marker": "n7",
+      "summary": "[summary: K 的定义,与 Q 匹配计分]",
+      "parentTurn": 2,
+      "expectedAnswer": "n3",
+      "actualParent": "n5",
+      "ok": false
+    },
+    {
+      "turn": 4,
+      "kind": "sibling",
+      "expectParentTurn": 1,
+      "marker": "n9",
+      "summary": "[summary: V 的定义,权重加权汇总]",
+      "parentTurn": 3,
+      "expectedAnswer": "n3",
+      "actualParent": "n7",
+      "ok": false
+    },
+    {
+      "turn": 5,
+      "kind": "seed",
+      "expectParentTurn": 0,
+      "marker": "root",
+      "summary": "[summary: 位置编码作用,正弦编码,可学习编码]"
+    },
+    {
+      "turn": 6,
+      "kind": "sibling",
+      "expectParentTurn": 5,
+      "marker": "n13",
+      "summary": "[summary: 正弦公式,波长分层,位置向量]",
+      "parentTurn": null,
+      "expectedAnswer": "n11",
+      "actualParent": "n1",
+      "ok": false
+    },
+    {
+      "turn": 7,
+      "kind": "sibling",
+      "expectParentTurn": 5,
+      "marker": "n13",
+      "summary": "[summary: 无法外推,长序列失效,额外参数]",
+      "parentTurn": 6,
+      "expectedAnswer": "n11",
+      "actualParent": "n13",
+      "ok": false
+    }
+  ],
+  "correct": 0,
+  "probes": 5
+}

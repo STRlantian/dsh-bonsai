@@ -1,0 +1,77 @@
+{
+  "sessionId": "session-36d909ac-920f-4f3a-8e45-087d5cc5ad8f",
+  "summaryMode": false,
+  "rows": [
+    {
+      "turn": 1,
+      "kind": "seed",
+      "expectParentTurn": 0,
+      "marker": "root",
+      "summary": null
+    },
+    {
+      "turn": 2,
+      "kind": "sibling",
+      "expectParentTurn": 1,
+      "marker": "n5",
+      "summary": null,
+      "parentTurn": null,
+      "expectedAnswer": "n3",
+      "actualParent": "n1",
+      "ok": false
+    },
+    {
+      "turn": 3,
+      "kind": "sibling",
+      "expectParentTurn": 1,
+      "marker": "n7",
+      "summary": null,
+      "parentTurn": 2,
+      "expectedAnswer": "n3",
+      "actualParent": "n5",
+      "ok": false
+    },
+    {
+      "turn": 4,
+      "kind": "sibling",
+      "expectParentTurn": 1,
+      "marker": null,
+      "summary": null,
+      "parentTurn": 3,
+      "expectedAnswer": "n3",
+      "actualParent": "n7",
+      "ok": false
+    },
+    {
+      "turn": 5,
+      "kind": "seed",
+      "expectParentTurn": 0,
+      "marker": "root",
+      "summary": null
+    },
+    {
+      "turn": 6,
+      "kind": "sibling",
+      "expectParentTurn": 5,
+      "marker": "n13",
+      "summary": null,
+      "parentTurn": null,
+      "expectedAnswer": "n11",
+      "actualParent": "n1",
+      "ok": false
+    },
+    {
+      "turn": 7,
+      "kind": "sibling",
+      "expectParentTurn": 5,
+      "marker": "n13",
+      "summary": null,
+      "parentTurn": 6,
+      "expectedAnswer": "n11",
+      "actualParent": "n13",
+      "ok": false
+    }
+  ],
+  "correct": 0,
+  "probes": 5
+}
