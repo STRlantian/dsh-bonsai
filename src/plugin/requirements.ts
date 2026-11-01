@@ -57,7 +57,7 @@ const CONSTRAINT = [
 ]
 
 /** Phrases that make a turn a topic question even when a constraint phrase appears. */
-const TOPIC = ['什么是', '是什么', '介绍了', '解释', '怎么', '如何', '为什么', '区别', '原理', '示例', '例子']
+const TOPIC = ['什么是', '是什么', '介绍了', '介绍', '讲讲', '说说', '讲解', '解释', '怎么', '如何', '为什么', '区别', '原理', '示例', '例子', '推导', '证明', '对比']
 
 /**
  * Openers that scope an instruction to everything after it.
@@ -96,10 +96,17 @@ export function classifyTurn(text: string): Classification {
     return { kind: 'topic', reason: `topic:${hitTopic}`, cancels: false }
   }
   const hitConstraint = CONSTRAINT.find(phrase => normalized.includes(phrase))
-  if (hitConstraint !== undefined && !asksQuestion(normalized)) {
-    return { kind: 'constraint', reason: `constraint:${hitConstraint}`, cancels: false }
+  if (hitConstraint === undefined || asksQuestion(normalized)) {
+    return { kind: 'topic', reason: 'default', cancels: false }
   }
-  return { kind: 'topic', reason: 'default', cancels: false }
+  // A question that carries an instruction ("向我介绍注意力机制（不超过 80 字）") is still a
+  // question. Only a turn whose remaining text is not substantive is an instruction.
+  const residual = CONSTRAINT.reduce((body, phrase) => body.split(phrase).join(' '), normalized)
+  const residualChars = (residual.match(/[\u4e00-\u9fffA-Za-z0-9]/g) ?? []).length
+  if (residualChars >= 10) {
+    return { kind: 'topic', reason: `topic:carries-instruction:${hitConstraint}`, cancels: false }
+  }
+  return { kind: 'constraint', reason: `constraint:${hitConstraint}`, cancels: false }
 }
 
 /**
