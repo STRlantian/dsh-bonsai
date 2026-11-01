@@ -1,0 +1,168 @@
+{
+  "sessionId": "session-b7631cb8-a685-448e-90cd-7f366807a767",
+  "rows": [
+    {
+      "turn": 1,
+      "expected": "root",
+      "marker": "root",
+      "summary": null,
+      "answer": "注意力机制根据查询与键的相关度算出权重，再对值加权求和，是 Transformer 的核心。\n\n[attach:root",
+      "actual": "root",
+      "ok": true
+    },
+    {
+      "turn": 2,
+      "expected": "n3",
+      "marker": "n5",
+      "summary": null,
+      "answer": "把每个词的向量与其他词向量做点积打分，经 softmax 归一化后加权求和，得到新向量。\n\n[attach:n5]",
+      "actual": "root",
+      "ok": false
+    },
+    {
+      "turn": 3,
+      "expected": "n5",
+      "marker": "n7",
+      "summary": null,
+      "answer": "y 是加权求和得到的新向量：原来“它”的向量，吸收了“猫”的信息，因此不再孤立。\n\n[attach:n7]",
+      "actual": "n5",
+      "ok": true
+    },
+    {
+      "turn": 4,
+      "expected": "n7",
+      "marker": "n9",
+      "summary": null,
+      "answer": "y_i 是第 i 个词的输出向量，而不是权重；权重 α_ij 中的 j 指序列中的位置，不指词表。\n\n[attach:n",
+      "actual": "n7",
+      "ok": true
+    },
+    {
+      "turn": 5,
+      "expected": "n10",
+      "marker": "n11",
+      "summary": null,
+      "answer": "y 是下一层的输入，逐层提炼语义。n 指序列长度（词数），不是查询轮数。\n\n[attach:n11]",
+      "actual": "n9",
+      "ok": false
+    },
+    {
+      "turn": 6,
+      "expected": "n3",
+      "marker": "here",
+      "summary": null,
+      "answer": "要解决的问题是：循环网络只能把上下文压缩成一个固定向量。思路是：让每个词直接回看所有词，并按权重取出信息。\n\n[atta",
+      "actual": "n11",
+      "ok": false
+    },
+    {
+      "turn": 7,
+      "expected": "n14",
+      "marker": "n15",
+      "summary": null,
+      "answer": "你说得对，内积同时混入了角度和模长。所以要用余弦或除以 √d 归一化，模长才不会干扰相似度。\n\n[attach:n15]",
+      "actual": "n13",
+      "ok": false
+    },
+    {
+      "turn": 8,
+      "expected": "n14",
+      "marker": "n11",
+      "summary": null,
+      "answer": "对，但关联度只是中间产物；最终要的是加权求和后的 y_i。\n\n[attach:n11]",
+      "actual": "n15",
+      "ok": false
+    },
+    {
+      "turn": 9,
+      "expected": "n18",
+      "marker": "n19",
+      "summary": null,
+      "answer": "思路是对的，但有两处不同：先让向量分别乘以 W_q、W_k；排序不会产生权重，要用 softmax 把分数变成权重。\n\n",
+      "actual": "n11",
+      "ok": false
+    },
+    {
+      "turn": 10,
+      "expected": "n20",
+      "marker": "n21",
+      "summary": null,
+      "answer": "对。补充：q 与 k 必须映射到同一空间才能做点积；v 是别人从“我”这里加权取走的信息。\n\n[attach:n21]",
+      "actual": "n19",
+      "ok": false
+    },
+    {
+      "turn": 11,
+      "expected": "n22",
+      "marker": "n23",
+      "summary": null,
+      "answer": "基本对，但 x 来自词表查找表，同一个词在各处共享一份，不会每处独立；并且还要训练 W_O、FFN 等。\n\n[attac",
+      "actual": "n21",
+      "ok": false
+    },
+    {
+      "turn": 12,
+      "expected": "n24",
+      "marker": "n25",
+      "summary": null,
+      "answer": "对，原版 Transformer 就是这样处理。但现代模型多用 RoPE：它不把位置向量叠加进词向量，而是在 q、k 上",
+      "actual": "n23",
+      "ok": false
+    },
+    {
+      "turn": 13,
+      "expected": "n26",
+      "marker": "n27",
+      "summary": null,
+      "answer": "对，但 s_ij 只是原始分数，还要对每个 i 用 softmax 归一化成权重，再用这些权重加权求和 v。\n\n[att",
+      "actual": "n25",
+      "ok": false
+    },
+    {
+      "turn": 14,
+      "expected": "n28",
+      "marker": "n29",
+      "summary": null,
+      "answer": "按权重混合所有词的 v，为每个词生成新向量：它的含义交由相关词的信息来补充。\n\n[attach:n29]",
+      "actual": "n27",
+      "ok": false
+    },
+    {
+      "turn": 15,
+      "expected": "n28",
+      "marker": "n31",
+      "summary": null,
+      "answer": "这里的 V 是每个 x_i 乘以 W_V 后组成的矩阵，而不是原始向量。\n\n[attach:n31]",
+      "actual": "n29",
+      "ok": false
+    },
+    {
+      "turn": 16,
+      "expected": "n32",
+      "marker": "n33",
+      "summary": null,
+      "answer": "更准确地说，Y 是每个词融合上下文后的新表示，不是“信息量”；通常它还要再乘 W_O。\n\n[attach:n33]",
+      "actual": "n31",
+      "ok": false
+    },
+    {
+      "turn": 17,
+      "expected": "n34",
+      "marker": "n35",
+      "summary": null,
+      "answer": "大致对，但特征通常不能这样清晰地命名。方向还需校正：q 表示我找别人时要找什么，k 表示我身上可被匹配的标签。\n\n[at",
+      "actual": "n33",
+      "ok": false
+    },
+    {
+      "turn": 18,
+      "expected": "n36",
+      "marker": "n37",
+      "summary": null,
+      "answer": "仅看可食用这一维，无法确定引申含义：W_Q 会混合所有维度，输出是学到的组合，只能靠经验解释。\n\n[attach:n37",
+      "actual": "n35",
+      "ok": false
+    }
+  ],
+  "correct": 3
+}

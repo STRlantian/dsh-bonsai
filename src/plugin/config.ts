@@ -153,6 +153,8 @@ export interface ResolvedConfig {
   attachPrompt: string
   /** When the candidate block is offered: every turn, or only when the local placement was unsure. */
   attachGate: string
+  /** Whether the model is asked for a trailing aspect summary. */
+  attachSummary: boolean
   attachChoices: number
   mandatoryContext: boolean
   /** Whether to supervise failures. */
@@ -375,6 +377,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         conservativeBudgetRatio: scalar(source, 'conservativeBudgetRatio', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input > 0 && input <= 1, issues, 'a number within (0, 1]') ?? 0.85,
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 40000,
+    attachSummary: scalar(source, 'attachSummary', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
     attachGate: (() => {
       const mode = scalar(source, 'attachGate', (input): input is string => typeof input === 'string', issues, 'a string')
       return mode === 'uncertain' ? 'uncertain' : 'always'

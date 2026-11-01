@@ -20,6 +20,7 @@ const argOf = (name, fallback) => {
 const port = Number(argOf('port', '0'))
 const token = argOf('token', '')
 const outPath = argOf('out', 'docs/experiments/learn-live.json')
+const summaryMode = argOf('summary', 'on') === 'on'
 if (port === 0 || token === '') throw new Error('usage: --port <port> --token <token>')
 const base = `http://127.0.0.1:${port}`
 let cookie = ''
@@ -80,7 +81,7 @@ await signIn()
 await fetch(`${base}/api/token-tree/settings`, {
   method: 'POST',
   headers: { 'content-type': 'application/json', cookie },
-  body: JSON.stringify({ attachPrompt: 'any', attachChoices: 10, autoInject: false, retrievalHint: false }),
+  body: JSON.stringify({ attachPrompt: 'any', attachChoices: 10, attachGate: 'always', attachSummary: summaryMode, autoInject: false, retrievalHint: false }),
 })
 const created = await rpc('session/create', { request: {} })
 const sessionId = created.sessionId
@@ -95,7 +96,8 @@ for (const [index, question] of questions.entries()) {
   const page = await say(sessionId, text)
   const answer = lastAssistantText(page)
   const marker = /\[attach:(n\d+|root|here)\]/.exec(answer)
-  rows.push({ turn: index + 1, expected: question.expected, marker: marker === null ? null : marker[1], answer: answer.slice(0, 60) })
+  const summary = /\[summary:[^\]]*\]/.exec(answer)
+  rows.push({ turn: index + 1, expected: question.expected, marker: marker === null ? null : marker[1], summary: summary === null ? null : summary[0].slice(0, 40), answer: answer.slice(0, 60) })
   console.log(`turn ${String(index + 1).padStart(2)} expected ${String(question.expected).padEnd(5)} marker ${String(marker === null ? '-' : marker[1]).padEnd(5)} ${marker === null ? '' : ''}`)
 }
 

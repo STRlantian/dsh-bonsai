@@ -1,0 +1,168 @@
+{
+  "sessionId": "session-c2dd6e39-8b10-469c-a2ff-d6428e2870cb",
+  "rows": [
+    {
+      "turn": 1,
+      "expected": "root",
+      "marker": "root",
+      "summary": "[summary: 注意力定义, QKV与softmax, Transforme",
+      "answer": "注意力机制：用查询与键的相似度对值加权求和，聚焦相关信息。核心是 QKV 与 softmax，是 Transformer",
+      "actual": "root",
+      "ok": true
+    },
+    {
+      "turn": 2,
+      "expected": "n3",
+      "marker": "n5",
+      "summary": "[summary: 查询与键比对, 按相似度取内容]",
+      "answer": "注意力像点名：每个词把自身当作查询，与其他词的键逐一比对，再按相似度取走对应内容，最后汇成它自己的新表示。\n\n[atta",
+      "actual": "root",
+      "ok": false
+    },
+    {
+      "turn": 3,
+      "expected": "n5",
+      "marker": "n7",
+      "summary": "[summary: 澄清y不存在, 若指公式则解释输出向量]",
+      "answer": "我前面没出现 y。若指 y=softmax(QKᵀ/√d)V，y 是每个词汇集上下文后的输出向量，而非单个词本身。\n\n[",
+      "actual": "n5",
+      "ok": true
+    },
+    {
+      "turn": 4,
+      "expected": "n7",
+      "marker": "n9",
+      "summary": "[summary: 纠正y_i含义, 权重是α_i, i指序列位置]",
+      "answer": "不对。y_i 是汇总后的输出向量；注意力权重在 softmax 里，记为 α_i，其中 i 指序列中的位置，并非词表里的",
+      "actual": "n7",
+      "ok": true
+    },
+    {
+      "turn": 5,
+      "expected": "n10",
+      "marker": "n11",
+      "summary": "[summary: y的后续用途, n指序列长度]",
+      "answer": "y 会进入残差与 FFN，并送入下一层，作为带上下文的词表示；n 是序列长度，也就是词元个数，每个位置各发一次查询。\n\n",
+      "actual": "n9",
+      "ok": false
+    },
+    {
+      "turn": 6,
+      "expected": "n3",
+      "marker": "here",
+      "summary": "[summary: RNN长依赖缺陷, 并行瓶颈, 全局加权取用]",
+      "answer": "要解决的问题是：RNN 逐词顺序传递，距离一远信息就会丢失，而且不能并行。自然的思路是：让每个词直接看全句，按相关程度加",
+      "actual": "n11",
+      "ok": false
+    },
+    {
+      "turn": 7,
+      "expected": "n14",
+      "marker": "n15",
+      "summary": "[summary: 内积含模长, 余弦是纯相似度, 缩放缓解]",
+      "answer": "内积等于两向量的模长乘积再乘余弦值，因此混入了模长。所以严格说，它是相似度乘上长度；纯相似度应看余弦，注意力里靠缩放来缓",
+      "actual": "n13",
+      "ok": false
+    },
+    {
+      "turn": 8,
+      "expected": "n14",
+      "marker": "n15",
+      "summary": "[summary: 确认思路, 权重是中间量, 需加权汇总]",
+      "answer": "基本正确。这是注意力中的一步：关联程度只是权重，还要加权汇总，才能得出每个词的语境义。\n\n[attach:n15]\n[s",
+      "actual": "n15",
+      "ok": false
+    },
+    {
+      "turn": 9,
+      "expected": "n18",
+      "marker": "n19",
+      "summary": "[summary: 确认方向, QK投影, 缩放与softmax]",
+      "answer": "大方向是对的。有三点修正：对词分别做 Q、K 投影后，再取内积；内积要除以 √d；排序后再用 softmax 归一化，并",
+      "actual": "n15",
+      "ok": false
+    },
+    {
+      "turn": 10,
+      "expected": "n20",
+      "marker": "n21",
+      "summary": "[summary: 确认QKV比喻, 微调k与v定义]",
+      "answer": "基本正确。k 更准确地说，是“我对外提供的标签”；v 是“我贡献出去的内容”。它们都是 x 乘上三个矩阵得到的。\n\n[a",
+      "actual": "n19",
+      "ok": false
+    },
+    {
+      "turn": 11,
+      "expected": "n22",
+      "marker": "n23",
+      "summary": "[summary: 修正优化对象, 嵌入表与W矩阵]",
+      "answer": "部分正确。可训练的是词嵌入表、QKV 三个矩阵，以及输出投影、FFN 等；x 来自嵌入表，并不是单独为每个词调整。\n\n[",
+      "actual": "n21",
+      "ok": false
+    },
+    {
+      "turn": 12,
+      "expected": "n24",
+      "marker": "n25",
+      "summary": "[summary: 确认相加做法, 混叠问题, RoPE替代]",
+      "answer": "对，这是原始 Transformer 的做法：把嵌入和位置编码相加。但相加后两者混在一起；现代模型多用 RoPE，通过旋",
+      "actual": "n23",
+      "ok": false
+    },
+    {
+      "turn": 13,
+      "expected": "n26",
+      "marker": "n27",
+      "summary": "[summary: 确认s_ij, 需softmax与加权, 因果掩码]",
+      "answer": "对，但 s_ij 只是原始分数；还需要对 j 做 softmax 归一，再对 V 加权求和，才能得到 y_i；解码时还必",
+      "actual": "n25",
+      "ok": false
+    },
+    {
+      "turn": 14,
+      "expected": "n28",
+      "marker": "n29",
+      "summary": "[summary: A乘V是加权混合, 语境义汇总]",
+      "answer": "含义是：按权重汇总全句各词的 V，混合成这个词的新表示。这相当于一次软性查表，从而把上下文信息汇集起来。\n\n[attac",
+      "actual": "n27",
+      "ok": false
+    },
+    {
+      "turn": 15,
+      "expected": "n28",
+      "marker": "n31",
+      "summary": "[summary: V是投影后的, 原始输入是x]",
+      "answer": "就是 x 乘 W_V 得到的 V 向量所组成的矩阵。V 本身就是投影后的结果；原始的输入是 x。\n\n[attach:n3",
+      "actual": "n29",
+      "ok": false
+    },
+    {
+      "turn": 16,
+      "expected": "n32",
+      "marker": "n33",
+      "summary": "[summary: 区分A与Y, Y是混合内容向量]",
+      "answer": "基本对，但略偏：A 表示“取多少”，Y 表示“取到了什么、混合成什么新向量”，有方向有内容，不是数量。\n\n[attach",
+      "actual": "n31",
+      "ok": false
+    },
+    {
+      "turn": 17,
+      "expected": "n34",
+      "marker": "n23",
+      "summary": "[summary: 方向正确, 投影混合特征, 维度语义变组合]",
+      "answer": "方向对，但投影会把特征混合起来，WQ、WK、WV 之后的每一维不再是“可食用”这类单项，而变成组合语义。\n\n[attac",
+      "actual": "n33",
+      "ok": false
+    },
+    {
+      "turn": 18,
+      "expected": "n36",
+      "marker": "n37",
+      "summary": "[summary: 苹果举例, 查询食物语义, 消歧]",
+      "answer": "可食用程度高，会让它优先查询“吃、甜、好吃、食物”这类词，用它来判断自己指水果还是公司。\n\n[attach:n37]\n[",
+      "actual": "n23",
+      "ok": false
+    }
+  ],
+  "correct": 3
+}

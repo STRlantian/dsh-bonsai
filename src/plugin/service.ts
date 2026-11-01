@@ -397,6 +397,8 @@ export class TokenTreeService {
   attachPrompt: string
   /** When the candidate block is offered. */
   attachGate: string
+  /** Whether the model is asked for an aspect summary. */
+  attachSummary: boolean
   } {
     const overrides = this.settings?.all() ?? {}
     return {
@@ -414,6 +416,7 @@ export class TokenTreeService {
       fileRegion: (overrides.fileRegion ?? this.config.fileRegion) as FileRegionMode,
       attachPrompt: overrides.attachPrompt ?? this.config.attachPrompt,
       attachGate: overrides.attachGate ?? this.config.attachGate,
+      attachSummary: overrides.attachSummary ?? this.config.attachSummary,
       attachChoices: overrides.attachChoices ?? this.config.attachChoices,
       mandatoryContext: overrides.mandatoryContext ?? this.config.mandatoryContext,
     }
@@ -541,6 +544,7 @@ export class TokenTreeService {
         fileRegion: this.config.fileRegion as FileRegionMode,
         attachPrompt: this.config.attachPrompt,
         attachGate: this.config.attachGate,
+        attachSummary: this.config.attachSummary,
         attachChoices: this.config.attachChoices,
         mandatoryContext: this.config.mandatoryContext,
         hintAboveTokens: this.config.hintAboveTokens,
@@ -1669,7 +1673,7 @@ export class TokenTreeService {
       ? [
         '[token-tree] 本轮的落点由你判，在回答最后单独一行写一种：',
         '  [attach:nX]  依赖下面某一条（含代词指代）；[attach:root] 新话题；[attach:here] 要求/元指令（让我换个方式来问），留在当前这条线上。',
-        '最后再另起一行写 [summary: 用 2–4 个短语说明本条回答讲了哪些方面，逗号分隔，≤40 字]。',
+        ...(this.effective().attachSummary ? ['最后再另起一行写 [summary: 用 2–4 个短语说明本条回答讲了哪些方面，逗号分隔，≤40 字]。'] : []),
         '只给问题，回答内容按需用 retrieve_context 取。',
       ]
       : [
