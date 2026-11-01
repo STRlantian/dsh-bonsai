@@ -917,7 +917,9 @@ export class TokenTreeService {
       )
       return
     }
-    const summary = summarize(text)
+    const described = this.takeSummary(text)
+    const textWithoutSummary = described.text
+    const summary = described.summary ?? summarize(textWithoutSummary)
     const embedding = embedText(text, this.config.embeddingDimension)
     const placement = this.pickQuestionParent(state, text, embedding)
     const parentId = placement.parentId
@@ -1207,7 +1209,11 @@ export class TokenTreeService {
       this.logger.debug(`token-tree: skipped the acknowledgment of a constraint turn (session ${state.sessionId})`)
       return
     }
-    const summary = summarize(text)
+    // The model's own summary of what the answer covers, when it wrote one; the heuristic is the
+    // fallback. This is what the candidate list shows instead of the answer text.
+    const described = this.takeSummary(text)
+    const bodyText = described.text
+    const summary = described.summary ?? summarize(bodyText)
     // The reasoning is measured and dropped: it costs tokens in every later request, but it is
     // neither what the user asked nor what the answer says. Storing the count keeps the
     // thresholds honest without keeping the text.
@@ -1218,8 +1224,8 @@ export class TokenTreeService {
       ...(questionParent === undefined || !state.tree.nodes.has(questionParent)
         ? {}
         : { parentId: questionParent }),
-      content: text,
-      tokens: this.countTokens(text) + reasoningTokens,
+      content: bodyText,
+      tokens: this.countTokens(bodyText) + reasoningTokens,
       timestamp: at,
       metadata: {
         step: numberField(data.step) ?? state.step,
@@ -1663,6 +1669,7 @@ export class TokenTreeService {
       ? [
         '[token-tree] 本轮的落点由你判，在回答最后单独一行写一种：',
         '  [attach:nX]  依赖下面某一条（含代词指代）；[attach:root] 新话题；[attach:here] 要求/元指令（让我换个方式来问），留在当前这条线上。',
+        '最后再另起一行写 [summary: 用 2–4 个短语说明本条回答讲了哪些方面，逗号分隔，≤40 字]。',
         '只给问题，回答内容按需用 retrieve_context 取。',
       ]
       : [
@@ -1686,8 +1693,10 @@ export class TokenTreeService {
       guard++
     }
     const source = cursor ?? tree.nodes.get(answerId)
-    const text = (source?.summary ?? source?.content ?? '').replace(/\s+/g, ' ').trim()
-    return text.length > 48 ? text.slice(0, 48) + '…' : text
+    const question = (source?.summary ?? source?.content ?? '').replace(/\s+/g, ' ').trim()
+    const answer = tree.nodes.get(answerId)?.summary?.replace(/\s+/g, ' ').trim() ?? ''
+    const label = answer === '' || question.includes(answer) ? question : `${question}（含 ${answer}）`
+    return label.length > 72 ? label.slice(0, 72) + '…' : label
   }
 
   /**
@@ -1699,6 +1708,22 @@ export class TokenTreeService {
    * @param text - assistant text.
    * @returns The text without the marker.
    */
+  /**
+   * Read the model's aspect summary, strip it, and return it for the node.
+   *
+   * The summary is what the candidate list shows instead of the whole answer, so a follow-up about a
+   * side concept can see which answer introduced it.
+   * @param text - assistant text.
+   * @returns The text without the marker and the summary, when present.
+   */
+  private takeSummary(text: string): { text: string; summary?: string } {
+    const match = /\[summary:([^\]]{0,120})\]/.exec(text)
+    if (match === null) return { text }
+    const summary = match[1].trim().slice(0, 60)
+    const stripped = text.replace(match[0], '').trim()
+    return summary.length === 0 ? { text: stripped } : { text: stripped, summary }
+  }
+
   private applyAttachMarker(state: SessionState, text: string): string {
     const match = /\[attach:(n\d+|root|here)\]/.exec(text)
     if (match === null) return text

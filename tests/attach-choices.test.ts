@@ -83,3 +83,17 @@ test('the instruction follows the attachPrompt mode', () => {
   const anyBlock = run.service.attachChoices('choices', '它的误判率怎么算')
   assert.ok(anyBlock.includes('[attach:root]') && anyBlock.includes('[attach:here]'), 'any mode offers all three: ' + anyBlock)
 })
+
+test('the model summary is stored, stripped, and shown next to the question', () => {
+  const run = conversation()
+  const answer = '布隆过滤器用位数组和多个哈希函数表示集合，还会提到布谷鸟过滤器与 Counting Bloom Filter。[summary: 布隆过滤器定义、布谷鸟过滤器、Counting Bloom Filter]'
+  run.turn('布隆过滤器的定义是什么', 1, answer)
+  const tree = run.tree()
+  const node = [...tree.nodes.values()].find(entry => entry.kind === 'answer')
+  assert.ok(node !== undefined)
+  assert.ok(!node.content.includes('[summary:'), 'the marker is not part of the answer text')
+  assert.ok(node.summary?.includes('布谷鸟'), 'the model summary is kept: ' + String(node.summary))
+  run.service.attachChoices('choices', '布谷鸟过滤器怎么删除')
+  const block = run.service.attachChoices('choices', '布谷鸟过滤器怎么删除')
+  assert.ok(block.includes('含') || block.includes('布谷鸟'), 'the label carries the aspects: ' + block)
+})
