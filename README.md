@@ -99,6 +99,21 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 
 > `[已折叠] 之前的 1 轮对话已从上下文移除以节省 token；原文完整保存在对话树中，需要细节时调用 retrieve_context 取回。`
 
+## 把落点判断交给模型
+
+模型每轮会收到最多 10 条候选（只有**问题**，没有回答正文），并可以在回答最后点名：
+
+```text
+[attach:nX]    依赖候选里的某一条（含代词指代）
+[attach:root]  这是新话题，挂到根
+[attach:here]  要求/元指令（"我来问，你来看对不对"），留在当前线上
+```
+
+提示里还有一句：**问题问的是某条回答里提到的子概念时，挂那条回答**。这一句让"讲了 A，其中提到 B
+和 C，再分别问 B、C"都挂回 A —— 实测 3/5 → 5/5（同一 5 次追问）；没有它时两问会串成 B→C 的链。
+
+插件只接受**本轮真的发过**的 id：模型编的节点号一律忽略，标记从正文剥掉，不进树也不进下一轮。
+
 ## 长内容怎么给
 
 长回答不摘要（摘要会改写代码与数字），按大小分三档：
@@ -128,7 +143,9 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 | `foldKeepTurns` | `3` | 保留最近轮数 |
 | `foldScope` | `turns` | 折叠范围 |
 | `attachChoices` | `10` | 每轮给模型看的候选问题数量（只给问题，不给正文）；`0` 关闭 |
-| `attachPrompt` | `any` | `any`：依赖写 `[attach:nX]`、新话题写 `[attach:root]`；`follow`：只问指代 |
+| `attachPrompt` | `any` | `any`：依赖写 `[attach:nX]`、新话题写 `[attach:root]`、元指令写 `[attach:here]`；`follow`：只问指代 |
+| `attachGate` | `always` | `uncertain`：只在本地没把握时才发候选块（实测按会话类型两极分化，0%–100%） |
+| `attachSummary` | `false` | 让模型在回答末尾写"方面摘要"，显示在候选列表里；实测无收益，默认关 |
 | `mandatoryContext` | `true` | 把一个回合的"父回答 + 它的提问"强制放进检索结果；这是接线保证（≈99%），不是打分检索的增益 |
 | `fileRegion` | `auto` | 检索返回本会话读过文件的当前内容（auto/digest/content/off） |
 | `tokenizerVersion` | `auto` | `auto` / `3` / `4` / `off`（估算 + 账单校准） |
@@ -178,7 +195,7 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 188 个用例（后端 163 + 浏览器端 25）
+pnpm test           # 201 个用例（后端 176 + 浏览器端 25）
 pnpm run check      # 类型检查 + 测试
 ```
 
@@ -212,7 +229,7 @@ powershell -File scripts/release.ps1           # 发布并推进到下一个测�
 | `src/core/` | 纯算法：图、边权、路径成本、加权检索、评估与回溯 |
 | `src/plugin/` | DSH 接线：`Config`、会话服务、工具、事件订阅、HTTP 路由、折叠规划 |
 | `client/client.js` | 浏览器端：dock、编辑器、图形视图、回收站、规则栏、设置面板、预设选择器 |
-| `tests/` | 188 个用例，含 jsdom 挂载真实 React 的客户端测试 |
+| `tests/` | 201 个用例，含 jsdom 挂载真实 React 的客户端测试 |
 | `docs/experiment-context-cache.md` | 全部实测记录（1–15） |
 
 ## License

@@ -111,13 +111,33 @@ Three presets sit at the top of the settings page, and every value is adjustable
 | `foldKeepTurns` | `3` | Keep this many recent turns verbatim |
 | `foldScope` | `turns` | `turns` folds whole turns, `tools` folds only tool output |
 | `attachChoices` | `10` | How many candidate questions the model sees each turn (questions only); `0` turns it off |
-| `attachPrompt` | `any` | `any`: dependency is `[attach:nX]`, new topic is `[attach:root]`; `follow`: anaphora only |
+| `attachPrompt` | `any` | `any`: dependency `[attach:nX]`, new topic `[attach:root]`, meta turn `[attach:here]`; `follow`: anaphora only |
+| `attachGate` | `always` | `uncertain`: offer candidates only when the local placement was unsure (measured 0%–100% depending on session shape) |
+| `attachSummary` | `false` | Ask the model for an aspect summary shown in the candidate list; no measured benefit, off by default |
 | `mandatoryContext` | `true` | Force-injects the answer a turn hangs under plus its question; this is a wiring guarantee (~99%), not a scoring gain |
 | `fileRegion` | `auto` | Retrieval returns the current text of files this session read (auto/digest/content/off) |
 
 The placeholder left behind tells the model where the text went:
 
 > `[folded] The previous turn was removed from the context to save tokens; the full text is kept in the conversation tree — call retrieve_context when you need the details.`
+
+## Letting the model place the turn
+
+Every turn the model sees up to ten candidates (their **questions** only, never the answer text) and may
+name one at the end of its answer:
+
+```text
+[attach:nX]    depends on one candidate (including anaphora)
+[attach:root]  a new topic, put it under the root
+[attach:here]  a requirement or meta turn ("I will ask, you judge"), stay on the current line
+```
+
+The hint also says: **when the question asks about a sub-concept some answer mentioned, attach to that
+answer**. That sentence makes "answered A mentioning B and C, now ask B / ask C" put both under A:
+3/5 -> 5/5 on the same five probes; without it the two follow-ups chain B->C.
+
+Only ids offered that turn are accepted: an invented node number is ignored, and the marker is
+stripped from the text, so it never reaches the tree or the next prompt.
 
 ## How long content is served
 
@@ -214,7 +234,7 @@ tool/result   ─┘
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 164 cases (140 backend + 24 browser)
+pnpm test           # 201 cases (176 backend + 25 browser)
 pnpm run check      # typecheck + tests
 ```
 
@@ -251,7 +271,7 @@ It validates, sets `x.y.z`, publishes `./plugin` with `--tag latest`, advances t
 | `src/core/` | Pure algorithms: graph, edge weights, path cost, weighted retrieval, grading and backtracking |
 | `src/plugin/` | The DSH wiring: `Config`, the session service, tools, event subscriptions, HTTP routes, fold planning |
 | `client/client.js` | Browser half: dock, editor, graph view, recycle bin, rule bar, settings panel, preset picker |
-| `tests/` | 164 cases, including client tests that mount real React under jsdom |
+| `tests/` | 201 cases, including client tests that mount real React under jsdom |
 | `docs/experiment-context-cache.md` | Every measurement (1–15) |
 
 ## License
