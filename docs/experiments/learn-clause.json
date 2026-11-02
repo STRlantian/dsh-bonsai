@@ -1,0 +1,168 @@
+{
+  "sessionId": "session-7d0e83c6-a955-4f09-a437-adb30c6fa56e",
+  "rows": [
+    {
+      "turn": 1,
+      "expected": "root",
+      "marker": "root",
+      "summary": null,
+      "answer": "注意力机制按相关性加权聚合：Q与K算相似度，softmax归一后加权求和V，并行且擅长捕捉长距离依赖。\n\n[attach",
+      "actual": "root",
+      "ok": true
+    },
+    {
+      "turn": 2,
+      "expected": "n3",
+      "marker": "here",
+      "summary": null,
+      "answer": "你需要的已经够了：q·k 内积打分，e^x/Σe^x 做 softmax，输出即权重矩阵乘 V，求导即可训练。\n\n[at",
+      "actual": "root",
+      "ok": false
+    },
+    {
+      "turn": 3,
+      "expected": "n5",
+      "marker": "n7",
+      "summary": null,
+      "answer": "我上一条回答里没有 y，你指的是 q·k、softmax 里的 e^x，还是输出矩阵？\n\n[attach:n7]",
+      "actual": "n5",
+      "ok": true
+    },
+    {
+      "turn": 4,
+      "expected": "n7",
+      "marker": "n9",
+      "summary": null,
+      "answer": "错：i 指序列中的位置，不是词表里的编号。权重就在上下文词之间分配、总和为 1；词表维度只出现在输出 embedding",
+      "actual": "n7",
+      "ok": true
+    },
+    {
+      "turn": 5,
+      "expected": "n10",
+      "marker": "n11",
+      "summary": null,
+      "answer": "y 用来对 V 加权求和得到新向量，再投影、残差后进下一层。n 是序列词数：每位置一个 query。\n\n[attach:",
+      "actual": "n9",
+      "ok": false
+    },
+    {
+      "turn": 6,
+      "expected": "n3",
+      "marker": "here",
+      "summary": null,
+      "answer": "RNN 顺序传递会丢失长距离信息，也不能并行。自然解法是：每个词直接与所有词比较相关性，再按分数加权取信息。\n\n[att",
+      "actual": "n11",
+      "ok": false
+    },
+    {
+      "turn": 7,
+      "expected": "n14",
+      "marker": "n7",
+      "summary": null,
+      "answer": "对，内积同时包含了长度和夹角，并不表示纯相似度；纯相似度要用余弦。实际靠学习到的投影和 1/√d 缩放，让长度也携带信息",
+      "actual": "n13",
+      "ok": false
+    },
+    {
+      "turn": 8,
+      "expected": "n14",
+      "marker": "here",
+      "summary": null,
+      "answer": "基本对。补充一点：关联是单向的，i 发出 Q，其他词给出 K；最后得到的不是分数，而是聚合后的新向量。\n\n[attach",
+      "actual": "n7",
+      "ok": false
+    },
+    {
+      "turn": 9,
+      "expected": "n18",
+      "marker": "here",
+      "summary": null,
+      "answer": "方向对，但不要直接用原始向量比较：先各自乘不同的矩阵，得到 Q、K，再算内积。排序后还要归一成权重。\n\n[attach:",
+      "actual": "n17",
+      "ok": false
+    },
+    {
+      "turn": 10,
+      "expected": "n20",
+      "marker": "here",
+      "summary": null,
+      "answer": "对。x 乘三个不同矩阵得到 q、k、v，维度可以不同；权重只由 q·k 决定，最后加权的是 v。\n\n[attach:he",
+      "actual": "n19",
+      "ok": false
+    },
+    {
+      "turn": 11,
+      "expected": "n22",
+      "marker": "here",
+      "summary": null,
+      "answer": "不完全对：x 不是每个词各存一份，它来自共享的嵌入表；训练的是嵌入表与 QKV 等矩阵，不是句中出现的那份 x。\n\n[a",
+      "actual": "n21",
+      "ok": false
+    },
+    {
+      "turn": 12,
+      "expected": "n24",
+      "marker": "here",
+      "summary": null,
+      "answer": "这种说法在可学习绝对位置编码下成立。但现代 LLM 多用 RoPE：不把位置向量相加，改为旋转 q、k 来体现位置。\n\n",
+      "actual": "n23",
+      "ok": false
+    },
+    {
+      "turn": 13,
+      "expected": "n26",
+      "marker": "here",
+      "summary": null,
+      "answer": "对。不过 s_ij 只是原始分数，还需按行对 j 做 softmax，才成为总和为 1 的注意力权重。\n\n[attach",
+      "actual": "n25",
+      "ok": false
+    },
+    {
+      "turn": 14,
+      "expected": "n28",
+      "marker": "here",
+      "summary": null,
+      "answer": "这一步按权重把各词的 v 混合起来：i 由此得到的新向量吸收相关词的信息，是对语境的表示，不再是它自己的字面含义。\n\n[",
+      "actual": "n27",
+      "ok": false
+    },
+    {
+      "turn": 15,
+      "expected": "n28",
+      "marker": "here",
+      "summary": null,
+      "answer": "这里的 V 是各 token 的 v 叠成的矩阵，即 V=X·W_V 算出的结果；它既不是原始 x，也不是那个投影矩阵本",
+      "actual": "n29",
+      "ok": false
+    },
+    {
+      "turn": 16,
+      "expected": "n32",
+      "marker": "here",
+      "summary": null,
+      "answer": "对，但其中包含该词自己（对角线元素），得到的是 v 的加权和，并非信息量；之后还要经过输出投影和残差。\n\n[attach",
+      "actual": "n31",
+      "ok": false
+    },
+    {
+      "turn": 17,
+      "expected": "n34",
+      "marker": "here",
+      "summary": null,
+      "answer": "直觉可以借用，但特征并不是人命名得出来的可解释维度，它们是分布式且互相纠缠的；W 只是学出来的线性重组，不能当作“程度”",
+      "actual": "n33",
+      "ok": false
+    },
+    {
+      "turn": 18,
+      "expected": "n36",
+      "marker": "here",
+      "summary": null,
+      "answer": "W_Q 会把各维混合起来，可食用这一维不再单独对应某个 q 分量；它只体现为 q 偏向某些语境方向，这些方向由用法决定。",
+      "actual": "n35",
+      "ok": false
+    }
+  ],
+  "correct": 3
+}

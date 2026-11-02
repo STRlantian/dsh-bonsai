@@ -1673,6 +1673,7 @@ export class TokenTreeService {
       ? [
         '[token-tree] 本轮的落点由你判，在回答最后单独一行写一种：',
         '  [attach:nX]  依赖下面某一条（含代词指代）；[attach:root] 新话题；[attach:here] 要求/元指令（让我换个方式来问），留在当前这条线上。',
+        '问题问的是某条回答里提到的子概念时，挂那条回答（不是刚才那条）。',
         ...(this.effective().attachSummary ? ['最后再另起一行写 [summary: 用 2–4 个短语说明本条回答讲了哪些方面，逗号分隔，≤40 字]。'] : []),
         '只给问题，回答内容按需用 retrieve_context 取。',
       ]

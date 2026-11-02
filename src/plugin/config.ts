@@ -377,7 +377,9 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         conservativeBudgetRatio: scalar(source, 'conservativeBudgetRatio', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input > 0 && input <= 1, issues, 'a number within (0, 1]') ?? 0.85,
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 40000,
-    attachSummary: scalar(source, 'attachSummary', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
+    // Measured on the B/C scenario: the sub-concept instruction alone scores 5/5, adding summaries
+    // 4/5. The summary stays available but off by default.
+    attachSummary: scalar(source, 'attachSummary', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,
     attachGate: (() => {
       const mode = scalar(source, 'attachGate', (input): input is string => typeof input === 'string', issues, 'a string')
       return mode === 'uncertain' ? 'uncertain' : 'always'

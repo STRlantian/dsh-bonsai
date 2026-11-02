@@ -1,0 +1,84 @@
+{
+  "sessionId": "session-8ec81e86-3317-4648-819b-819e30ae70f1",
+  "summaryMode": true,
+  "rows": [
+    {
+      "turn": 1,
+      "kind": "seed",
+      "q": "请用大约 150 字介绍注意力机制，并在中间明确提到 Q、K、V 三个矩阵各自的作用。",
+      "expectParentTurn": 0,
+      "marker": null,
+      "summary": null
+    },
+    {
+      "turn": 2,
+      "kind": "sibling",
+      "q": "那 Q 具体是什么？一句话。",
+      "expectParentTurn": 1,
+      "marker": "n3",
+      "summary": "[summary: Q 是查询矩阵，由当前输入线性变换得到，用于与 K 匹配]",
+      "parentTurn": 1,
+      "expectedAnswer": "n3",
+      "actualParent": "n3",
+      "ok": true
+    },
+    {
+      "turn": 3,
+      "kind": "sibling",
+      "q": "那 K 具体是什么？一句话。",
+      "expectParentTurn": 1,
+      "marker": "n5",
+      "summary": "[summary: K 是键矩阵，各位置的特征标签，与 Q 点积算相关性]",
+      "parentTurn": 2,
+      "expectedAnswer": "n3",
+      "actualParent": "n5",
+      "ok": false
+    },
+    {
+      "turn": 4,
+      "kind": "sibling",
+      "q": "那 V 具体是什么？一句话。",
+      "expectParentTurn": 1,
+      "marker": "n3",
+      "summary": "[summary: V 是值矩阵，注意力权重作用其上，加权求和得输出]",
+      "parentTurn": 1,
+      "expectedAnswer": "n3",
+      "actualParent": "n3",
+      "ok": true
+    },
+    {
+      "turn": 5,
+      "kind": "seed",
+      "q": "请用大约 150 字介绍位置编码，并在中间明确提到正弦编码与可学习编码两种做法。",
+      "expectParentTurn": 0,
+      "marker": "root",
+      "summary": "[summary: 位置编码作用，正弦编码，可学习编码，其他变体]"
+    },
+    {
+      "turn": 6,
+      "kind": "sibling",
+      "q": "正弦编码具体怎么算？一句话。",
+      "expectParentTurn": 5,
+      "marker": "n11",
+      "summary": "[summary: 正弦编码公式，按维度奇偶用 sin/cos，频率随维度变化]",
+      "parentTurn": 5,
+      "expectedAnswer": "n11",
+      "actualParent": "n11",
+      "ok": true
+    },
+    {
+      "turn": 7,
+      "kind": "sibling",
+      "q": "可学习编码有什么缺点？一句话。",
+      "expectParentTurn": 5,
+      "marker": "n11",
+      "summary": "[summary: 最大长度固定，无法外推，位置数受限]",
+      "parentTurn": 5,
+      "expectedAnswer": "n11",
+      "actualParent": "n11",
+      "ok": true
+    }
+  ],
+  "correct": 4,
+  "probes": 5
+}

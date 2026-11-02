@@ -89,7 +89,7 @@ await fetch(`${base}/api/token-tree/settings`, {
 })
 const created = await rpc('session/create', { request: {} })
 const sessionId = created.sessionId
-await say(sessionId, '从现在开始，每次回答控制在 120 字以内，并在最后按注入的提示写标记。')
+await say(sessionId, '从现在起，每次回答控制在 120 字以内。')
 
 const rows = []
 for (const [index, step] of script.entries()) {
@@ -98,6 +98,7 @@ for (const [index, step] of script.entries()) {
   rows.push({
     turn: index + 1,
     kind: step.kind,
+    q: step.q,
     expectParentTurn: step.expectParent,
     marker: (/\[attach:(n\d+|root|here)\]/.exec(answer) ?? [])[1] ?? null,
     summary: /\[summary:[^\]]*\]/.exec(answer)?.[0] ?? null,
