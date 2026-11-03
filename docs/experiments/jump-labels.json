@@ -1,0 +1,96 @@
+{
+  "session": "2ba794ae",
+  "note": "Jump-only set: every question is appended after the end of the real attention session, so the previous answer is turn 18 and the expected parent is always an earlier answer. This is the only shape where a scoring change can show a difference. Categories: synonym = same meaning, different words; earlier = refers back to an earlier explanation; concept = asks about a specific term introduced elsewhere.",
+  "items": [
+    {
+      "question": "模型是怎么决定该关注哪些位置的？",
+      "expectedTurn": 1,
+      "category": "synonym",
+      "note": "注意力 spoken as 关注"
+    },
+    {
+      "question": "两个向量方向一致但长度不同时，用点积判断相似可靠吗？",
+      "expectedTurn": 7,
+      "category": "synonym",
+      "note": "内积 spoken as 点积"
+    },
+    {
+      "question": "词向量和位置向量相加之后，还能分辨每一维代表什么吗？",
+      "expectedTurn": 12,
+      "category": "concept",
+      "note": "e(w)+p 的讨论"
+    },
+    {
+      "question": "三个参数矩阵为什么能在所有位置之间共享？",
+      "expectedTurn": 10,
+      "category": "concept",
+      "note": "q/k/v 与共享参数"
+    },
+    {
+      "question": "权重矩阵的一行加起来等于 1 意味着什么？",
+      "expectedTurn": 16,
+      "category": "concept",
+      "note": "A 的行和为 1"
+    },
+    {
+      "question": "输入句子变长时，中间那些矩阵的形状怎么变？",
+      "expectedTurn": 16,
+      "category": "concept",
+      "note": "Y=AV 的形状"
+    },
+    {
+      "question": "softmax 之前的分数为什么说没有统一单位？",
+      "expectedTurn": 13,
+      "category": "earlier",
+      "note": "s_ij 是原始分数"
+    },
+    {
+      "question": "位置信息和词义信息在向量里是叠加还是拼接？",
+      "expectedTurn": 12,
+      "category": "synonym",
+      "note": "叠加 vs 拼接"
+    },
+    {
+      "question": "哪一个矩阵是给别人看的标签？",
+      "expectedTurn": 10,
+      "category": "concept",
+      "note": "k 是被动方"
+    },
+    {
+      "question": "输出向量的维度会随句子长度变化吗？",
+      "expectedTurn": 16,
+      "category": "concept",
+      "note": "n×d_v"
+    },
+    {
+      "question": "训练的时候到底在调整哪些数值？",
+      "expectedTurn": 11,
+      "category": "synonym",
+      "note": "参数 vs 激活值"
+    },
+    {
+      "question": "被优化的是输入本身还是可训练的参数？",
+      "expectedTurn": 11,
+      "category": "synonym",
+      "note": "x 不是参数"
+    },
+    {
+      "question": "两个词的匹配强度是怎么算出来的？",
+      "expectedTurn": 9,
+      "category": "concept",
+      "note": "s_ij = q·k"
+    },
+    {
+      "question": "为什么内积会偏好模长大的向量？",
+      "expectedTurn": 7,
+      "category": "earlier",
+      "note": "点积的尺度问题"
+    },
+    {
+      "question": "公式里的 V 是原始输入还是变换之后的？",
+      "expectedTurn": 15,
+      "category": "concept",
+      "note": "V = XW_V"
+    }
+  ]
+}
