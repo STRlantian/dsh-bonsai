@@ -212,7 +212,7 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
         // ?session=<id> asks for that conversation's values: its own overrides on top of the globals.
         const scopedSession = scopedSessionOf(request)
         if (request.method === 'GET') {
-          return Response.json({ ok: true, ...service.settingsInfo(), effective: service.effective(scopedSession) }, {
+          return Response.json({ ok: true, ...service.settingsInfo(scopedSession), effective: service.effective(scopedSession) }, {
             headers: { 'cache-control': 'no-store' },
           })
         }

@@ -513,9 +513,11 @@ export class TokenTreeService {
   }
 
   /** The override file in use, for the settings panel to show. */
-  settingsInfo(): {
+  settingsInfo(sessionId?: string): {
     path: string | null
     overrides: Record<string, boolean | number | string | string[]>
+    /** Overrides that are global, whatever scope the request asked for. */
+    globalOverrides: Record<string, boolean | number | string | string[]>
     /** Per-session overrides, so the panel can show which conversations have their own values. */
     sessions: Record<string, Record<string, boolean | number | string | string[]>>
     base: ReturnType<TokenTreeService['effective']> & { hintAboveTokens: number; tokenizerPath: string | null }
@@ -544,7 +546,11 @@ export class TokenTreeService {
   } {
     return {
       path: this.settings === undefined ? null : this.settings.path,
-      overrides: { ...(this.settings?.all() ?? {}) } as Record<string, boolean | number | string | string[]>,
+      overrides: (sessionId === undefined
+        ? { ...(this.settings?.all() ?? {}) }
+        : { ...(this.settings?.allFor?.(sessionId) ?? this.settings?.all() ?? {}) }) as Record<string, boolean | number | string | string[]>,
+      /** Overrides that are global, regardless of the scope being edited. */
+      globalOverrides: { ...(this.settings?.all() ?? {}) } as Record<string, boolean | number | string | string[]>,
       sessions: (this.settings?.allSessions?.() ?? {}) as Record<string, Record<string, boolean | number | string | string[]>>,
       base: {
         autoInject: this.config.autoInject,

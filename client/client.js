@@ -1557,14 +1557,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           h('p', { className: 'twt-hint' }, t('本对话的设置只覆盖这一个对话，清空某项就回落到全局值'))),
         h('div', { className: 'twt-guide' },
           h('span', { className: 'twt-dtitle' }, t('按需求设置')),
-          h('p', { className: 'twt-hint' }, t('选一个最接近你用法的情况，只改这一页的开关，随时可以再换')),
+          h('p', { className: 'twt-hint' }, t('只保留三种最常用的情形；想微调下面的开关，随时可以换')),
           h('div', { className: 'twt-guide-buttons' },
             [
               { id: 'learn', label: '学习、概念问答', patch: { foldAboveTokens: 20000, foldKeepTurns: 2, foldScope: 'turns', fileRegion: 'auto', mandatoryContext: true, attachChoices: 6, attachGate: 'always', attachSummary: false } },
-              { id: 'chat', label: '长对话、概念问答', patch: { foldAboveTokens: 20000, foldKeepTurns: 2, foldScope: 'turns', fileRegion: 'auto', mandatoryContext: true } },
               { id: 'code', label: '工程、反复改文件', patch: { foldAboveTokens: 20000, foldKeepTurns: 3, foldScope: 'tools', fileRegion: 'auto', mandatoryContext: true } },
               { id: 'save', label: '尽量省 token', patch: { foldAboveTokens: 10000, foldKeepTurns: 1, foldScope: 'turns', fileRegion: 'digest', mandatoryContext: true, toolDeny: ['workflow', 'schedule_create', 'schedule_update', 'schedule_delete', 'schedule_list', 'subagent_fork', 'ask_user_question', 'update_goal', 'get_goal'] } },
-              { id: 'off', label: '先全关掉', patch: { foldAboveTokens: 0, fileRegion: 'off', mandatoryContext: false } },
             ].map(function (option) {
               return h('button', {
                 key: option.id,
