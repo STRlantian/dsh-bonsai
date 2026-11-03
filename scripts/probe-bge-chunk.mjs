@@ -75,7 +75,7 @@ const started = Date.now()
 const extractor = await pipeline('feature-extraction', 'Xenova/bge-small-zh-v1.5', { dtype: 'q8' })
 console.log('model loaded in', Date.now() - started, 'ms')
 const embed = async texts => {
-  const result = await extractor(texts, { pooling: 'mean', normalize: true })
+  const result = await extractor(texts, { pooling: (process.env.BGE_POOLING ?? 'mean'), normalize: true })
   return result.tolist()
 }
 
