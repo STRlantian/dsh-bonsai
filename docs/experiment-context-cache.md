@@ -1667,3 +1667,32 @@ discount     = max(baseDiscount, 被匹配词的 tf / 该节点最高 tf)
 与 33b（改 evidence）相比：**这一版在默认边距 0.08 下就生效**，不需要动 margin，改动更小、更贴本意。
 因此 33b 的 strong 改动与 margin 0.02 已回退，最终只保留 `discount = max(base, 占比)`。
 
+
+
+## 实验 34：BGE（bge-small-zh）能不能解决同义改写
+
+做法：`@huggingface/transformers` + `onnxruntime-node`（q8 量化），模型 `Xenova/bge-small-zh-v1.5`，
+离线跑 `scripts/probe-bge.mjs`：对每条问题，用 BGE 向量给所有回答排序，看目标回答的名次。
+
+| 集合 | BGE rank1 | 现有挂接（本地） |
+|---|---|---|
+| 18 条学习标注（去掉 root 项，17 条） | **1/17**（top3 4/17） | 14/18 |
+| 同义改写 8 条（6 改写 + 2 控制） | **5/8** | 3/8 |
+
+注意两点：
+
+1. 标注集那一行**指标不完全可比**（BGE 是"排序"，本地是"实际挂接"），但它说明
+   **单靠 BGE 排序无法替代现有规则**：长回答被 512 token 截断，向量只覆盖开头；
+2. 同义改写上 BGE 明显更好：6 条改写里 3 条排第一（点乘/词的编号/配比那三条），
+   而本地只挂对 1 条；2 条控制项都靠词面命中。
+
+可行性数据（本机）：
+- 模型加载 **96 ms**（q8，缓存后）；包体 @huggingface/transformers ≈ 10 MB + onnxruntime 原生二进制，
+  模型下载 ≈ 25 MB（q8）；
+- 环境有坑：直接 import `dist/transformers.js` 会因后端未初始化报 `reading 'create'`，
+  必须走包名解析 `import('@huggingface/transformers')`；本机还有 CA 证书问题需要
+  `NODE_TLS_REJECT_UNAUTHORIZED=0` 才能首次下载。
+
+结论：BGE **只对"同义改写"这一种情况有可测收益**（6 条里 3 条），对长回答的整体排序很差。
+是否接入取决于愿不愿意为"弱证据兜底"付出：原生依赖 + 约 25 MB 模型 + 首次下载。
+未接入；探针脚本保留（需要临时安装依赖）。
