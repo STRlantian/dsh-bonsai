@@ -39,7 +39,7 @@ import { BillingFit, classCounts } from '../core/billing.ts'
 import { resolveTokenizer, defaultTokenizerDir, discoverTokenizers } from './tokenizer-select.ts'
 import { presetOf } from './presets.ts'
 import type { Tokenize } from '../core/tokenizer.ts'
-import { contentFeatures, cosine, embedText } from '../core/embedding.ts'
+import { contentFeatures, embedText, termCounts } from '../core/embedding.ts'
 import type { RetrieveOptions, RetrieveResult, SelectedNode } from '../core/retrieve.ts'
 import { renderContextBlock, retrieveContext } from '../core/retrieve.ts'
 import type { BacktrackPlan, BranchScore, Evaluation, Observation } from '../core/reflect.ts'
@@ -81,6 +81,9 @@ interface AttachmentContext {
   documentFrequency: Map<string, number>
   /** Number of nodes, the denominator of the gate. */
   nodeCount: number
+  /** Term frequencies of the evaluated node, and its largest count (prominence denominator). */
+  counts: Map<NodeId, Map<string, number>>
+  maxTf: Map<NodeId, number>
   /** Feature count of the node the question would otherwise extend, the penalty reference. */
   referenceFeatures: number
   /** The node the question would extend, exempt from the weak-evidence discount. */
@@ -141,6 +144,8 @@ export interface SessionState {
   sticky: NodeId[]
   /** Content features per node, computed once: node content is immutable. */
   featureCache: Map<NodeId, Set<string>>
+  /** Term frequencies per node, for the prominence weight. */
+  termCounts: Map<NodeId, Map<string, number>>
   /** Candidate ids offered to the model this turn, so a marker can only name one of them. */
   offered: NodeId[]
   /** Whether `[attach:root]` was on the table this turn. */
@@ -612,6 +617,7 @@ export class TokenTreeService {
     sticky: [],
     offered: [],
     featureCache: new Map(),
+    termCounts: new Map(),
     offeredRoot: false,
       callArgs: new Map(),
       tokenCounts: new Map(),
@@ -996,7 +1002,6 @@ export class TokenTreeService {
   }
 
   private attachmentScore(input: AttachmentContext, node: MemoryNode): number {
-    const semantic = Math.max(0, cosine(input.embedding, node.embedding))
     const features = input.nodeFeatures.get(node.id) ?? contentFeatures(node.content)
     let best = 0
     let bestFeature = ''
@@ -1039,7 +1044,12 @@ export class TokenTreeService {
     const penalty = Math.min(1, Math.sqrt(input.referenceFeatures / Math.max(1, features.size)))
     // Applied to the whole score: the semantic half is a bag-of-characters cosine that also
     // rewards size, so scaling only the lexical half left long answers winning.
-    return (0.45 * semantic + 0.55 * lexical) * penalty * discount
+    // Prominence: a term the answer keeps coming back to is more likely to be what that answer is
+    // *about*, rather than something it mentioned once in passing.
+    const counts = input.counts.get(node.id)
+    const tf = counts?.get(bestFeature) ?? 0
+    const prominence = tf === 0 ? 0 : 0.5 + 0.5 * (tf / Math.max(1, input.maxTf.get(node.id) ?? 1))
+    return lexical * prominence * penalty * discount
   }
 
   /**
@@ -1052,6 +1062,8 @@ export class TokenTreeService {
   private attachmentContext(state: SessionState, text: string, embedding: number[]): AttachmentContext {
     const questionFeatures = contentFeatures(text)
     const nodeFeatures = new Map<NodeId, Set<string>>()
+    const countsByNode = new Map<NodeId, Map<string, number>>()
+    const maxTfByNode = new Map<NodeId, number>()
     const documentFrequency = new Map<string, number>()
     let nodeCount = 0
     for (const node of state.tree.nodes.values()) {
@@ -1063,6 +1075,15 @@ export class TokenTreeService {
       nodeFeatures.set(node.id, features)
       // A question repeats the topic it asks about; counting it made "凸包" look common in the
       // very tree where it was the subject. Frequency describes the nodes that can own a topic.
+      let counts = state.termCounts.get(node.id)
+      if (counts === undefined) {
+        counts = termCounts(node.content)
+        state.termCounts.set(node.id, counts)
+      }
+      countsByNode.set(node.id, counts)
+      let biggest = 1
+      for (const value of counts.values()) if (value > biggest) biggest = value
+      maxTfByNode.set(node.id, biggest)
       if (node.kind === 'question' || node.kind === 'note') continue
       nodeCount++
       for (const feature of features) {
@@ -1084,6 +1105,8 @@ export class TokenTreeService {
     return {
       embedding,
       questionFeatures,
+      counts: countsByNode,
+      maxTf: maxTfByNode,
       nodeFeatures,
       idf,
       maxIdf,

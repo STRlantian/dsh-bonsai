@@ -35,10 +35,10 @@ A：树完全由 `user/message`、`assistant/message`、`tool/result` 三类事�
 A：默认挂在"最近可见祖先"（通常是上一轮回答）。分数：
 
 ```text
-score = (0.45×semantic + 0.55×lexical) × lengthPenalty × evidenceDiscount
+score = lexical × prominence × lengthPenalty × evidenceDiscount
 
-semantic        = 问题与节点 256 维字符哈希向量的余弦
-lexical         = 共享的最稀有具体词 IDF / 问题最大 IDF
+lexical     = 共享的最稀有具体词 IDF / 问题最大 IDF
+prominence  = 0.5 + 0.5 × （该词在本节点出现次数 / 本节点最高词频）
 lengthPenalty   = min(1, √(默认节点特征数 / 该节点特征数))
 evidenceDiscount= 强证据（≥2 个具体词或最长共享词≥3字）或默认节点 → 1，否则 → 0.3
 ```

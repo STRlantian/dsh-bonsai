@@ -207,7 +207,7 @@ assistant/message ├─▶ TokenTreeService ─▶ MemoryTree (nodes / edge wei
 tool/result   ─┘
                           │
               Where does a new question attach?
-              ├ a specific term (shared by ≤1/3 of nodes) + semantic similarity
+              ├ a specific term (shared by few nodes), weighted by how central it is to that answer
               │   → the answer that introduced that term
               └ only generic words → a new branch under the root
 ```

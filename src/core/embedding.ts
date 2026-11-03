@@ -104,6 +104,22 @@ const STOPWORDS = new Set([
  * @param text - source text.
  * @returns Distinct content features, possibly empty.
  */
+/**
+ * Term frequencies with the same filtering as {@link contentFeatures}.
+ * @param text - source text.
+ * @returns Feature counts, possibly empty.
+ */
+export function termCounts(text: string): Map<string, number> {
+  const counts = new Map<string, number>()
+  for (const feature of tokenize(text)) {
+    if (feature.length < 2 && !(feature.length === 1 && /^[a-z0-9]$/i.test(feature))) continue
+    if (STOPWORDS.has(feature)) continue
+    if (isFunctionBigram(feature)) continue
+    counts.set(feature, (counts.get(feature) ?? 0) + 1)
+  }
+  return counts
+}
+
 export function contentFeatures(text: string): Set<string> {
   const features = new Set<string>()
   for (const feature of tokenize(text)) {
