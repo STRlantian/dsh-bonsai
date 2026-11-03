@@ -762,3 +762,26 @@ test('anchoring from a branch row calls the focus route', { timeout: 30000 }, as
   assert.ok(focusCall !== undefined, 'focus route called')
   assert.ok(String(focusCall.body).includes('n4'), 'anchored to the branch node')
 })
+
+test('the settings panel opens on the global scope with a tab switch', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  await client.click('盆栽')
+  await client.click('设置')
+  const tabs = [...client.document.querySelectorAll('.twt-tab')].map(tab => tab.textContent)
+  assert.deepEqual(tabs, ['全局设置', '本对话'], 'two scope tabs, in order')
+  const active = client.document.querySelector('.twt-tab-active')
+  assert.ok(active !== null, 'one tab is active')
+  assert.equal(active.textContent, '全局设置', 'opens on the global scope')
+  // The quick-setup blocks are cards with headings, not loose button rows.
+  const titles = [...client.document.querySelectorAll('.twt-card .twt-dtitle')].map(node => node.textContent)
+  assert.ok(titles.includes('快捷设置'), 'guided setup is a card')
+  assert.ok(titles.includes('预设'), 'presets are a card')
+  // The gate switch existed as a setting but had no row; it now sits under 挂接.
+  const rows = [...client.document.querySelectorAll('.twt-srow')].map(row => row.textContent ?? '')
+  assert.ok(rows.some(text => text.includes('何时让模型看候选')), 'attachGate row present')
+  // The fold body row sits directly under the threshold row.
+  const thresholdIndex = rows.findIndex(text => text.includes('历史超过多少 token 开始省略旧轮次'))
+  const keepIndex = rows.findIndex(text => text.includes('最近几轮保留原文'))
+  assert.equal(keepIndex, thresholdIndex + 1, '保留轮数 follows the threshold')
+})

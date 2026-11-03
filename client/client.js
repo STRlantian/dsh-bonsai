@@ -579,7 +579,23 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-guide{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--twt-border);border-radius:8px}',
     '.twt-guide-buttons{display:flex;flex-wrap:wrap;gap:6px}',
     '.twt-srow{display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:8px;',
-    'border:1px solid var(--twt-border);background:rgba(255,255,255,.02)}',
+    'border:1px solid var(--twt-border);background:rgba(255,255,255,.02);transition:background .12s ease}',
+    '.twt-srow:hover{background:rgba(255,255,255,.05)}',
+    // A segmented switch reads as one control, not as two stray buttons.
+    '.twt-tabs{display:flex;gap:4px;padding:3px;border:1px solid var(--twt-border);border-radius:10px;background:rgba(255,255,255,.03)}',
+    '.twt-tab{flex:1;padding:7px 10px;border:0;border-radius:8px;background:transparent;color:inherit;',
+    'font-size:12px;cursor:pointer;opacity:.72;transition:background .12s ease,opacity .12s ease}',
+    '.twt-tab:hover{background:var(--twt-hover);opacity:1}',
+    '.twt-tab:disabled{opacity:.35;cursor:default}',
+    '.twt-tab-active{background:var(--twt-accent);color:#fff;opacity:1}',
+    '.twt-card{border:1px solid var(--twt-border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}',
+    '.twt-cardhead{display:flex;align-items:center;gap:8px}',
+    '.twt-scopehint{margin:2px 0 0}',
+    '.twt-advanced{border:1px solid var(--twt-border);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;gap:8px}',
+    '.twt-advanced summary{cursor:pointer;font-size:12px;font-weight:700;opacity:.72;letter-spacing:.02em;list-style:none}',
+    '.twt-advanced summary::before{content:"▸ ";opacity:.7}',
+    '.twt-advanced[open] summary::before{content:"▾ "}',
+    '.twt-advanced summary::-webkit-details-marker{display:none}',
     '.twt-slabel{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}',
     '.twt-slabel .twt-hint{font-size:11px;opacity:.7}',
     '.twt-scontrol{display:flex;align-items:center;gap:8px;flex:none}',
@@ -1534,30 +1550,39 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       settingsPanel = h('div', { className: 'twt-settings' },
         h('p', { className: 'twt-hint' },
           tf('这些开关立即生效，写入 {}，重启后仍然有效。', settings.path === null ? t('（未配置）') : settings.path)),
-        h('div', { className: 'twt-guide' },
-          h('span', { className: 'twt-dtitle' }, t('编辑范围')),
-          h('div', { className: 'twt-guide-buttons' },
-            h('button', {
-              className: settingsScopeId === null ? 'twt-action twt-active' : 'twt-action',
-              disabled: busy,
-              onClick: function () {
-                settingsScopeId = null
-                refreshSettings()
-              },
-            }, t('全局')),
-            h('button', {
-              className: settingsScopeId === null ? 'twt-action' : 'twt-action twt-active',
-              disabled: busy || typeof sessionId !== 'string' || sessionId.length === 0,
-              title: typeof sessionId !== 'string' || sessionId.length === 0 ? t('还没有绑定会话') : t('只影响当前这个对话'),
-              onClick: function () {
-                settingsScopeId = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
-                refreshSettings()
-              },
-            }, t('本对话'))),
-          h('p', { className: 'twt-hint' }, t('本对话的设置只覆盖这一个对话，清空某项就回落到全局值'))),
-        h('div', { className: 'twt-guide' },
-          h('span', { className: 'twt-dtitle' }, t('按需求设置')),
-          h('p', { className: 'twt-hint' }, t('只保留三种最常用的情形；想微调下面的开关，随时可以换')),
+        h('div', { className: 'twt-tabs', role: 'tablist' },
+          h('button', {
+            role: 'tab',
+            'aria-selected': settingsScopeId === null,
+            className: settingsScopeId === null ? 'twt-tab twt-tab-active' : 'twt-tab',
+            disabled: busy,
+            onClick: function () {
+              if (settingsScopeId === null) return
+              settingsScopeId = null
+              refreshSettings()
+            },
+          }, t('全局设置')),
+          h('button', {
+            role: 'tab',
+            'aria-selected': settingsScopeId !== null,
+            className: settingsScopeId === null ? 'twt-tab' : 'twt-tab twt-tab-active',
+            disabled: busy || typeof sessionId !== 'string' || sessionId.length === 0,
+            title: typeof sessionId !== 'string' || sessionId.length === 0 ? t('还没有绑定会话') : t('只覆盖当前这个对话'),
+            onClick: function () {
+              if (settingsScopeId !== null || typeof sessionId !== 'string' || sessionId.length === 0) return
+              settingsScopeId = sessionId
+              refreshSettings()
+            },
+          }, t('本对话'))),
+        h('p', { className: 'twt-hint twt-scopehint' },
+          settingsScopeId === null
+            ? t('改动影响所有对话；被改过的项会标「已覆盖」')
+            : t('只覆盖当前这个对话；清空某项就退回全局值')),
+        h('div', { className: 'twt-card twt-guide' },
+          h('div', { className: 'twt-cardhead' },
+            h('span', { className: 'twt-dtitle' }, t('快捷设置')),
+            h('span', { className: 'twt-hint' }, t('选一个最接近的情形'))),
+          h('p', { className: 'twt-hint' }, t('只保留三种；想微调下面的开关，随时可以换')),
           h('div', { className: 'twt-guide-buttons' },
             [
               { id: 'learn', label: '学习、概念问答', patch: { foldAboveTokens: 20000, foldKeepTurns: 2, foldScope: 'turns', fileRegion: 'auto', mandatoryContext: true, attachChoices: 6, attachGate: 'always', attachSummary: false } },
@@ -1572,8 +1597,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               }, t(option.label))
             })),
           h('p', { className: 'twt-hint' }, t('详细说明见仓库 README 的「设置」与「两个省 token 的开关」'))),
-        h('div', { className: 'twt-presets' },
-          h('span', { className: 'twt-dtitle' }, t('预设')),
+        h('div', { className: 'twt-card twt-presets' },
+          h('div', { className: 'twt-cardhead' },
+            h('span', { className: 'twt-dtitle' }, t('预设')),
+            h('span', { className: 'twt-hint' }, t('整套参数，一次改完'))),
           PRESET_LIST.map(function (preset) {
             return h('button', {
               key: preset.id,
@@ -1758,6 +1785,27 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           }),
         }),
         settingRow({
+          key: 'foldKeepTurns',
+          label: t('最近几轮保留原文'),
+          hint: t('最近这么多轮保持原样，保证正在用的上下文完整'),
+          control: h('input', {
+            type: 'number',
+            min: 0,
+            step: 1,
+            defaultValue: String(effective.foldKeepTurns === undefined ? 2 : effective.foldKeepTurns),
+            disabled: busy,
+            style: { width: '76px' },
+            onBlur: function (event) {
+              var next = Number(event.target.value)
+              if (!Number.isFinite(next) || next < 0) {
+                event.target.value = String(effective.foldKeepTurns === undefined ? 2 : effective.foldKeepTurns)
+                return
+              }
+              saveSetting('foldKeepTurns', Math.round(next))
+            },
+          }),
+        }),
+        settingRow({
           key: 'fileRegion',
           label: t('文件区（检索返回文件内容）'),
           hint: t('自动：预算够就给全文，不够给开头；也可以只给开头、总给全文，或关闭'),
@@ -1769,6 +1817,20 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             h('option', { value: 'digest' }, t('只给开头')),
             h('option', { value: 'content' }, t('总是全文')),
             h('option', { value: 'off' }, t('关闭'))),
+        }),
+        settingRow({
+          key: 'attachGate',
+          label: t('何时让模型看候选'),
+          hint: t('每轮：每轮都给（默认）。仅不确定时：本地没把握才给，省 token 但可能错过改挂'),
+          advanced: true,
+          control: h('select', {
+            className: 'twt-select',
+            defaultValue: effective.attachGate === 'uncertain' ? 'uncertain' : 'always',
+            disabled: busy,
+            onChange: function (event) { saveSetting('attachGate', event.target.value) },
+          },
+            h('option', { value: 'always' }, t('每轮')),
+            h('option', { value: 'uncertain' }, t('仅不确定时'))),
         }),
         settingRow({
           key: 'attachPrompt',
@@ -1833,27 +1895,6 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           },
             h('option', { value: 'tools' }, t('工具输出')),
             h('option', { value: 'turns' }, t('整轮对话'))),
-        }),
-        settingRow({
-          key: 'foldKeepTurns',
-          label: t('最近几轮保留原文'),
-          hint: t('最近这么多轮保持原样，保证正在用的上下文完整'),
-          control: h('input', {
-            type: 'number',
-            min: 0,
-            step: 1,
-            defaultValue: String(effective.foldKeepTurns === undefined ? 2 : effective.foldKeepTurns),
-            disabled: busy,
-            style: { width: '76px' },
-            onBlur: function (event) {
-              var next = Number(event.target.value)
-              if (!Number.isFinite(next) || next < 0) {
-                event.target.value = String(effective.foldKeepTurns === undefined ? 2 : effective.foldKeepTurns)
-                return
-              }
-              saveSetting('foldKeepTurns', Math.round(next))
-            },
-          }),
         }),
         settings && settings.fold && settings.fold.folded > 0
           ? h('p', { className: 'twt-hint' },
