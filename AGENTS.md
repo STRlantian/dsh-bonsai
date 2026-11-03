@@ -18,9 +18,16 @@ If a release fix is urgent (a broken README, a corrupt manifest), say what is wr
 
 Push only when asked. The default rhythm here is: change, verify locally, report, wait.
 
+## Do not swap the installed plugin under a running app
+
+Overwriting `profiles/desktop/node_modules/dsh-bonsai` while the desktop app is running makes the
+renderer fetch a bundle that no longer matches, and the panel fails with `Failed to fetch` /
+`net::ERR_FAILED` until the files settle or the app restarts. Build and copy while the app is
+closed, then start it; when debugging a live app, use `dsh web` on a scratch profile instead.
+
 ## Verification before claiming something works
 
-- `pnpm run build`, `pnpm run typecheck`, `pnpm test` (147 cases) must pass.
+- `pnpm run build`, `pnpm run typecheck`, `pnpm test` must pass.
 - Behaviour claims about the host (folding, tool restriction, attachment) need a measurement:
   replay a real session with `scripts/probe-session-report.mjs` or run the relevant `probe-*`
   script. Numbers in the README must come from `docs/experiment-context-cache.md`.
