@@ -84,6 +84,7 @@ interface AttachmentContext {
   /** Term frequencies of the evaluated node, and its largest count (prominence denominator). */
   counts: Map<NodeId, Map<string, number>>
   docLength: Map<NodeId, number>
+  maxTf: Map<NodeId, number>
   /** Feature count of the node the question would otherwise extend, the penalty reference. */
   referenceFeatures: number
   /** The node the question would extend, exempt from the weak-evidence discount. */
@@ -998,7 +999,21 @@ export class TokenTreeService {
       shared++
       if (feature.length > longest) longest = feature.length
     }
-    return { shared, longest, strong: shared >= 2 || longest >= 3 }
+    let strong = shared >= 2 || longest >= 3
+    if (!strong) {
+      // Second reading: how much of this answer's emphasis one matched term carries.
+      const counts = input.counts.get(node.id)
+      const maxTf = Math.max(1, input.maxTf.get(node.id) ?? 1)
+      for (const feature of input.questionFeatures) {
+        if (!features.has(feature)) continue
+        const frequency = input.documentFrequency.get(feature) ?? 0
+        const isSpecific = input.nodeCount <= 2 || frequency <= Math.max(2, Math.floor(input.nodeCount / 10))
+        if (!isSpecific) continue
+        const tf = counts?.get(feature) ?? 0
+        if (tf / maxTf >= 0.5) { strong = true; break }
+      }
+    }
+    return { shared, longest, strong }
   }
 
   private attachmentScore(input: AttachmentContext, node: MemoryNode): number {
@@ -1038,7 +1053,21 @@ export class TokenTreeService {
     // `longest` never reaches 3 and this reduces to `shared >= 2`. The `longest >= 3` half only
     // fires for a Latin word of three or more letters ("bloom", "kmp"): one content word in English
     // is decent evidence, one bigram in Chinese is not.
-    const strong = shared >= 2 || longest >= 3
+    // Evidence is the stronger of two readings: the number of specific shared terms, or how much of
+    // this answer's emphasis a single shared term carries. The second reading is what lets "缓存怎样更安全"
+    // reach the answer that dwells on 缓存, instead of staying on a short answer that mentions it once.
+    let strong = shared >= 2 || longest >= 3
+    if (!strong) {
+      const counts = input.counts.get(node.id)
+      const maxTf = Math.max(1, input.maxTf.get(node.id) ?? 1)
+      for (const feature of input.questionFeatures) {
+        if (!features.has(feature)) continue
+        const frequency = input.documentFrequency.get(feature) ?? 0
+        if (input.nodeCount > 2 && frequency > Math.max(2, Math.floor(input.nodeCount / 10))) continue
+        const tf = counts?.get(feature) ?? 0
+        if (tf / maxTf >= 0.5) { strong = true; break }
+      }
+    }
     // Only a jump to another branch needs strong evidence; the current thread is governed by
     // newTopicBelow, where a single shared term is normal for a follow-up.
     const discount = strong || node.id === input.defaultNodeId ? 1 : 0.3
@@ -1069,6 +1098,7 @@ export class TokenTreeService {
     const nodeFeatures = new Map<NodeId, Set<string>>()
     const countsByNode = new Map<NodeId, Map<string, number>>()
     const lengthByNode = new Map<NodeId, number>()
+    const maxTfByNode = new Map<NodeId, number>()
     const documentFrequency = new Map<string, number>()
     let nodeCount = 0
     for (const node of state.tree.nodes.values()) {
@@ -1087,8 +1117,13 @@ export class TokenTreeService {
       }
       countsByNode.set(node.id, counts)
       let total = 0
-      for (const value of counts.values()) total += value
+      let biggest = 1
+      for (const value of counts.values()) {
+        total += value
+        if (value > biggest) biggest = value
+      }
       lengthByNode.set(node.id, Math.max(1, total))
+      maxTfByNode.set(node.id, biggest)
       if (node.kind === 'question' || node.kind === 'note') continue
       nodeCount++
       for (const feature of features) {
@@ -1112,6 +1147,7 @@ export class TokenTreeService {
       questionFeatures,
       counts: countsByNode,
       docLength: lengthByNode,
+      maxTf: maxTfByNode,
       nodeFeatures,
       idf,
       maxIdf,

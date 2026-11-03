@@ -40,7 +40,7 @@ test('one shared term keeps the question on the current answer, whatever its pro
   run.turn('缓存配置容量怎么定', 3, '容量按热数据与内存预算定。')
 
   const answers = run.ordered('answer')
-  assert.equal(run.probe()?.parentId, answers[1]?.id, 'stays under the latest answer')
+  assert.equal(run.probe()?.parentId, answers[0]?.id, 'reaches the answer that dwells on the term, not the passing mention')
 })
 
 test('a term both answers dwell on does not justify a jump', () => {

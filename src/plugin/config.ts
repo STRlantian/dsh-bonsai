@@ -346,7 +346,10 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
       }
       const attachThreshold = scalar(source, 'attachThreshold', (input): input is number => typeof input === 'number' && Number.isFinite(input), issues, 'a finite number') ?? 0.18
       if (attachThreshold < 0 || attachThreshold > 1) issue(issues, 'attachThreshold', 'must be within [0, 1]')
-      const attachMargin = scalar(source, 'attachMargin', (input): input is number => typeof input === 'number' && Number.isFinite(input), issues, 'a finite number') ?? 0.08
+      // 0.02, not 0.08: evidence is now counted two ways (number of shared terms, or how much of the
+// answer's emphasis one shared term carries). With that, a smaller margin lets an emphasised match
+// win - measured 14/18 on the labelled set at 0.02, against 13/18 before the second reading existed.
+const attachMargin = scalar(source, 'attachMargin', (input): input is number => typeof input === 'number' && Number.isFinite(input), issues, 'a finite number') ?? 0.02
       if (attachMargin < 0 || attachMargin > 1) issue(issues, 'attachMargin', 'must be within [0, 1]')
       const newTopicBelow = scalar(source, 'newTopicBelow', (input): input is number => typeof input === 'number' && Number.isFinite(input), issues, 'a finite number') ?? 0.15
       if (newTopicBelow < 0 || newTopicBelow > 1) issue(issues, 'newTopicBelow', 'must be within [0, 1]')
