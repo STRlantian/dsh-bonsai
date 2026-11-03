@@ -40,7 +40,7 @@ test('one shared term keeps the question on the current answer, whatever its pro
   run.turn('缓存配置容量怎么定', 3, '容量按热数据与内存预算定。')
 
   const answers = run.ordered('answer')
-  assert.equal(run.probe()?.parentId, answers[0]?.id, 'reaches the answer that dwells on the term, not the passing mention')
+  assert.equal(run.probe()?.parentId, answers[1]?.id, 'stays under the latest answer')
 })
 
 test('a term both answers dwell on does not justify a jump', () => {
@@ -61,4 +61,17 @@ test('a rare term on short answers still pulls the question back', () => {
 
   const answers = run.ordered('answer')
   assert.equal(run.probe()?.parentId, answers[0]?.id, 'the rare term decides the branch')
+})
+
+test('the discount rises with how much the answer dwells on the term', () => {
+  const run = conversation('emphasis')
+  // The older answer returns to 缓存 four times; the current answer never mentions it.
+  run.turn('缓存清理怎么做', 1, '缓存按热度淘汰，缓存按过期清理，缓存设上限，缓存命中率要监控。')
+  run.turn('位数组是什么', 2, '位数组是一串比特。')
+  // One shared bigram only (缓存), plus a term no answer has (安全), so the lexical score is diluted.
+  // What carries the decision is that 缓存 is the older answer's most repeated term.
+  run.turn('缓存怎样更安全', 3, '先设上限。')
+
+  const answers = run.ordered('answer')
+  assert.equal(run.probe()?.parentId, answers[0]?.id, 'reaches the answer that dwells on 缓存')
 })
