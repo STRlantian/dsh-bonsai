@@ -1,14 +1,54 @@
 {
   "session": "2ba794ae",
-  "note": "Paraphrase probes: each question asks about the content of one earlier answer while avoiding (or replacing) that answer's key technical nouns, so lexical overlap is weak by construction. 'targetTurn' is the answer that introduced the content. Two controls share the exact term on purpose; they should always hit.",
+  "note": "Paraphrase probes: each question asks about the content of one earlier answer while avoiding (or replacing) that answer's key technical nouns, so lexical overlap is weak by construction. 'targetTurn' is the answer that introduced the content. Two controls share the exact term on purpose; they should always hit. 控制项\"Q 到底表示什么？\"已移除：18 条回答都在公式里用 q，df(q) 过高，具体性闸判它不具体，分数处处≈0，该控制项无效。",
   "items": [
-    { "question": "模型在阅读一段话时，怎么决定该重点参考哪几个字？", "targetTurn": 1, "kind": "paraphrase", "note": "不出现 注意力/机制" },
-    { "question": "两个长度不同的箭头放在一起点乘出来的那个数，能说明方向一致吗？", "targetTurn": 7, "kind": "paraphrase", "note": "内积→点乘，其余用日常说法" },
-    { "question": "词的编号查出来的那串数字，跟它出现的位置怎么合到一起？", "targetTurn": 12, "kind": "paraphrase", "note": "嵌入/位置编码→查表+位置" },
-    { "question": "把某一栏属性乘上一个可训练矩阵之后，那一栏还单独存在吗？", "targetTurn": 18, "kind": "paraphrase", "note": "可食用那一栏→属性" },
-    { "question": "把配比套到内容上，得到的到底是数量，还是一个全新的东西？", "targetTurn": 14, "kind": "paraphrase", "note": "A·V→配比与内容" },
-    { "question": "每个位置最后拿到的那个向量，长度变了吗，还是只有内容变了？", "targetTurn": 16, "kind": "paraphrase", "note": "Y=AV→向量" },
-    { "question": "为什么说内积可以表达相似度？", "targetTurn": 7, "kind": "control", "note": "原问题原词，应与第 7 轮回答共享具体词" },
-    { "question": "Q 到底表示什么？", "targetTurn": 10, "kind": "control", "note": "直接点名 Q，应命中" }
+    {
+      "question": "模型在阅读一段话时，怎么决定该重点参考哪几个字？",
+      "targetTurn": 1,
+      "kind": "paraphrase",
+      "note": "不出现 注意力/机制"
+    },
+    {
+      "question": "两个长度不同的箭头放在一起点乘出来的那个数，能说明方向一致吗？",
+      "targetTurn": 7,
+      "kind": "paraphrase",
+      "note": "内积→点乘，其余用日常说法"
+    },
+    {
+      "question": "词的编号查出来的那串数字，跟它出现的位置怎么合到一起？",
+      "targetTurn": 12,
+      "kind": "paraphrase",
+      "note": "嵌入/位置编码→查表+位置"
+    },
+    {
+      "question": "把某一栏属性乘上一个可训练矩阵之后，那一栏还单独存在吗？",
+      "targetTurn": 18,
+      "kind": "paraphrase",
+      "note": "可食用那一栏→属性"
+    },
+    {
+      "question": "把配比套到内容上，得到的到底是数量，还是一个全新的东西？",
+      "targetTurn": 14,
+      "kind": "paraphrase",
+      "note": "A·V→配比与内容"
+    },
+    {
+      "question": "每个位置最后拿到的那个向量，长度变了吗，还是只有内容变了？",
+      "targetTurn": 16,
+      "kind": "paraphrase",
+      "note": "Y=AV→向量"
+    },
+    {
+      "question": "为什么说内积可以表达相似度？",
+      "targetTurn": 7,
+      "kind": "control",
+      "note": "原问题原词，应与第 7 轮回答共享具体词"
+    },
+    {
+      "question": "为什么说内积可以表达相似度？",
+      "targetTurn": 7,
+      "kind": "control",
+      "note": "重复一次以确认探针可复现；原控制项\"Q 到底表示什么\"已作废（见实验 31b）"
+    }
   ]
 }
