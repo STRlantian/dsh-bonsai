@@ -106,9 +106,11 @@ for (const [index, step] of script.entries()) {
 
 const treeResponse = await fetch(`${base}/api/token-tree/tree?view=nodes&session=${encodeURIComponent(sessionId)}`, { headers: { cookie } })
 const nodes = (await treeResponse.json()).nodes ?? []
-const byTurn = new Map()
-for (const node of nodes) if (node.kind === 'answer' && typeof node.turn === 'number') byTurn.set(node.turn, node)
+// Score by conversation order, not by turn: the opening constraint message consumes turn 1, so answer
+// turns start at 2 and comparing turns is off by one. The i-th question belongs to script turn i and
+// its expected parent is the answer of script turn `expect` (or the previous answer for "here").
 const questions = nodes.filter(node => node.kind === 'question').sort((a, b) => (a.turn ?? 0) - (b.turn ?? 0))
+const answers = nodes.filter(node => node.kind === 'answer').sort((a, b) => (a.turn ?? 0) - (b.turn ?? 0))
 const rootId = nodes.find(node => node.kind === 'note')?.id
 
 let correct = 0
@@ -117,7 +119,11 @@ for (const [index, step] of script.entries()) {
   const question = questions[index]
   const parentId = question?.parentId ?? null
   const parentTurn = nodes.find(node => node.id === parentId)?.turn ?? null
-  const expectedId = step.expect === 'root' ? rootId : step.expect === 'here' ? byTurn.get(index)?.id : byTurn.get(step.expect)?.id
+  const expectedId = step.expect === 'root'
+    ? rootId
+    : step.expect === 'here'
+      ? answers[index - 1]?.id
+      : answers[Number(step.expect) - 1]?.id
   const ok = parentId === expectedId
   if (ok) correct++
   rows.push({ turn: index + 1, kind: step.kind, expected: step.expect, parentId, parentTurn, ok })

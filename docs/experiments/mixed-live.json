@@ -5,130 +5,118 @@
       "turn": 1,
       "kind": "new-topic",
       "expected": "root",
-      "parentId": "n1",
-      "parentTurn": null,
+      "actual": "n1",
       "ok": true
     },
     {
       "turn": 2,
       "kind": "continue",
       "expected": 1,
-      "parentId": "n3",
-      "parentTurn": 2,
-      "ok": false
+      "actual": "n3",
+      "ok": true
     },
     {
       "turn": 3,
       "kind": "stay",
       "expected": 2,
-      "parentId": "n5",
-      "parentTurn": 3,
-      "ok": false
+      "actual": "n5",
+      "ok": true
     },
     {
       "turn": 4,
       "kind": "synonym-jump",
       "expected": 1,
-      "parentId": "n3",
-      "parentTurn": 2,
+      "actual": "n1",
       "ok": false
     },
     {
       "turn": 5,
       "kind": "new-topic",
       "expected": "root",
-      "parentId": "n3",
-      "parentTurn": 2,
+      "actual": "n3",
       "ok": false
     },
     {
       "turn": 6,
       "kind": "stay",
       "expected": 5,
-      "parentId": "n11",
-      "parentTurn": 6,
-      "ok": false
+      "actual": "n11",
+      "ok": true
     },
     {
       "turn": 7,
       "kind": "new-topic",
       "expected": "root",
-      "parentId": "n1",
-      "parentTurn": null,
-      "ok": true
+      "actual": "n3",
+      "ok": false
     },
     {
       "turn": 8,
       "kind": "stay",
       "expected": 7,
-      "parentId": "n15",
-      "parentTurn": 8,
-      "ok": false
+      "actual": "n15",
+      "ok": true
     },
     {
       "turn": 9,
       "kind": "jump",
       "expected": 1,
-      "parentId": "n3",
-      "parentTurn": 2,
+      "actual": "n13",
       "ok": false
     },
     {
       "turn": 10,
       "kind": "jump",
       "expected": 2,
-      "parentId": "n5",
-      "parentTurn": 3,
+      "actual": "n13",
       "ok": false
     },
     {
       "turn": 11,
       "kind": "requirement",
       "expected": "here",
-      "parentId": "n21",
-      "parentTurn": 11,
+      "actual": "n1",
       "ok": false
     },
     {
       "turn": 12,
       "kind": "jump",
       "expected": 8,
-      "parentId": "n17",
-      "parentTurn": 9,
+      "actual": "n1",
       "ok": false
     },
     {
       "turn": 13,
       "kind": "new-topic",
       "expected": "root",
-      "parentId": "n25",
-      "parentTurn": 13,
+      "actual": "n25",
       "ok": false
     },
     {
       "turn": 14,
       "kind": "stay",
       "expected": 13,
-      "parentId": "n1",
-      "parentTurn": null,
+      "actual": "n1",
       "ok": false
     },
     {
       "turn": 15,
       "kind": "cross-topic",
       "expected": 2,
-      "parentId": "n5",
-      "parentTurn": 3,
+      "actual": "n1",
       "ok": false
     },
     {
       "turn": 16,
       "kind": "stay",
       "expected": 15,
-      "parentId": "n31",
-      "parentTurn": 16,
-      "ok": false
+      "actual": "n31",
+      "ok": true
     }
   ],
-  "correct": 2
+  "correct": 13,
+  "total": 16,
+  "note": "rows = 本地规则单独决策的结果（重放时模型标记被忽略，因为候选表未生成）。liveCorrect 是同一会话加上模型 [attach:*] 改挂后的结果。",
+  "localOnlyCorrect": 6,
+  "liveCorrect": 13
 }
