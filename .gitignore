@@ -5,6 +5,9 @@
 *.tgz
 *.tsbuildinfo
 
+# Local model cache for the offline embedding experiments
+/.cache/
+
 # Dependencies
 node_modules/
 .pnpm-store/

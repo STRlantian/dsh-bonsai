@@ -191,6 +191,8 @@ function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number 
 export class SettingsStore {
   readonly path: string
   private current: SettingsOverrides
+  /** Per-session overrides, keyed by session id, then by setting key. */
+  private sessions: Record<string, SettingsOverrides> = {}
   private readonly io: SettingsIo
   private readonly onError: (message: string) => void
 
@@ -210,11 +212,68 @@ export class SettingsStore {
       if (!this.io.exists(this.path)) return {}
       const parsed = JSON.parse(this.io.readFile(this.path)) as unknown
       if (parsed === null || typeof parsed !== 'object') return {}
-      return this.validate(parsed as Record<string, unknown>)
+      const source = parsed as Record<string, unknown>
+      const perSession = source.sessions
+      if (perSession !== null && typeof perSession === 'object') {
+        this.sessions = {}
+        for (const [sessionId, value] of Object.entries(perSession as Record<string, unknown>)) {
+          if (value === null || typeof value !== 'object') continue
+          this.sessions[sessionId] = this.validate(value as Record<string, unknown>)
+        }
+      }
+      return this.validate(source)
     } catch (error) {
       this.onError(`token-tree: ignoring unreadable settings (${error instanceof Error ? error.message : String(error)})`)
       return {}
     }
+  }
+
+  /**
+   * Overrides that apply to one session: global first, then the session's own patch.
+   * @param sessionId - session identity.
+   * @returns The merged overrides.
+   */
+  allFor(sessionId: string): SettingsOverrides {
+    return { ...this.current, ...(this.sessions?.[sessionId] ?? {}) }
+  }
+
+  /**
+   * Patch one session's overrides without touching the global ones.
+   *
+   * A `null` value clears a key for that session only, falling back to the global value.
+   * @param sessionId - session identity.
+   * @param patch - partial update.
+   * @returns The session's overrides after the update.
+   */
+  applyFor(sessionId: string, patch: Record<string, unknown>): SettingsOverrides {
+    if (this.sessions === undefined) this.sessions = {}
+    const next: SettingsOverrides = { ...(this.sessions[sessionId] ?? {}) }
+    for (const key of SETTING_KEYS) {
+      if (!(key in patch)) continue
+      const raw = patch[key]
+      if (raw === null) { delete next[key]; continue }
+      const value = coerce(key, raw)
+      if (value !== undefined) (next as Record<string, boolean | number | string | string[]>)[key] = value
+    }
+    if (Object.keys(next).length === 0) delete this.sessions[sessionId]
+    else this.sessions[sessionId] = next
+    this.persist()
+    return { ...next }
+  }
+
+  /**
+   * Drop a session's overrides.
+   * @param sessionId - session identity.
+   */
+  clearFor(sessionId: string): void {
+    if (this.sessions === undefined) return
+    delete this.sessions[sessionId]
+    this.persist()
+  }
+
+  /** Current per-session overrides, for the settings payload. */
+  allSessions(): Record<string, SettingsOverrides> {
+    return { ...(this.sessions ?? {}) }
   }
 
   /**
@@ -265,7 +324,10 @@ export class SettingsStore {
   private persist(): void {
     try {
       this.io.makeDir(dirname(this.path))
-      this.io.writeFile(this.path, `${JSON.stringify(this.current, undefined, 2)}\n`)
+      const payload = Object.keys(this.sessions ?? {}).length === 0
+        ? this.current
+        : { ...this.current, sessions: this.sessions }
+      this.io.writeFile(this.path, `${JSON.stringify(payload, undefined, 2)}\n`)
     } catch (error) {
       this.onError(`token-tree: could not save settings (${error instanceof Error ? error.message : String(error)})`)
     }

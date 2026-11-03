@@ -381,7 +381,7 @@ export class TokenTreeService {
    * so a switch flipped in the UI takes effect on the next turn without a restart.
    * @returns Effective value of each user-facing switch.
    */
-  effective(): {
+  effective(sessionId?: string): {
     autoInject: boolean
     retrievalHint: boolean
     autoReflect: boolean
@@ -406,7 +406,9 @@ export class TokenTreeService {
   /** Whether the model is asked for an aspect summary. */
   attachSummary: boolean
   } {
-    const overrides = this.settings?.all() ?? {}
+    const overrides = sessionId === undefined
+      ? this.settings?.all() ?? {}
+      : this.settings?.allFor?.(sessionId) ?? this.settings?.all() ?? {}
     return {
       autoInject: overrides.autoInject ?? this.config.autoInject,
       retrievalHint: overrides.retrievalHint ?? this.config.retrievalHint,
@@ -433,15 +435,21 @@ export class TokenTreeService {
    * @param patch - keys to set; `null` clears an override.
    * @returns The effective switches after the change, plus the override set.
    */
-  updateSettings(patch: Record<string, unknown>): {
+  updateSettings(patch: Record<string, unknown>, sessionId?: string): {
     effective: ReturnType<TokenTreeService['effective']>
     overrides: Record<string, boolean | number | string | string[]>
   } {
-    const overrides = this.settings === undefined ? {} : this.settings.apply(patch)
+    // With a session id the patch lands on that conversation only, and falls back to the global
+    // value when a key is cleared.
+    const overrides = this.settings === undefined
+      ? {}
+      : sessionId === undefined
+        ? this.settings.apply(patch)
+        : this.settings.applyFor(sessionId, patch)
     this.logger.info(`token-tree: settings updated ${JSON.stringify(overrides)}`)
     // A different vocabulary invalidates every cached number, so re-resolve it here.
     if (Object.prototype.hasOwnProperty.call(patch, 'tokenizerVersion')) this.reloadTokenizer()
-    return { effective: this.effective(), overrides: { ...overrides } }
+    return { effective: this.effective(sessionId), overrides: { ...overrides } }
   }
 
   /**
@@ -508,6 +516,8 @@ export class TokenTreeService {
   settingsInfo(): {
     path: string | null
     overrides: Record<string, boolean | number | string | string[]>
+    /** Per-session overrides, so the panel can show which conversations have their own values. */
+    sessions: Record<string, Record<string, boolean | number | string | string[]>>
     base: ReturnType<TokenTreeService['effective']> & { hintAboveTokens: number; tokenizerPath: string | null }
     tokenizer: {
       path: string | null
@@ -535,6 +545,7 @@ export class TokenTreeService {
     return {
       path: this.settings === undefined ? null : this.settings.path,
       overrides: { ...(this.settings?.all() ?? {}) } as Record<string, boolean | number | string | string[]>,
+      sessions: (this.settings?.allSessions?.() ?? {}) as Record<string, Record<string, boolean | number | string | string[]>>,
       base: {
         autoInject: this.config.autoInject,
         retrievalHint: this.config.retrievalHint,
@@ -1600,7 +1611,7 @@ export class TokenTreeService {
    */
   fileBlock(sessionId: string, query: string, budget: number): string {
     const state = this.stateOf(sessionId)
-    const mode = this.effective().fileRegion
+    const mode = this.effective(sessionId).fileRegion
     if (mode === 'off') return ''
     // Drop what moved: the cached text is not what the file says any more.
     for (const filePath of [...state.files.keys()]) {
@@ -1684,13 +1695,13 @@ export class TokenTreeService {
    * @param limit - how many rows (0 disables the block).
    * @returns The block, or '' when there is nothing worth offering.
    */
-  attachChoices(sessionId: string, query: string, limit = this.effective().attachChoices): string {
+  attachChoices(sessionId: string, query: string, limit = this.effective(sessionId).attachChoices): string {
     const state = this.stateOf(sessionId)
     state.offered = []
     state.offeredRoot = false
     if (limit <= 0 || query.trim().length === 0) return ''
     // Confidence gating: a question the local rules placed confidently does not need ten options.
-    if (this.effective().attachGate === 'uncertain' && state.uncertain !== true) {
+    if (this.effective(sessionId).attachGate === 'uncertain' && state.uncertain !== true) {
       this.logger.debug('token-tree: confident placement, no candidate block')
       return ''
     }
@@ -1707,7 +1718,7 @@ export class TokenTreeService {
     if (picked.length === 0) return ''
     state.offered = picked.map(entry => entry.id)
     const rows = picked.map(entry => '- ' + entry.id + ' · ' + this.candidateLabel(tree, entry.id))
-    const anyMode = this.effective().attachPrompt === 'any'
+    const anyMode = this.effective(sessionId).attachPrompt === 'any'
     // `any` owns the whole decision: a dependency is named as [attach:nX], a new topic as
     // [attach:root]. There is no third switch: this is what the mode means.
     state.offeredRoot = anyMode
@@ -1716,7 +1727,7 @@ export class TokenTreeService {
         '[token-tree] 本轮的落点由你判，在回答最后单独一行写一种：',
         '  [attach:nX]  依赖下面某一条（含代词指代）；[attach:root] 新话题；[attach:here] 要求/元指令（让我换个方式来问），留在当前这条线上。',
         '问题问的是某条回答里提到的子概念时，挂那条回答（不是刚才那条）。',
-        ...(this.effective().attachSummary ? ['最后再另起一行写 [summary: 用 2–4 个短语说明本条回答讲了哪些方面，逗号分隔，≤40 字]。'] : []),
+        ...(this.effective(sessionId).attachSummary ? ['最后再另起一行写 [summary: 用 2–4 个短语说明本条回答讲了哪些方面，逗号分隔，≤40 字]。'] : []),
         '只给问题，回答内容按需用 retrieve_context 取。',
       ]
       : [
@@ -1850,7 +1861,7 @@ export class TokenTreeService {
     const state = this.stateOf(sessionId)
     const tree = state.tree
     // Fold-everything mode: nothing but the current turn is visible, so retrieval is not optional.
-    if (this.effective().foldPolicy === 'always') {
+    if (this.effective(sessionId).foldPolicy === 'always') {
       return MANDATORY_HINT_TEXT
     }
     if (state.sawReduction === true) {
@@ -1882,7 +1893,7 @@ export class TokenTreeService {
       state.lastHint = { counted, above, fast: counted, fired, reason: fired ? 'conversation over threshold' : 'conversation under threshold' }
       return fired ? HINT_TEXT : undefined
     }
-    const fired = tree.nodes.size >= this.effective().hintMinNodes
+    const fired = tree.nodes.size >= this.effective(sessionId).hintMinNodes
     state.lastHint = {
       counted: undefined,
       above,
@@ -2377,7 +2388,7 @@ export class TokenTreeService {
    */
   compactionIndex(sessionId: string, limit = 8, maxChars = 1_200): string | undefined {
     const state = this.stateOf(sessionId)
-    if (this.effective().compactionIndex === false) return undefined
+    if (this.effective(sessionId).compactionIndex === false) return undefined
     if (state.indexInjected === true) return undefined
     const nodes = [...state.tree.nodes.values()].filter(node => node.kind !== 'note')
     if (nodes.length === 0) return undefined
@@ -2630,7 +2641,7 @@ export class TokenTreeService {
    */
   supervise(agent: AgentLike, turn: number): SupervisionOutcome {
     const state = this.stateOf(agent.session.id)
-    if (!this.effective().autoReflect) return { injected: false, reasons: [], skipped: 'autoReflect disabled' }
+    if (!this.effective(agent.session.id).autoReflect) return { injected: false, reasons: [], skipped: 'autoReflect disabled' }
     const evaluation = evaluateProgress({ observations: state.observations, policy: this.config.loop })
     if (evaluation.verdict === 'progress' || evaluation.verdict === 'done') {
       return { injected: false, verdict: evaluation.verdict, reasons: evaluation.reasons, skipped: 'turn is healthy' }

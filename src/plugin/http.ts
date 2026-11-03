@@ -209,8 +209,10 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
       methods: ['GET', 'POST'],
       requestBody: 'buffered',
       fetch: async (request: Request): Promise<Response> => {
+        // ?session=<id> asks for that conversation's values: its own overrides on top of the globals.
+        const scopedSession = scopedSessionOf(request)
         if (request.method === 'GET') {
-          return Response.json({ ok: true, ...service.settingsInfo(), effective: service.effective() }, {
+          return Response.json({ ok: true, ...service.settingsInfo(), effective: service.effective(scopedSession) }, {
             headers: { 'cache-control': 'no-store' },
           })
         }
@@ -222,7 +224,7 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
         return Response.json({ ok: false, error: 'invalid json' }, { status: 400 })
       }
       try {
-        const updated = service.updateSettings(body)
+        const updated = service.updateSettings(body, scopedSession)
         return Response.json({ ok: true, ...updated }, { headers: { 'cache-control': 'no-store' } })
       } catch (error) {
         return Response.json(
@@ -257,4 +259,21 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
 
   if (ctx.inject !== undefined) ctx.inject(['connection'], register)
   else register(ctx)
+}
+
+/**
+ * The conversation a settings request is scoped to.
+ *
+ * Absent (or empty) means the global settings; the panel sends the bound session id when the user
+ * picks "本对话".
+ * @param request - incoming request.
+ * @returns The session id, or undefined for global settings.
+ */
+function scopedSessionOf(request: Request): string | undefined {
+  try {
+    const value = new URL(request.url).searchParams.get('session')
+    return value === null || value.trim() === '' ? undefined : value.trim()
+  } catch {
+    return undefined
+  }
 }

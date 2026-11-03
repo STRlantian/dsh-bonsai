@@ -320,6 +320,16 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   var FOCUS = '/api/token-tree/focus'
   var EDIT = '/api/token-tree/edit'
   var SETTINGS = '/api/token-tree/settings'
+  /** null edits the global settings; a session id edits that conversation's overrides. */
+  var settingsScopeId = null
+
+  /**
+   * The settings URL for the current scope.
+   * @returns {string} path plus an optional session query.
+   */
+  function settingsUrl() {
+    return settingsScopeId === null ? SETTINGS : SETTINGS + '?session=' + encodeURIComponent(settingsScopeId)
+  }
   var PANEL_WIDTH = 420
 
   /**
@@ -327,7 +337,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
    * @returns {Promise<object>} `{ base, overrides, effective, path }`.
    */
   function settingsGet() {
-    return fetch(SETTINGS, { credentials: 'same-origin' })
+    return fetch(settingsUrl(), { credentials: 'same-origin' })
       .then(function (response) {
         if (!response.ok) throw new Error('HTTP ' + response.status)
         return response.json()
@@ -340,7 +350,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
    * @returns {Promise<object>} `{ effective, overrides }`.
    */
   function settingsPost(patch) {
-    return fetch(SETTINGS, {
+    return fetch(settingsUrl(), {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'content-type': 'application/json' },
@@ -1248,6 +1258,18 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     ]
 
     /** Apply a preset, then refresh the panel so the numbers match. */
+    /** Re-read the settings for the current scope and re-render the panel. */
+    function refreshSettings() {
+      setBusy(true)
+      settingsGet()
+        .then(function (payload) {
+          setSettings(payload)
+          return null
+        })
+        .catch(function (error) { setNote(tf('读取设置失败：{}', error.message)) })
+        .finally(function () { setBusy(false) })
+    }
+
     function applyPreset(name) {
       setBusy(true)
       setNote('')
@@ -1504,10 +1526,32 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         h('p', { className: 'twt-hint' },
           tf('这些开关立即生效，写入 {}，重启后仍然有效。', settings.path === null ? t('（未配置）') : settings.path)),
         h('div', { className: 'twt-guide' },
+          h('span', { className: 'twt-dtitle' }, t('编辑范围')),
+          h('div', { className: 'twt-guide-buttons' },
+            h('button', {
+              className: settingsScopeId === null ? 'twt-action twt-active' : 'twt-action',
+              disabled: busy,
+              onClick: function () {
+                settingsScopeId = null
+                refreshSettings()
+              },
+            }, t('全局')),
+            h('button', {
+              className: settingsScopeId === null ? 'twt-action' : 'twt-action twt-active',
+              disabled: busy || typeof sessionId !== 'string' || sessionId.length === 0,
+              title: typeof sessionId !== 'string' || sessionId.length === 0 ? t('还没有绑定会话') : t('只影响当前这个对话'),
+              onClick: function () {
+                settingsScopeId = typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : null
+                refreshSettings()
+              },
+            }, t('本对话'))),
+          h('p', { className: 'twt-hint' }, t('本对话的设置只覆盖这一个对话，清空某项就回落到全局值'))),
+        h('div', { className: 'twt-guide' },
           h('span', { className: 'twt-dtitle' }, t('按需求设置')),
           h('p', { className: 'twt-hint' }, t('选一个最接近你用法的情况，只改这一页的开关，随时可以再换')),
           h('div', { className: 'twt-guide-buttons' },
             [
+              { id: 'learn', label: '学习、概念问答', patch: { foldAboveTokens: 20000, foldKeepTurns: 2, foldScope: 'turns', fileRegion: 'auto', mandatoryContext: true, attachChoices: 6, attachGate: 'always', attachSummary: false } },
               { id: 'chat', label: '长对话、概念问答', patch: { foldAboveTokens: 20000, foldKeepTurns: 2, foldScope: 'turns', fileRegion: 'auto', mandatoryContext: true } },
               { id: 'code', label: '工程、反复改文件', patch: { foldAboveTokens: 20000, foldKeepTurns: 3, foldScope: 'tools', fileRegion: 'auto', mandatoryContext: true } },
               { id: 'save', label: '尽量省 token', patch: { foldAboveTokens: 10000, foldKeepTurns: 1, foldScope: 'turns', fileRegion: 'digest', mandatoryContext: true, toolDeny: ['workflow', 'schedule_create', 'schedule_update', 'schedule_delete', 'schedule_list', 'subagent_fork', 'ask_user_question', 'update_goal', 'get_goal'] } },
@@ -1535,7 +1579,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           h('span', { className: 'twt-hint' }, t('预设只改这一页的设置，随时可以再点另一个'))),
         settingRow({
           key: 'autoInject',
-          label: t('自动注入记忆块'),
+          label: t('自动注入检索结果'),
           hint: t('每回合把检索到的节点作为一块推到上下文里，约 428 token/轮'),
           control: h('input', {
             type: 'checkbox',
@@ -1683,7 +1727,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           : null,
         settingRow({
           key: 'foldAboveTokens',
-          label: t('折叠历史阈值'),
+          label: t('历史超过多少 token 开始省略旧轮次'),
           hint: t('对话超过这个 token 数就把较早的内容移出模型视野（0 = 关闭）。只改模型看到的部分，日志和对话树里的原文不动，也不产生模型调用'),
           control: h('input', {
             type: 'number',
@@ -1717,7 +1761,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'attachPrompt',
-          label: t('挂接提示范围'),
+          label: t('让模型自己选落点'),
           hint: t('仅追问：只在指代时请模型点名；任何明确依赖：任何依赖都点名（实测误标更少）'),
           control: h('select', {
             value: effective === undefined || effective.attachPrompt === undefined ? 'any' : effective.attachPrompt,
@@ -1728,7 +1772,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'attachChoices',
-          label: t('挂接候选数'),
+          label: t('候选条数（只给问题）'),
           hint: t('每轮给模型看的候选问题数量（只给问题，不给回答正文）；0 关闭'),
           control: h('input', {
             type: 'number',
@@ -1768,7 +1812,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'foldKeepTurns',
-          label: t('保留最近轮数'),
+          label: t('最近几轮保留原文'),
           hint: t('最近这么多轮保持原样，保证正在用的上下文完整'),
           control: h('input', {
             type: 'number',

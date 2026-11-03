@@ -90,7 +90,7 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     service.notePromptStats(payload.agent.session.id)
     service.notePromptShape(payload.agent.session.id, decision.messages)
     service.noteDecisionShape(payload.agent.session.id, decision)
-    const settings = service.effective()
+    const settings = service.effective(payload.agent.session.id)
     const query = queryOf(decision.messages)
     // The choices block rides along whatever else is injected: ten questions cost a few hundred
     // tokens, while a separate request to ask the model the same thing would cost a whole prompt.
@@ -181,7 +181,7 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
   }
 
   ctx.on('agent/turn-stopping', (payload) => {
-    if (!service.effective().autoReflect) return
+    if (!service.effective(payload.agent?.session?.id).autoReflect) return
     if (!tracked(payload.agent, ctx, config)) return
     try {
       const outcome = service.supervise(payload.agent, payload.turn)
@@ -223,7 +223,7 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
  * @param ctx - plugin context, for logging.
  */
 function maybeFold(session: SessionLike, service: TokenTreeService, ctx: ContextLike): void {
-  const settings = service.effective()
+  const settings = service.effective(session.id)
   // `always` folds every finished turn outside the keep window, whatever the size: the experiment
   // "fold everything, force the model to consult the tree" needs no threshold at all.
   const always = settings.foldPolicy === 'always'
