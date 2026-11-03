@@ -1398,9 +1398,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
      * @param {object} options - key, label, hint, control.
      * @returns {object} the row.
      */
+    /** Rows with `advanced: true` collect here and render inside the 高级 disclosure. */
+    var advancedRowSink = null
+
     function settingRow(options) {
       var overridden = settings !== null && settings.overrides[options.key] !== undefined
-      return h('div', { className: 'twt-srow', key: options.key },
+      var row = h('div', { className: 'twt-srow', key: options.key },
         h('div', { className: 'twt-slabel' },
           h('b', null, options.label),
           h('span', { className: 'twt-hint' }, options.hint),
@@ -1417,6 +1420,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               title: t('恢复成 profile 配置里的值'),
             }, t('恢复默认'))
             : null))
+      if (options.advanced === true && advancedRowSink !== null) {
+        advancedRowSink.push(row)
+        return null
+      }
+      return row
     }
 
   
@@ -1522,6 +1530,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     if (settings !== null) {
       // Defensive: an older or partial payload must not take the editor down.
     var effective = (settings && settings.effective) || {}
+      advancedRowSink = []
       settingsPanel = h('div', { className: 'twt-settings' },
         h('p', { className: 'twt-hint' },
           tf('这些开关立即生效，写入 {}，重启后仍然有效。', settings.path === null ? t('（未配置）') : settings.path)),
@@ -1601,6 +1610,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'hintMinNodes',
+          advanced: true,
           label: t('提示起始节点数'),
           hint: t('节点数达到这个值才开始发提示；被压缩过的会话不受此限，会立即提示'),
           control: h('input', {
@@ -1630,6 +1640,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'admitRelevance',
+          advanced: true,
           label: t('检索准入阈值'),
           hint: t('相关度低于这个值的节点不进入排序（0 = 不设门槛）。0.3 实测比较稳，0.5 会让多数查询空手（空手时会自动放宽一次）'),
           control: h('input', {
@@ -1652,6 +1663,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'hintAboveTokens',
+          advanced: true,
           label: t('提示起始 token 数'),
           hint: t('对话达到这个 token 数才发检索提示；有词表时按实测，没有时按估算'),
           control: h('input', {
@@ -1673,6 +1685,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'tokenizerVersion',
+          advanced: true,
           label: 'tokenizer',
           hint: t('列出磁盘上实际找到的 tokenizer.json；「自主学习」不读词表，用估算加账单校准'),
           control: h('select', {
@@ -1707,7 +1720,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'toolDeny',
           label: t('隐藏工具'),
-          hint: t('从清单里挑不需要的工具，模型就看不到它们。工具定义占 prompt 的大头，隐藏几个用得少的能明显省钱；默认一个都不藏'),
+          hint: t('从清单里挑不需要的工具，模型就看不到它们。工具定义占 prompt 的大头：实测编码类工具合计约 2,300 token/请求，隐藏用得少的能明显省钱'),
           control: h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
             h('span', { className: 'twt-hint', 'data-testid': 'tool-deny-count' },
               tf('已隐藏 {} 个', deniedTools.length)),
@@ -1773,7 +1786,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         settingRow({
           key: 'attachChoices',
           label: t('候选条数（只给问题）'),
-          hint: t('每轮给模型看的候选问题数量（只给问题，不给回答正文）；0 关闭'),
+          hint: t('每轮给模型看的候选问题数量（只给问题，不给回答正文）。每条约 15 token，10 条约 147 token/轮'),
           control: h('input', {
             type: 'number',
             min: '0',
@@ -1788,7 +1801,19 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           }),
         }),
         settingRow({
+          key: 'attachSummary',
+          advanced: true,
+          label: t('让模型写方面摘要'),
+          hint: t('回答末尾附一行"讲了哪些方面"，显示在候选列表里。实测无收益，还多约 30–40 输出 token/轮'),
+          control: h('input', {
+            type: 'checkbox',
+            checked: effective !== undefined && effective.attachSummary === true,
+            onChange: function (event) { saveSetting('attachSummary', event.target.checked) },
+          }),
+        }),
+        settingRow({
           key: 'foldPolicy',
+          advanced: true,
           label: t('每轮折叠全部历史'),
           hint: t('只保留当前提问，强制模型先调用 retrieve_context'),
           control: h('input', {
@@ -1799,6 +1824,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'foldScope',
+          advanced: true,
           label: t('折叠范围'),
           hint: t('工具输出：只移走旧的工具结果。整轮对话：整轮换成一行提示，工具调用与结果一起移走'),
           control: h('select', {
@@ -1858,6 +1884,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             h('option', { value: 'zh' }, t('中文')),
             h('option', { value: 'en' }, t('English'))),
         }),
+        h('details', { className: 'twt-advanced' },
+          h('summary', null, t('高级（一般不用改）')),
+          advancedRowSink),
         note === '' ? null : h('p', { className: 'twt-flash' }, note))
     } else {
       settingsPanel = h('div', { className: 'twt-settings' }, h('p', { className: 'twt-note' }, t('读取设置中…')), note === '' ? null : h('p', { className: 'twt-flash' }, note))

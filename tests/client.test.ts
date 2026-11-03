@@ -368,8 +368,11 @@ test('the settings tab offers the tokenizer dropdown from the payload', { timeou
   t.after(client.cleanup)
   await client.click('盆栽')
   await client.click('设置')
-  const select = client.document.querySelector('select')
-  assert.ok(select !== null, 'tokenizer select rendered')
+  // The tokenizer row lives inside the 高级 disclosure now, so pick it by content rather than by
+  // being the first select on the page.
+  const select = [...client.document.querySelectorAll('select')]
+    .find(element => [...element.options].some(option => option.value === '4'))
+  assert.ok(select !== undefined, 'tokenizer select rendered')
   const options = [...select.querySelectorAll('option')].map(option => `${option.value}:${option.textContent}`)
   assert.deepEqual(options, ['auto:自动（最新一代）', '3:DeepSeek v3', '4:DeepSeek v4', 'off:自主学习（不用词表）'])
   assert.equal(select.value, '4', 'shows the generation actually in use')
