@@ -83,7 +83,7 @@ interface AttachmentContext {
   nodeCount: number
   /** Term frequencies of the evaluated node, and its largest count (prominence denominator). */
   counts: Map<NodeId, Map<string, number>>
-  maxTf: Map<NodeId, number>
+  docLength: Map<NodeId, number>
   /** Feature count of the node the question would otherwise extend, the penalty reference. */
   referenceFeatures: number
   /** The node the question would extend, exempt from the weak-evidence discount. */
@@ -1048,7 +1048,8 @@ export class TokenTreeService {
     // *about*, rather than something it mentioned once in passing.
     const counts = input.counts.get(node.id)
     const tf = counts?.get(bestFeature) ?? 0
-    const prominence = tf === 0 ? 0 : 0.5 + 0.5 * (tf / Math.max(1, input.maxTf.get(node.id) ?? 1))
+    const totalTerms = Math.max(1, input.docLength.get(node.id) ?? 1)
+    const prominence = tf === 0 ? 0 : 0.5 + 0.5 * Math.min(1, (tf / totalTerms) * 4)
     return lexical * prominence * penalty * discount
   }
 
@@ -1063,7 +1064,7 @@ export class TokenTreeService {
     const questionFeatures = contentFeatures(text)
     const nodeFeatures = new Map<NodeId, Set<string>>()
     const countsByNode = new Map<NodeId, Map<string, number>>()
-    const maxTfByNode = new Map<NodeId, number>()
+    const lengthByNode = new Map<NodeId, number>()
     const documentFrequency = new Map<string, number>()
     let nodeCount = 0
     for (const node of state.tree.nodes.values()) {
@@ -1081,9 +1082,9 @@ export class TokenTreeService {
         state.termCounts.set(node.id, counts)
       }
       countsByNode.set(node.id, counts)
-      let biggest = 1
-      for (const value of counts.values()) if (value > biggest) biggest = value
-      maxTfByNode.set(node.id, biggest)
+      let total = 0
+      for (const value of counts.values()) total += value
+      lengthByNode.set(node.id, Math.max(1, total))
       if (node.kind === 'question' || node.kind === 'note') continue
       nodeCount++
       for (const feature of features) {
@@ -1106,7 +1107,7 @@ export class TokenTreeService {
       embedding,
       questionFeatures,
       counts: countsByNode,
-      maxTf: maxTfByNode,
+      docLength: lengthByNode,
       nodeFeatures,
       idf,
       maxIdf,
