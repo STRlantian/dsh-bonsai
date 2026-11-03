@@ -1189,8 +1189,10 @@ export class TokenTreeService {
     const substantive = defaultNode.kind === 'answer' && contentFeatures(defaultNode.content).size >= NEW_TOPIC_MIN_FEATURES
     if (defaultId !== tree.rootId && substantive && defaultScore < this.config.newTopicBelow) {
       this.logger.info(`token-tree: new topic branch under the root (score ${defaultScore.toFixed(3)} below ${this.config.newTopicBelow})`)
-      // A deliberate new topic: there is nothing for a candidate list to decide.
-      state.uncertain = false
+      // The new-topic call is a guess: the question matched nothing, which is also what a vague
+      // follow-up looks like ("Q 到底表示什么" vs "锅包肉怎么做"). Mark it uncertain so the model can
+      // move it back onto the thread it belongs to.
+      state.uncertain = true
       return { parentId: tree.rootId, score: defaultScore }
     }
     // Staying on the default line with thin evidence is exactly the case the model can improve on.
