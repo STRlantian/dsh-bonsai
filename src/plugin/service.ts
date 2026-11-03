@@ -1034,6 +1034,10 @@ export class TokenTreeService {
       shared++
       if (feature.length > longest) longest = feature.length
     }
+    // What this can mean: Chinese features are two-character bigrams, so for a Chinese question
+    // `longest` never reaches 3 and this reduces to `shared >= 2`. The `longest >= 3` half only
+    // fires for a Latin word of three or more letters ("bloom", "kmp"): one content word in English
+    // is decent evidence, one bigram in Chinese is not.
     const strong = shared >= 2 || longest >= 3
     // Only a jump to another branch needs strong evidence; the current thread is governed by
     // newTopicBelow, where a single shared term is normal for a follow-up.
