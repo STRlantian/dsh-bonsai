@@ -1400,7 +1400,7 @@ export class TokenTreeService {
       timestamp: at,
       metadata: {
         step: numberField(data.step) ?? state.step,
-        turn: numberField(data.turn) ?? state.turn,
+        turn: state.turn,
         ...(reasoningTokens === 0 ? {} : { reasoningTokens }),
       },
       ...(summary === undefined ? {} : { summary }),
@@ -1443,7 +1443,7 @@ export class TokenTreeService {
         toolCallId: callId,
         ok: !failed,
         step: numberField(data.step) ?? state.step,
-        turn: numberField(data.turn) ?? state.turn,
+        turn: state.turn,
         ...(errorText === undefined ? {} : { error: errorText }),
       },
       // A tool result is a leaf of the answer that requested it: the dialogue
