@@ -191,6 +191,10 @@ export interface SessionState {
   }
   /** Whether the post-compaction index was already injected. */
   indexInjected?: boolean
+  /** What the provider billed for the last answer, for /usage and /cache. */
+  lastUsage?: { input: number; cached: number; written: number; output: number; total: number; at: number }
+  /** What the last retrieve_context call returned, for /retrieve. */
+  lastRetrieve?: { query: string; originId: string; budget: number; tokensUsed: number; selected: number; dropped: number; ids: string[]; at: number }
   /** Shape of the last `decision.messages` we were given, for diagnosing the hook. */
   probe?: { count: number; chars: number; kinds: string[] }
   /** Field names and sizes of the last decision object, for the same purpose. */
@@ -672,7 +676,7 @@ export class TokenTreeService {
       lastDecision: this.lastDecisionInfo(),
       lastAssembly: this.assemblyInfo(),
       toolRestriction: this.stateOf('assembly').toolRestriction ?? null,
-      fold: this.stateOf('assembly').fold ?? null,
+      fold: this.stateOf(sessionId ?? 'assembly').fold ?? this.stateOf('assembly').fold ?? null,
       sessionCapability: this.stateOf('assembly').sessionCapability ?? null,
       availableTools: this.availableTools(),
       drift: this.driftInfo(),
@@ -1550,8 +1554,20 @@ export class TokenTreeService {
     // under. Scoring alone returned that answer in only a third of measured turns - anaphora
     // ("这里的 V 是指...") shares no words with the text it refers to - so it is put in the
     // buffer unconditionally, ahead of the scored hits.
-    if (!this.effective().mandatoryContext || options.query.trim().length === 0) return result
-    return this.withMandatoryContext(state.tree, result, originId, budget, state, options.query)
+    const final = !this.effective().mandatoryContext || options.query.trim().length === 0
+      ? result
+      : this.withMandatoryContext(state.tree, result, originId, budget, state, options.query)
+    state.lastRetrieve = {
+      query: final.query,
+      originId: String(final.originId),
+      budget: final.budget,
+      tokensUsed: final.tokensUsed,
+      selected: final.selected.length,
+      dropped: final.dropped.length,
+      ids: final.selected.map(entry => String(entry.nodeId)),
+      at: Date.now(),
+    }
+    return final
   }
 
   /**
@@ -2380,7 +2396,9 @@ export class TokenTreeService {
     threshold: number,
     extra: { planned?: number; visible?: number; range?: string; error?: string; cadence?: number; gap?: number } = {},
   ): void {
-    this.stateOf('assembly').fold = { sessionId, folded, tokens, threshold, ...extra, at: Date.now() }
+    const note = { sessionId, folded, tokens, threshold, ...extra, at: Date.now() }
+    this.stateOf(sessionId).fold = note
+    this.stateOf('assembly').fold = note
   }
 
   /**
@@ -2438,6 +2456,36 @@ export class TokenTreeService {
   }
 
   /** Shape of the last assembled system prompt. */
+  /** Prompt shape of the last assembly, for /prompt. */
+  assemblyOf(): NonNullable<SessionState['assembly']> | null {
+    return this.assemblyInfo() ?? null
+  }
+
+  /** Shape of the last decision.messages, for /prompt. */
+  promptOf(sessionId: string): NonNullable<SessionState['probe']> | null {
+    return this.stateOf(sessionId).probe ?? null
+  }
+
+  /** What the provider billed last, for /usage and /cache. */
+  usageOf(sessionId: string): NonNullable<SessionState['lastUsage']> | null {
+    return this.stateOf(sessionId).lastUsage ?? null
+  }
+
+  /** Fold note of a session, for /fold. */
+  foldOf(sessionId: string): NonNullable<SessionState['fold']> | null {
+    return this.stateOf(sessionId).fold ?? null
+  }
+
+  /** Last retrieval, for /retrieve. */
+  retrieveOf(sessionId: string): NonNullable<SessionState['lastRetrieve']> | null {
+    return this.stateOf(sessionId).lastRetrieve ?? null
+  }
+
+  /** Hint state of a session, for /fold. */
+  hintOf(sessionId: string): NonNullable<SessionState['lastHint']> | null {
+    return this.stateOf(sessionId).lastHint ?? null
+  }
+
   private assemblyInfo(): SessionState['assembly'] | null {
     return this.stateOf('assembly').assembly ?? null
   }
@@ -2634,9 +2682,19 @@ export class TokenTreeService {
   private observeBilling(state: SessionState, data: Record<string, unknown>): void {
     const usage = objectField(data.usage)
     if (usage === undefined) return
-    const billed = (numberField(usage.inputTokens) ?? 0)
-      + (numberField(usage.cacheReadTokens) ?? 0)
-      + (numberField(usage.cacheWriteTokens) ?? 0)
+    const input = numberField(usage.inputTokens) ?? 0
+    const cached = numberField(usage.cacheReadTokens) ?? 0
+    const written = numberField(usage.cacheWriteTokens) ?? 0
+    const output = numberField(usage.outputTokens) ?? 0
+    state.lastUsage = {
+      input,
+      cached,
+      written,
+      output,
+      total: numberField(usage.totalTokens) ?? (input + cached + written + output),
+      at: Date.now(),
+    }
+    const billed = input + cached + written
     if (billed <= 0) return
     // Teach the model-agnostic estimator first: the character classes we saw, against what
     // the provider billed for the same request. This is the only tokenizer a closed-source

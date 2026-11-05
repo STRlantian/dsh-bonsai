@@ -61,6 +61,20 @@ dsh plugin --profile desktop add "file:<repo>/plugin"
   recycle bin restores it.
 - **“Continue from here”**: your next question attaches under that node (one turn only).
 
+## Diagnostic commands
+
+Five slash commands, typed in the chat; the output is shown to you and never enters model history:
+
+| Command | Shows |
+|---|---|
+| `/tree` | the conversation tree (`/tree go n12` anchors the next turn, `/tree clear` drops it) |
+| `/prompt` | last prompt shape: characters per system section, how much is tool schemas, the messages the hook saw |
+| `/fold` | last fold decision: how many turns, block size, threshold, and whether cadence or the ratio blocked it |
+| `/usage` | last bill: new input / cache hit / cache write, plus the hit rate |
+| `/retrieve` | last `retrieve_context`: query, budget, tokens used, selected and dropped nodes |
+
+Each one answers with a line of explanation in an empty session instead of failing; the numbers come from billing fields and the plugin's own records, not estimates.
+
 ## The two token switches
 
 ### 1. Hide tools (optional, the most direct one)
