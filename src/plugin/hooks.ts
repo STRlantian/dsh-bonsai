@@ -219,6 +219,7 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     if (session !== undefined && foldedTurns.get(session.id) !== payload.turn) {
       foldedTurns.set(session.id, payload.turn)
       try {
+        stripMarkers(session, service, ctx, payload.turn)
         maybeFold(session, service, ctx, payload.turn)
       } catch (error) {
         ctx.logger.warn(`token-tree: fold failed for session ${session.id}: ${describe(error)}`)
@@ -243,6 +244,55 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
  * @param service - tree service holding the measurement.
  */
 
+
+/** Marker patterns the prompt asks for; they are ours, not the answer's body. */
+const ATTACH_MARKER = /\[attach:(n\d+|root|here)\]/g
+const SUMMARY_MARKER = /\[summary:[^\]]{0,120}\]/g
+
+/**
+ * Remove the placement and summary markers from the answers of the turn that just ran.
+ *
+ * The prompt asks the model to end its answer with these markers so the plugin can place the next
+ * question and label the answer. They are instructions to the plugin, not text for the reader, and
+ * leaving them in the transcript both looks wrong and is sent back to the model next turn. The
+ * replacement is appended at turn-stopping, so it sits inside the open turn, which is what the log
+ * reader requires of a surface replacement.
+ * @param session - session whose turn is stopping.
+ * @param service - tree service, for the turn bookkeeping.
+ * @param ctx - plugin context, for logging.
+ * @param currentTurn - turn that is still open.
+ */
+function stripMarkers(session: SessionLike, service: TokenTreeService, ctx: ContextLike, currentTurn: number): void {
+  if (typeof session.append !== 'function') return
+  const surfaceSeqs = Array.isArray(session.surface?.nodes) ? [...session.surface.nodes] : []
+  const resolve = typeof session.eventAt === 'function' ? (seq: number) => session.eventAt?.(seq) : undefined
+  const events = surfaceSeqs.length > 0 && resolve !== undefined
+    ? surfaceSeqs.map(seq => ({ seq, event: resolve(seq) }))
+    : (session.snapshotEvents?.() ?? []).map((event, index) => ({ seq: event.seq ?? index + 1, event }))
+  for (const entry of events) {
+    if (entry.event?.type !== 'assistant/message') continue
+    if (service.turnOfSeq(session.id, entry.seq) !== currentTurn) continue
+    const data = entry.event.data as Record<string, unknown> | undefined
+    if (data === undefined) continue
+    const message = data.message as { content?: unknown[] } | undefined
+    const body = textOfContent(message?.content)
+    if (body.length === 0) continue
+    const cleaned = body.replace(ATTACH_MARKER, '').replace(SUMMARY_MARKER, '').replace(/\n{3,}/g, '\n\n').trim()
+    if (cleaned === body) continue
+    try {
+      session.append('assistant/message', {
+        ...data,
+        message: { ...(message ?? {}), content: [{ type: 'text', text: cleaned }] },
+      }, {
+        surfaceOp: { op: 'replace', startSeq: entry.seq, endSeq: entry.seq },
+        sourceEventSeqs: [entry.seq],
+      })
+      ctx.logger.info(`token-tree: stripped placement markers from a turn-${currentTurn} answer`)
+    } catch (error) {
+      ctx.logger.warn(`token-tree: could not strip markers from seq ${entry.seq}: ${String(error)}`)
+    }
+  }
+}
 
 /**
  * Fold old tool results out of the model-visible surface.
