@@ -484,13 +484,16 @@ export class TokenTreeService {
    * @param name - preset id from the request body.
    * @returns The result, or `undefined` when the name is unknown.
    */
-  applyPreset(name: unknown): { preset: string; effective: ReturnType<TokenTreeService['effective']> } | undefined {
+  applyPreset(name: unknown, sessionId?: string): { preset: string; effective: ReturnType<TokenTreeService['effective']> } | undefined {
     const preset = presetOf(name)
     if (preset === undefined) return undefined
     if (this.settings === undefined) return undefined
-    this.settings.apply(preset.settings)
-    this.logger.info(`token-tree: applied preset ${preset.name}`)
-    return { preset: preset.name, effective: this.effective() }
+    // With a session id the bundle lands on that conversation only, matching the scope the panel is
+    // editing; without one it is the global bundle.
+    if (sessionId === undefined) this.settings.apply(preset.settings)
+    else this.settings.applyFor(sessionId, preset.settings)
+    this.logger.info(`token-tree: applied preset ${preset.name}${sessionId === undefined ? '' : ' to ' + sessionId}`)
+    return { preset: preset.name, effective: this.effective(sessionId) }
   }
 
   /**

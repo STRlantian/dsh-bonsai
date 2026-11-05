@@ -247,7 +247,7 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
         } catch {
           return Response.json({ ok: false, error: 'invalid json' }, { status: 400 })
         }
-        const applied = service.applyPreset(body.preset)
+        const applied = service.applyPreset(body.preset, scopedSessionOf(request))
         if (applied === undefined) {
           return Response.json({ ok: false, error: 'unknown preset or no settings store' }, { status: 400 })
         }

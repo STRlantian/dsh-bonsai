@@ -83,3 +83,24 @@ test('applying a preset writes the whole bundle at once', () => {
   assert.equal(service.toolDeny().length, 0, 'tools are shown again')
   assert.equal(service.applyPreset('nope'), undefined)
 })
+
+test('a preset applies to the scope it is asked for', () => {
+  const { settings, files } = store()
+  const service = new TokenTreeService({
+    config: Config['~standard'].validate({ logEdgeUpdates: false }).value!,
+    logger,
+    settings,
+  })
+  // Session scope: the bundle lands on that conversation, the global set stays untouched.
+  const applied = service.applyPreset('learning', 'session-a')
+  assert.ok(applied !== undefined)
+  assert.equal(applied.effective.foldKeepTurns, 2, 'session sees the preset')
+  assert.equal(service.effective().foldKeepTurns, 3, 'global still has the profile default')
+  const written = JSON.parse(files.get('C:/tmp/settings.json') as string)
+  assert.deepEqual(Object.keys(written), ['sessions'], 'only the session map was written')
+  assert.equal(written.sessions['session-a'].foldKeepTurns, 2)
+  // Global scope still works the old way.
+  service.applyPreset('learning')
+  const global = JSON.parse(files.get('C:/tmp/settings.json') as string)
+  assert.equal(global.foldKeepTurns, 2, 'global bundle written')
+})

@@ -320,6 +320,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   var FOCUS = '/api/token-tree/focus'
   var EDIT = '/api/token-tree/edit'
   var SETTINGS = '/api/token-tree/settings'
+  var PRESET_ROUTE = '/api/token-tree/preset'
   /** null edits the global settings; a session id edits that conversation's overrides. */
   var settingsScopeId = null
 
@@ -329,6 +330,14 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
    */
   function settingsUrl() {
     return settingsScopeId === null ? SETTINGS : SETTINGS + '?session=' + encodeURIComponent(settingsScopeId)
+  }
+
+  /**
+   * The preset URL for the current scope.
+   * @returns {string} path plus an optional session query.
+   */
+  function presetUrl() {
+    return settingsScopeId === null ? PRESET_ROUTE : PRESET_ROUTE + '?session=' + encodeURIComponent(settingsScopeId)
   }
   var PANEL_WIDTH = 420
 
@@ -1367,7 +1376,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
      */
     /** POST one preset name to the host. */
     function presetPost(name) {
-      return fetch('/api/token-tree/preset', {
+      return fetch(presetUrl(), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ preset: name }),
@@ -1571,7 +1580,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               onClick: function () { applyPreset(preset.id) },
             }, t(preset.label))
           }),
-          h('span', { className: 'twt-hint' }, t('预设只改这一页的设置，随时可以再点另一个'))),
+          h('span', { className: 'twt-hint' },
+            settingsScopeId === null
+              ? t('应用到所有对话，随时可以再点另一个')
+              : t('只改当前这个对话，随时可以再点另一个'))),
         settingRow({
           key: 'autoInject',
           advanced: true,
