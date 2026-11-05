@@ -7,7 +7,8 @@
  * before that fix still show the markers. This edits the assistant message text inside its own frame
  * (frames are the log's commit units, so they are never merged or reordered) and keeps a backup.
  *
- * Dry run by default; `--write` rewrites; `--session <id>` limits the run.
+ * Dry run by default; `--write` rewrites; `--session <id>` limits the run; `--skip <id>` excludes one
+ * (the session the running host is appending to must not be rewritten under it).
  *
  * Usage: node scripts/clean-marker-text.mjs [--session <id>] [--write]
  */
@@ -21,6 +22,7 @@ const argOf = (name, fallback) => {
   return index === -1 ? fallback : args[index + 1]
 }
 const only = argOf('session', undefined)
+const skip = argOf('skip', undefined)
 const write = args.includes('--write')
 const root = join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.dsh', 'sessions')
 const ATTACH = /\[attach:(n\d+|root|here)\]/g
@@ -87,6 +89,7 @@ for (const project of readdirSync(root, { withFileTypes: true })) {
   if (!project.isDirectory()) continue
   for (const name of readdirSync(join(root, project.name))) {
     if (only !== undefined && !name.includes(only)) continue
+    if (skip !== undefined && name.includes(skip)) continue
     const file = join(root, project.name, name, 'session.v4.jsonl.zstd')
     let outcome
     try { outcome = cleanFile(file) } catch { continue }
