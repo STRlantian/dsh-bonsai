@@ -1613,6 +1613,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           h('span', { className: 'twt-hint' }, t('预设只改这一页的设置，随时可以再点另一个'))),
         settingRow({
           key: 'autoInject',
+          advanced: true,
           label: t('自动注入检索结果'),
           hint: t('每回合把检索到的节点作为一块推到上下文里，约 428 token/轮'),
           control: h('input', {
@@ -1624,6 +1625,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'retrievalHint',
+          advanced: true,
           label: t('一行检索提示'),
           hint: t('不注入整块，只在尾部加一行提醒模型可以调用 retrieve_context（约 57 token/轮）'),
           control: h('input', {
@@ -1654,6 +1656,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'autoReflect',
+          advanced: true,
           label: t('自动反思与回溯'),
           hint: t('回合结束时评估失败、写反思节点，并把 Agent 拉回更优的兄弟分支'),
           control: h('input', {
@@ -1765,6 +1768,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           : null,
         settingRow({
           key: 'foldAboveTokens',
+          advanced: true,
           label: t('待折的旧内容至少多少 token'),
           hint: t('准备折掉的那一段达到这个大小才折（0 = 只看相对规则）。折一次会让缓存失效，所以块太小就不值得'),
           control: h('input', {
@@ -1786,6 +1790,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'foldBlockRatio',
+          advanced: true,
           label: t('待折块至少是保留窗口的几倍'),
           hint: t('缓存命中价约是漏价的 1/50，折一次要把保留窗口按漏价重算；块 ≥ 5×窗口时约 10 轮回本，0 = 只看绝对阈值'),
           advanced: true,
@@ -1805,6 +1810,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'foldCadence',
+          advanced: true,
           label: t('两次折叠至少间隔几轮'),
           hint: t('折叠会重写提示前缀、让缓存失效；0 表示每轮都可以折叠（旧行为），3 表示最多每 3 轮折一次'),
           advanced: true,
@@ -1845,6 +1851,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'fileRegion',
+          advanced: true,
           label: t('文件区（检索返回文件内容）'),
           hint: t('自动：预算够就给全文，不够给开头；也可以只给开头、总给全文，或关闭'),
           control: h('select', {
@@ -1858,6 +1865,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'attachGate',
+          advanced: true,
           label: t('何时让模型看候选'),
           hint: t('每轮：每轮都给（默认）。仅不确定时：本地没把握才给，省 token 但可能错过改挂'),
           advanced: true,
@@ -1872,6 +1880,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'attachPrompt',
+          advanced: true,
           label: t('让模型自己选落点'),
           hint: t('仅追问：只在指代时请模型点名；任何明确依赖：任何依赖都点名（实测误标更少）'),
           control: h('select', {
@@ -1883,6 +1892,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
         settingRow({
           key: 'attachChoices',
+          advanced: true,
           label: t('候选条数（只给问题）'),
           hint: t('每轮给模型看的候选问题数量（只给问题，不给回答正文）。每条约 15 token，10 条约 147 token/轮'),
           control: h('input', {
@@ -1945,6 +1955,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           : null,
         settingRow({
           key: 'locale',
+          advanced: true,
           label: t('界面语言'),
           hint: t('「自动」跟随浏览器/系统语言；选择后只影响这个插件，不影响宿主'),
           control: h('select', {

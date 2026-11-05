@@ -778,17 +778,25 @@ test('the settings panel opens on the global scope with a tab switch', { timeout
   assert.ok(titles.includes('快捷设置'), 'guided setup is a card')
   assert.ok(titles.includes('预设'), 'presets are a card')
   // The gate switch existed as a setting but had no row; it now sits under 挂接.
-  const rows = [...client.document.querySelectorAll('.twt-srow')].map(row => row.textContent ?? '')
+  const rowNodes = [...client.document.querySelectorAll('.twt-srow')]
+  const rows = rowNodes.map(row => row.textContent ?? '')
   assert.ok(rows.some(text => text.includes('何时让模型看候选')), 'attachGate row present')
-  // The fold rows read in the order the decision is made: block size, block/window ratio,
-  // minimum gap, then the window itself.
-  const thresholdIndex = rows.findIndex(text => text.includes('待折的旧内容至少多少 token'))
-  const ratioIndex = rows.findIndex(text => text.includes('待折块至少是保留窗口的几倍'))
-  const cadenceIndex = rows.findIndex(text => text.includes('两次折叠至少间隔几轮'))
-  const keepIndex = rows.findIndex(text => text.includes('最近几轮保留原文'))
-  // Advanced rows are collected into the disclosure, so only presence and relative order in the
-  // main list are stable.
-  assert.ok(thresholdIndex >= 0, 'the block floor is in the main list')
-  assert.ok(ratioIndex >= 0 && cadenceIndex >= 0, 'the ratio and the cadence are in the advanced block')
-  assert.ok(keepIndex > thresholdIndex, 'the keep window follows the block floor')
+  // The first screen keeps two switches only: the keep window and the hidden tools. Everything
+  // else lives inside the advanced disclosure, which is closed on open.
+  const disclosure = client.document.querySelector('.twt-advanced')
+  assert.ok(disclosure !== null, 'advanced disclosure exists')
+  assert.equal(disclosure.hasAttribute('open'), false, 'advanced is closed on open')
+  const visibleRows = rowNodes
+    .filter(node => node.closest('.twt-advanced') === null)
+    .map(node => node.textContent ?? '')
+  assert.equal(visibleRows.length, 2, 'two rows on the first screen')
+  assert.ok(visibleRows.some(text => text.includes('最近几轮保留原文')), 'keep window is visible')
+  assert.ok(visibleRows.some(text => text.includes('隐藏工具')), 'hidden tools is visible')
+  // The rest still exist, inside the disclosure, in the order the fold decision is made.
+  const advancedRows = [...disclosure.querySelectorAll('.twt-srow')].map(row => row.textContent ?? '')
+  const thresholdIndex = advancedRows.findIndex(text => text.includes('待折的旧内容至少多少 token'))
+  const ratioIndex = advancedRows.findIndex(text => text.includes('待折块至少是保留窗口的几倍'))
+  const cadenceIndex = advancedRows.findIndex(text => text.includes('两次折叠至少间隔几轮'))
+  assert.ok(thresholdIndex >= 0 && ratioIndex === thresholdIndex + 1, 'block floor then ratio')
+  assert.ok(cadenceIndex === ratioIndex + 1, 'then the cadence')
 })
