@@ -343,6 +343,8 @@ export class TokenTreeService {
   /** Effective configuration. */
   readonly config: ResolvedConfig
   private readonly logger: LoggerLike
+  /** Turn number of the last fold, per session, for the cadence switch. */
+  private readonly lastFold = new Map<string, number>()
   private readonly states = new Map<string, SessionState>()
   private readonly store: EditStore | undefined
   private readonly settings: SettingsStore | undefined
@@ -391,6 +393,8 @@ export class TokenTreeService {
     compactionIndex: boolean
     foldAboveTokens: number
     foldKeepTurns: number
+    /** Minimum turns between two folds; 0 re-evaluates every turn. */
+    foldCadence: number
     foldScope: string
     foldPolicy: string
   /** What the file region may return in retrieval: off, a digest, the whole text, or by budget. */
@@ -419,6 +423,7 @@ export class TokenTreeService {
       compactionIndex: overrides.compactionIndex ?? this.config.compactionIndex,
       foldAboveTokens: overrides.foldAboveTokens ?? this.config.foldAboveTokens,
       foldKeepTurns: overrides.foldKeepTurns ?? this.config.foldKeepTurns,
+      foldCadence: overrides.foldCadence ?? this.config.foldCadence,
       foldScope: overrides.foldScope ?? this.config.foldScope,
       foldPolicy: overrides.foldPolicy ?? this.config.foldPolicy,
       fileRegion: (overrides.fileRegion ?? this.config.fileRegion) as FileRegionMode,
@@ -502,6 +507,36 @@ export class TokenTreeService {
    * @param sessionId - session identity.
    * @returns Sum of every node's tokens.
    */
+  /** The highest turn number the tree has seen, or 0 before the first turn. */
+  sessionTurn(sessionId: string): number {
+    let turn = 0
+    for (const node of this.stateOf(sessionId).tree.nodes.values()) {
+      const value = node.metadata?.turn
+      if (typeof value === 'number' && value > turn) turn = value
+    }
+    return turn
+  }
+
+  /**
+   * How many turns have passed since this session last folded.
+   * @param sessionId - session identity.
+   * @returns Infinity when it has never folded.
+   */
+  foldGap(sessionId: string): number {
+    const last = this.lastFold.get(sessionId)
+    if (last === undefined) return Number.POSITIVE_INFINITY
+    return this.sessionTurn(sessionId) - last
+  }
+
+  /**
+   * Remember that a fold happened on this turn.
+   * @param sessionId - session identity.
+   * @param turn - the turn that folded.
+   */
+  noteFoldTurn(sessionId: string, turn: number): void {
+    this.lastFold.set(sessionId, turn)
+  }
+
   historyTokens(sessionId: string): number {
     const tree = this.stateOf(sessionId).tree
     let total = 0
@@ -562,6 +597,7 @@ export class TokenTreeService {
         compactionIndex: this.config.compactionIndex,
         foldAboveTokens: this.config.foldAboveTokens,
         foldKeepTurns: this.config.foldKeepTurns,
+        foldCadence: this.config.foldCadence,
         foldScope: this.config.foldScope,
         foldPolicy: this.config.foldPolicy,
         fileRegion: this.config.fileRegion as FileRegionMode,
@@ -2270,7 +2306,7 @@ export class TokenTreeService {
     folded: number,
     tokens: number,
     threshold: number,
-    extra: { planned?: number; visible?: number; range?: string; error?: string } = {},
+    extra: { planned?: number; visible?: number; range?: string; error?: string; cadence?: number; gap?: number } = {},
   ): void {
     this.stateOf('assembly').fold = { sessionId, folded, tokens, threshold, ...extra, at: Date.now() }
   }

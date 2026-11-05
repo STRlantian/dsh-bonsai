@@ -137,6 +137,11 @@ export interface ResolvedConfig {
   foldAboveTokens: number
   /** Recent turns left unfolded. */
   foldKeepTurns: number
+  /**
+   * Minimum number of turns between two folds; `0` keeps the old behaviour of re-evaluating every
+   * turn. A fold rewrites the prompt prefix, so a cadence caps how often the prefix cache is lost.
+   */
+  foldCadence: number
   /** What folding removes: tool output only (`tools`) or whole turns (`turns`). */
   foldScope: string
   /**
@@ -377,6 +382,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         conservativeBudgetRatio: scalar(source, 'conservativeBudgetRatio', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input > 0 && input <= 1, issues, 'a number within (0, 1]') ?? 0.85,
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 40000,
+    foldCadence: scalar(source, 'foldCadence', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 3,
     // Measured on the B/C scenario: the sub-concept instruction alone scores 5/5, adding summaries
     // 4/5. The summary stays available but off by default.
     attachSummary: scalar(source, 'attachSummary', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,

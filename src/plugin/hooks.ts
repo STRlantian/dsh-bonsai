@@ -233,6 +233,11 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   // The whole session, not the current branch: the next request carries all of it.
   const tokens = service.historyTokens(session.id)
   if (!always && tokens < threshold) return
+  const turn = service.sessionTurn(session.id)
+  if (!always && settings.foldCadence > 0 && service.foldGap(session.id) < settings.foldCadence) {
+    service.noteFold(session.id, 0, tokens, threshold, { planned: 0, visible: 0, cadence: settings.foldCadence, gap: service.foldGap(session.id) })
+    return
+  }
   const events = (session.snapshotEvents?.() ?? []).map(event => ({
     type: event.type,
     seq: event.seq,
@@ -262,6 +267,7 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
         return
       }
     }
+    if (folded > 0) service.noteFoldTurn(session.id, turn)
     service.noteFold(session.id, folded, tokens, threshold, { planned: turns.length, visible: visible.length })
     return
   }
@@ -285,6 +291,7 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
       return
     }
   }
+  if (folded > 0) service.noteFoldTurn(session.id, turn)
   service.noteFold(session.id, folded, tokens, threshold, { planned: plan.length, visible: visible.length })
   ctx.logger.info(`token-tree: folded ${folded} tool result(s) at ${tokens} tokens (threshold ${threshold})`)
 }

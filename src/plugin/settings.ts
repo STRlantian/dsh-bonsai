@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** Keys the settings surface may override. */
-const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'attachChoices', 'attachPrompt', 'attachGate', 'attachSummary', 'admitRelevance', 'summaryMatch'] as const
+const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldCadence', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'attachChoices', 'attachPrompt', 'attachGate', 'attachSummary', 'admitRelevance', 'summaryMatch'] as const
 
 export interface SettingsOverrides {
   /** Push a memory block every turn instead of the one-line hint. */
@@ -42,6 +42,8 @@ export interface SettingsOverrides {
   foldAboveTokens?: number
   /** How many recent turns to keep unfolded. */
   foldKeepTurns?: number
+  /** Minimum turns between two folds; 0 re-evaluates every turn. */
+  foldCadence?: number
   /** What to fold: tool output only, or whole turns. */
   foldScope?: string
   /** When to fold: `threshold` waits for the size gate, `always` folds every finished turn. */
@@ -98,7 +100,7 @@ export function defaultSettingsPath(): string {
  * @returns The value when it has the right type, otherwise `undefined`.
  */
 function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number | string | string[] | undefined {
-  if (key === 'foldAboveTokens') {
+  if (key === 'foldAboveTokens' || key === 'foldCadence') {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined
     return value
   }

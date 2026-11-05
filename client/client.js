@@ -1785,6 +1785,25 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           }),
         }),
         settingRow({
+          key: 'foldCadence',
+          label: t('两次折叠至少间隔几轮'),
+          hint: t('折叠会重写提示前缀、让缓存失效；0 表示每轮都可以折叠（旧行为），3 表示最多每 3 轮折一次'),
+          advanced: true,
+          control: h('input', {
+            type: 'number',
+            min: '0',
+            step: '1',
+            style: { width: '76px' },
+            defaultValue: String(effective.foldCadence === undefined ? 3 : effective.foldCadence),
+            disabled: busy,
+            onBlur: function (event) {
+              var next = Number(event.target.value)
+              if (!Number.isFinite(next) || next < 0) { event.target.value = String(effective.foldCadence === undefined ? 3 : effective.foldCadence); return }
+              saveSetting('foldCadence', Math.round(next))
+            },
+          }),
+        }),
+        settingRow({
           key: 'foldKeepTurns',
           label: t('最近几轮保留原文'),
           hint: t('最近这么多轮保持原样，保证正在用的上下文完整'),
