@@ -182,25 +182,6 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     ctx.logger.debug(`token-tree: agent/created not available (${describe(error)})`)
   }
 
-  // Fold old tool results out of the model view at turn end. Append-only: the log keeps
-  // every original, the surface just stops showing it.
-  const foldScheduled = new Set<string>()
-  ctx.on('session/event', (session, event) => {
-    if (event.type !== 'turn/end') return
-    if (foldScheduled.has(session.id)) return
-    foldScheduled.add(session.id)
-    // The event is still being published: appending now re-enters the publish and the host
-    // rejects it. Defer to the next macrotask, after the log write has settled.
-    setTimeout(() => {
-      foldScheduled.delete(session.id)
-      try {
-        maybeFold(session, service, ctx)
-      } catch (error) {
-        ctx.logger.warn(`token-tree: fold failed for session ${session.id}: ${describe(error)}`)
-      }
-    }, 0)
-  })
-
   // Read-only observation of the prompt the host is about to assemble.
   try {
     ctx.on('system-prompt/assemble', (assembly, _context, next) => {
@@ -215,16 +196,33 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     ctx.logger.debug(`token-tree: system-prompt/assemble not available (${describe(error)})`)
   }
 
+  // Fold old tool results out of the model view at the last moment the turn is still open.
+  // The host's durable-log reader requires a `tool/result` surface replacement to fall inside
+  // an open turn; appending it after `turn/end` writes a log that loads live but is rejected on
+  // the next read. `agent/turn-stopping` runs before the host appends `turn/end`, so the fold is
+  // both ahead of the next request and inside the turn that owns it.
+  const foldedTurns = new Map<string, number>()
   ctx.on('agent/turn-stopping', (payload) => {
-    if (!service.effective(payload.agent?.session?.id).autoReflect) return
-    if (!tracked(payload.agent, ctx, config)) return
-    try {
-      const outcome = service.supervise(payload.agent, payload.turn)
-      if (outcome.skipped !== undefined) {
-        ctx.logger.debug(`token-tree: supervisor skipped turn ${payload.turn} (${outcome.skipped})`)
+    // Supervision keeps seeing the pre-fold tree, exactly as it did when folding ran after
+    // turn/end. A fold only changes what the next request reads, not what just happened.
+    if (service.effective(payload.agent?.session?.id).autoReflect && tracked(payload.agent, ctx, config)) {
+      try {
+        const outcome = service.supervise(payload.agent, payload.turn)
+        if (outcome.skipped !== undefined) {
+          ctx.logger.debug(`token-tree: supervisor skipped turn ${payload.turn} (${outcome.skipped})`)
+        }
+      } catch (error) {
+        ctx.logger.warn(`token-tree: supervision failed for session ${payload.agent.session.id}: ${describe(error)}`)
       }
-    } catch (error) {
-      ctx.logger.warn(`token-tree: supervision failed for session ${payload.agent.session.id}: ${describe(error)}`)
+    }
+    const session = payload.agent?.session
+    if (session !== undefined && foldedTurns.get(session.id) !== payload.turn) {
+      foldedTurns.set(session.id, payload.turn)
+      try {
+        maybeFold(session, service, ctx, payload.turn)
+      } catch (error) {
+        ctx.logger.warn(`token-tree: fold failed for session ${session.id}: ${describe(error)}`)
+      }
     }
   })
 }
@@ -249,15 +247,17 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
 /**
  * Fold old tool results out of the model-visible surface.
  *
- * Runs at `turn/end`, so no turn is in flight. Only `tool/result` entries are touched, and
+ * Runs at `agent/turn-stopping`, before the host appends `turn/end`: a `tool/result` surface
+ * replacement is only legal inside an open turn. Only `tool/result` entries are touched, and
  * only their `message.content`: turn, step, callId and error fields stay, which is what keeps
  * the call/result pairs well formed. The replacement is a `surfaceOp: replace` event, so the
  * originals remain in the log and in the tree.
- * @param session - session that just finished a turn.
+ * @param session - session whose turn is stopping.
  * @param service - tree service, for the measured size and the diagnostics.
  * @param ctx - plugin context, for logging.
+ * @param currentTurn - turn that is still open; its results stay visible until the next turn.
  */
-function maybeFold(session: SessionLike, service: TokenTreeService, ctx: ContextLike): void {
+function maybeFold(session: SessionLike, service: TokenTreeService, ctx: ContextLike, currentTurn?: number): void {
   const settings = service.effective(session.id)
   // `always` folds every finished turn outside the keep window, whatever the size: the experiment
   // "fold everything, force the model to consult the tree" needs no threshold at all.
@@ -266,7 +266,7 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   if (typeof session.append !== 'function') return
   // The whole session, not the current branch: the next request carries all of it.
   const tokens = service.historyTokens(session.id)
-  const turn = service.sessionTurn(session.id)
+  const turn = currentTurn ?? service.sessionTurn(session.id)
   if (!always && settings.foldCadence > 0 && service.foldGap(session.id) < settings.foldCadence) {
     service.noteFold(session.id, 0, tokens, settings.foldAboveTokens, { planned: 0, visible: 0, cadence: settings.foldCadence, gap: service.foldGap(session.id) })
     return
@@ -295,7 +295,10 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   const legacy = !always && settings.foldTrigger === 'history'
   if (legacy && tokens < settings.foldAboveTokens) return
   if (settings.foldScope === 'turns') {
+    // The turn that is still stopping is not history yet: a continuation inside it may still
+    // need these messages, and `foldKeepTurns: 0` must never replace the question being asked.
     const turns = planTurnFold(events, visible, settings.foldKeepTurns, seq => service.turnOfSeq(session.id, seq))
+      .filter(planned => planned.turn !== turn)
     if (turns.length === 0) {
       service.noteFold(session.id, 0, tokens, settings.foldAboveTokens, { planned: 0, visible: visible.length })
       return
@@ -335,7 +338,9 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   // Tool results are much smaller than a turn, so the absolute threshold still measures the whole
   // history here; the relative block rule is a turn-level decision.
   if (!always && tokens < settings.foldAboveTokens) return
+  // Keep the still-open turn's own results visible for the same reason as the turn fold above.
   const plan = planFold(events, visible, settings.foldKeepTurns)
+    .filter(replacement => (replacement.data as { turn?: unknown }).turn !== turn)
   if (plan.length === 0) {
     service.noteFold(session.id, 0, tokens, settings.foldAboveTokens, { planned: 0, visible: visible.length })
     return
