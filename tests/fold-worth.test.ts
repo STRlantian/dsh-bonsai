@@ -8,7 +8,8 @@ const fold = turn => ({ turn, startSeq: turn * 10, endSeq: turn * 10 + 1, turns:
 test('the block is the sum of the turns about to leave', () => {
   const tokens = new Map([[1, 500], [2, 4000], [3, 3000], [4, 800]])
   assert.equal(blockTokensOf([fold(2), fold(3)], tokens), 7000, 'only the folded turns count')
-  assert.equal(keptTokensOf([fold(2), fold(3)], tokens), 1300, 'the head and the keep window stay')
+  // The head (turn 1) sits before the fold point and stays cached, so it is not part of the window.
+  assert.equal(keptTokensOf([fold(2), fold(3)], tokens), 800, 'only what follows the fold point is re-priced')
 })
 
 test('a fold is worth it only when the block clears the floor', () => {

@@ -90,7 +90,7 @@ export function planFold(events: readonly FoldEvent[], visible: readonly number[
 }
 
 /** Event types that carry model-visible messages. */
-const SURFACE_TYPES = new Set(['user/message', 'assistant/message', 'tool/result', 'system/message'])
+export const SURFACE_TYPES = new Set(['user/message', 'assistant/message', 'tool/result', 'system/message'])
 
 /**
  * Placeholder that stands in for a folded turn.
@@ -117,9 +117,16 @@ export function blockTokensOf(folds: readonly TurnFold[], turnTokens: ReadonlyMa
  * @returns Summed size of every turn the fold leaves in place.
  */
 export function keptTokensOf(folds: readonly TurnFold[], turnTokens: ReadonlyMap<number, number>): number {
+  // Only what sits after the fold point is re-priced: the prompt head before it stays cached, so
+  // counting it would overstate the cost of a fold and make the rule needlessly conservative.
   const folded = new Set(folds.map(fold => fold.turn))
+  let start = Number.POSITIVE_INFINITY
+  for (const fold of folds) start = Math.min(start, fold.turn)
   let total = 0
-  for (const [turn, tokens] of turnTokens) if (!folded.has(turn)) total += tokens
+  for (const [turn, tokens] of turnTokens) {
+    if (folded.has(turn) || turn < start) continue
+    total += tokens
+  }
   return total
 }
 
@@ -158,7 +165,12 @@ export function turnPlaceholder(turns: number): string {
  * @param keepTurns - most recent turns to leave alone.
  * @returns One replacement per foldable turn, oldest first.
  */
-export function planTurnFold(events: readonly FoldEvent[], visible: readonly number[], keepTurns: number): TurnFold[] {
+export function planTurnFold(
+  events: readonly FoldEvent[],
+  visible: readonly number[],
+  keepTurns: number,
+  turnOf?: (seq: number) => number | undefined,
+): TurnFold[] {
   const indexOf = new Map<number, number>()
   visible.forEach((seq, index) => indexOf.set(seq, index))
   const byTurn = new Map<number, number[]>()
@@ -174,7 +186,9 @@ export function planTurnFold(events: readonly FoldEvent[], visible: readonly num
     const data = event.data ?? {}
     // A placeholder from an earlier fold is not a conversation turn.
     if ((data.source as { kind?: string } | undefined)?.kind === 'token-tree') continue
-    const turn = typeof data.turn === 'number' ? data.turn : current
+    // A surface view may not carry turn/start, and a user message may carry no turn field at all;
+    // the caller's resolver knows the turn from the events it did see.
+    const turn = typeof data.turn === 'number' ? data.turn : (turnOf?.(event.seq) ?? current)
     if (turn <= 0) continue
     const list = byTurn.get(turn)
     if (list === undefined) byTurn.set(turn, [index])

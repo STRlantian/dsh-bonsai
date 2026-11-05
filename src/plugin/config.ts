@@ -150,6 +150,11 @@ export interface ResolvedConfig {
    * window at the miss price; `0` disables the relative rule.
    */
   foldBlockRatio: number
+  /**
+   * What the threshold measures: `block` (the turns about to leave, the default) or `history` (the
+   * whole visible prompt, the older behaviour).
+   */
+  foldTrigger: string
   /** What folding removes: tool output only (`tools`) or whole turns (`turns`). */
   foldScope: string
   /**
@@ -392,6 +397,13 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 40000,
     foldCadence: scalar(source, 'foldCadence', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 3,
     foldBlockRatio: scalar(source, 'foldBlockRatio', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 5,
+    foldTrigger: ((): string => {
+      const value = source === undefined ? undefined : (source as Record<string, unknown>).foldTrigger
+      if (value === undefined) return 'block'
+      if (value === 'block' || value === 'history') return value
+      issue(issues, 'foldTrigger', 'must be `block` or `history`')
+      return 'block'
+    })(),
     // Measured on the B/C scenario: the sub-concept instruction alone scores 5/5, adding summaries
     // 4/5. The summary stays available but off by default.
     attachSummary: scalar(source, 'attachSummary', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,

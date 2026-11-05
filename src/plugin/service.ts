@@ -345,6 +345,8 @@ export class TokenTreeService {
   private readonly logger: LoggerLike
   /** Turn number of the last fold, per session, for the cadence switch. */
   private readonly lastFold = new Map<string, number>()
+  /** Turn that each surface event belongs to, so folding works without turn markers in the view. */
+  private readonly seqTurns = new Map<string, Map<number, number>>()
   private readonly states = new Map<string, SessionState>()
   private readonly store: EditStore | undefined
   private readonly settings: SettingsStore | undefined
@@ -397,6 +399,8 @@ export class TokenTreeService {
     foldCadence: number
     /** Block size relative to the keep window; 0 disables the relative rule. */
     foldBlockRatio: number
+    /** What the threshold measures: `block` or `history`. */
+    foldTrigger: string
     foldScope: string
     foldPolicy: string
   /** What the file region may return in retrieval: off, a digest, the whole text, or by budget. */
@@ -427,6 +431,7 @@ export class TokenTreeService {
       foldKeepTurns: overrides.foldKeepTurns ?? this.config.foldKeepTurns,
       foldCadence: overrides.foldCadence ?? this.config.foldCadence,
       foldBlockRatio: overrides.foldBlockRatio ?? this.config.foldBlockRatio,
+      foldTrigger: overrides.foldTrigger ?? this.config.foldTrigger,
       foldScope: overrides.foldScope ?? this.config.foldScope,
       foldPolicy: overrides.foldPolicy ?? this.config.foldPolicy,
       fileRegion: (overrides.fileRegion ?? this.config.fileRegion) as FileRegionMode,
@@ -510,6 +515,16 @@ export class TokenTreeService {
    * @param sessionId - session identity.
    * @returns Sum of every node's tokens.
    */
+  /**
+   * The turn a surface event belongs to.
+   * @param sessionId - session identity.
+   * @param seq - event sequence.
+   * @returns The turn number, or undefined when the event is not a surface event.
+   */
+  turnOfSeq(sessionId: string, seq: number): number | undefined {
+    return this.seqTurns.get(sessionId)?.get(seq)
+  }
+
   /**
    * Measured tokens per turn, for the fold economics.
    * @param sessionId - session identity.
@@ -618,6 +633,7 @@ export class TokenTreeService {
         foldKeepTurns: this.config.foldKeepTurns,
         foldCadence: this.config.foldCadence,
         foldBlockRatio: this.config.foldBlockRatio,
+        foldTrigger: this.config.foldTrigger,
         foldScope: this.config.foldScope,
         foldPolicy: this.config.foldPolicy,
         fileRegion: this.config.fileRegion as FileRegionMode,
@@ -884,6 +900,16 @@ export class TokenTreeService {
   private applyEvent(state: SessionState, event: SessionEventLike): void {
     const data = objectField(event.data) ?? {}
     const at = numberField(event.time) ?? Date.now()
+    // Remember the turn of every surface event: a host view may drop turn/start and omit the turn
+    // field, and the fold planner still has to group messages by turn.
+    if (event.type === 'user/message' || event.type === 'assistant/message' || event.type === 'tool/result') {
+      const turn = numberField(data.turn) ?? state.turn
+      if (turn > 0 && typeof event.seq === 'number') {
+        let map = this.seqTurns.get(state.sessionId)
+        if (map === undefined) { map = new Map(); this.seqTurns.set(state.sessionId, map) }
+        map.set(event.seq, turn)
+      }
+    }
     switch (event.type) {
       case 'compaction/start':
       case 'compaction/end': {

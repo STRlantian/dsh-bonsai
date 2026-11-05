@@ -1896,3 +1896,39 @@ discount     = max(baseDiscount, 被匹配词的 tf / 该节点最高 tf)
 
 实现：`foldWorthIt` / `blockTokensOf` / `keptTokensOf` 是纯函数（见 `src/plugin/fold.ts`），
 有单测；设置页把"历史超过多少 token"改成"待折的旧内容至少多少 token"，并新增"待折块至少是保留窗口的几倍"。
+
+
+## 实验 40：真机 A/B 跑不起来 —— 当前宿主里折叠根本没发生
+
+原本想用真机 A/B 定默认值，先做了一个 10 轮的脚本会话（3 个 arm：旧"整段历史"、新"块 + 5×窗口"）。
+结果**三条 arm 的折叠次数都是 0**。这不是阈值没到，而是折叠路径在当前宿主上没跑通：
+
+探针（临时 stderr）显示：
+
+```text
+TTFOLD enter {"hasAppend":"function","hasSurface":true}
+TTFOLD state {"tokens":2798,"turn":3,"above":2000,...}
+TTFOLD plan 0 visible 13 turnsOf=[[7,null],[8,1],[9,1],[10,1],...]
+```
+
+也就是说：
+
+1. `session.append` 存在、surface 列表存在、阈值确实到了；
+2. 但 `planTurnFold` 一个轮次都选不出来：宿主交给插件的 surface 事件**没有 turn 号**
+   （user/message 没有 `data.turn`，surface 视图里也没有 turn/start），于是所有事件都被归到第 1 轮；
+3. 日志里最后一次真实折叠是 **2026-11-03 23:04（本地）**，之后所有会话都没有再折过 —— 与宿主升级到
+   0.2.1-rc.5 的时间吻合。
+
+已顺手做的兼容改动（都带测试）：
+
+| 改动 | 作用 |
+|---|---|
+| `service.seqTurns` + `turnOfSeq()` | 从插件看到的事件流里记住每个 seq 属于哪一轮 |
+| `planTurnFold(..., turnOf)` | 事件没有 turn 字段时用上面的映射 |
+| `session.eventAt` 声明 + surface 重建 | surface 有 seq 时按真实 seq 重建事件表 |
+
+但真机上 turn 号仍然拿不到（surface 事件里 turn 全是 1），所以**折叠仍然不触发**。
+
+结论：默认值这件事真机暂时测不了。离线模拟（实验 39）给的相对结论仍然成立：
+块触发 + 5×窗口把折叠次数从 420 降到 44、成本 68.7%。默认值先按离线的取（`foldAboveTokens 40000`、
+`foldBlockRatio 5`），等折叠在真机上恢复后再做一次端到端 A/B。

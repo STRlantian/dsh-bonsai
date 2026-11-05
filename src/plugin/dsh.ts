@@ -64,6 +64,13 @@ export interface SessionLike {
     readonly replaceGeneration?: number
   }
   /**
+   * Look up one surface event by its sequence number.
+   * @param seq - surface sequence.
+   * @returns The event, when the host keeps the index.
+   */
+  eventAt?(seq: number): { type?: string; data?: unknown } | undefined
+
+  /**
    * Append one durable event.
    * @param type - event type, e.g. `tool/result`.
    * @param data - event payload, unchanged except for the text being folded.

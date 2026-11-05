@@ -22,6 +22,7 @@ import type { AgentLike, ContextLike, SessionLike } from './dsh.ts'
 import { agentRegistryOf } from './dsh.ts'
 import { buildInjectedMessage, isInjected, textOfContent } from './messages.ts'
 import { blockTokensOf, foldWorthIt, keptTokensOf, planFold, planTurnFold } from './fold.ts'
+import { SURFACE_TYPES } from './fold.ts'
 import type { TokenTreeService } from './service.ts'
 
 /** Longest query text taken from a user message. */
@@ -236,16 +237,31 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
     service.noteFold(session.id, 0, tokens, settings.foldAboveTokens, { planned: 0, visible: 0, cadence: settings.foldCadence, gap: service.foldGap(session.id) })
     return
   }
-  const events = (session.snapshotEvents?.() ?? []).map(event => ({
-    type: event.type,
-    seq: event.seq,
-    data: event.data as Record<string, unknown> | undefined,
-  }))
+  // A snapshot event may carry no sequence, while the host tracks the view as real sequence numbers.
+  // Rebuild from the surface list when the host can resolve each seq, so the planner's ranges are the
+  // values the fold op has to cite.
+  const surfaceSeqs = Array.isArray(session.surface?.nodes) ? [...session.surface.nodes] : []
+  const resolveEvent = typeof session.eventAt === 'function' ? (seq: number) => session.eventAt?.(seq) : undefined
+  const events = surfaceSeqs.length > 0 && resolveEvent !== undefined
+    ? surfaceSeqs.map(seq => {
+      const entry = resolveEvent(seq)
+      return { type: entry?.type ?? 'user/message', seq, data: entry?.data as Record<string, unknown> | undefined }
+    })
+    : (session.snapshotEvents?.() ?? []).map((event, index) => ({
+      type: event.type,
+      seq: typeof event.seq === 'number' ? event.seq : index + 1,
+      data: event.data as Record<string, unknown> | undefined,
+    }))
+  // The host's surface list is the authority when it is there. Without it, fall back to the
+  // surface event types only: the planner groups messages by turn and rejects a turn whose nodes are
+  // not contiguous, and step bookkeeping between two messages would break that.
   const visible = Array.isArray(session.surface?.nodes) && session.surface.nodes.length > 0
     ? [...session.surface.nodes]
-    : events.map(event => event.seq)
+    : events.filter(event => SURFACE_TYPES.has(event.type)).map(event => event.seq)
+  const legacy = !always && settings.foldTrigger === 'history'
+  if (legacy && tokens < settings.foldAboveTokens) return
   if (settings.foldScope === 'turns') {
-    const turns = planTurnFold(events, visible, settings.foldKeepTurns)
+    const turns = planTurnFold(events, visible, settings.foldKeepTurns, seq => service.turnOfSeq(session.id, seq))
     if (turns.length === 0) {
       service.noteFold(session.id, 0, tokens, settings.foldAboveTokens, { planned: 0, visible: visible.length })
       return
@@ -253,7 +269,7 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
     // The threshold now measures the block about to leave, and the block must also be large
     // relative to the keep window: a fold re-prices that window at the miss price, so a small
     // block is a loss even when the total history is large.
-    if (!always) {
+    if (!always && !legacy) {
       const perTurn = service.turnTokens(session.id)
       const block = blockTokensOf(turns, perTurn)
       const kept = keptTokensOf(turns, perTurn)
