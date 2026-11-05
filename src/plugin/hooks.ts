@@ -21,6 +21,10 @@ import type { ResolvedConfig } from './config.ts'
 import type { AgentLike, ContextLike, SessionLike } from './dsh.ts'
 import { agentRegistryOf } from './dsh.ts'
 import { buildInjectedMessage, isInjected, textOfContent } from './messages.ts'
+import { appendFileSync, mkdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { homedir } from 'node:os'
+
 import { blockTokensOf, foldWorthIt, keptTokensOf, planFold, planTurnFold } from './fold.ts'
 import { SURFACE_TYPES } from './fold.ts'
 import type { TokenTreeService } from './service.ts'
@@ -68,12 +72,34 @@ function queryOf(messages: readonly unknown[]): string | undefined {
  * @param service - session memory service.
  * @param config - resolved configuration.
  */
+/**
+ * Append one failure to the plugin's own diagnostics file.
+ *
+ * The host console usually swallows plugin warnings, and a tree that silently stays empty is very
+ * hard to notice otherwise.
+ * @param sessionId - session the failure belongs to.
+ * @param type - event type, or a short tag.
+ * @param error - what went wrong.
+ */
+function recordFailure(sessionId: string, type: string, error: unknown): void {
+  try {
+    const home = process.env.DSH_HOME ?? join(homedir(), '.dsh')
+    const path = join(home, 'token-tree', 'diagnostics.log')
+    mkdirSync(dirname(path), { recursive: true })
+    appendFileSync(path, `${new Date().toISOString()} ${sessionId} ${type} ${String(error)}\n`)
+  } catch {
+    // Diagnostics must never break the turn loop.
+  }
+}
+
 export function installHooks(ctx: ContextLike, service: TokenTreeService, config: ResolvedConfig): void {
   ctx.on('session/event', (session, event) => {
     try {
       service.noteSessionCapability(session)
       service.handleEvent(session, event)
     } catch (error) {
+      // The host console usually swallows plugin warnings, and a silent tree failure is hard to spot.
+      recordFailure(session.id, event.type, error)
       ctx.logger.warn(`token-tree: failed to fold ${event.type} for session ${session.id}: ${describe(error)}`)
     }
   })
@@ -83,6 +109,14 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     if (decision.kind !== 'enter') return decision
     if (payload.step > 1) return decision
     if (!tracked(payload.agent, ctx, config)) return decision
+    // A session that existed before this process started may not publish its events to the plugin, so
+    // the tree would stay empty while this hook keeps running. Rebuilding from the snapshot is
+    // idempotent and gives the panel and folding the history back.
+    try {
+      service.backfillFromSession(payload.agent.session)
+    } catch (error) {
+      ctx.logger.warn(`token-tree: could not rebuild the tree for ${payload.agent.session.id}: ${describe(error)}`)
+    }
     // Tool-first mode: no block, just a one-line reminder that the older history is
     // retrievable. The block itself costs ~400 uncached tokens every turn, which a
     // short conversation does not need. These switches can be changed while running,
