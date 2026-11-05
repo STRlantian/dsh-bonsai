@@ -11,7 +11,7 @@
  */
 
 /** The presets the settings panel offers. */
-export type PresetName = 'conservative' | 'balanced' | 'learning' | 'coding' | 'aggressive'
+export type PresetName = 'treeOnly' | 'conservative' | 'balanced' | 'learning' | 'coding' | 'aggressive'
 
 /** One preset: a label, a one-line reason, and the overrides it writes. */
 export interface Preset {
@@ -41,6 +41,22 @@ export const AGGRESSIVE_HIDDEN_TOOLS = [
 
 /** All presets, in the order the panel shows them. */
 export const PRESETS: readonly Preset[] = [
+  {
+    name: 'treeOnly',
+    settings: {
+      // Only the tree: no injection, no hint, no candidate block, no folding, no reflection.
+      autoInject: false,
+      retrievalHint: false,
+      attachChoices: 0,
+      attachSummary: false,
+      autoReflect: false,
+      foldAboveTokens: 0,
+      foldBlockRatio: 0,
+      foldCadence: 0,
+      mandatoryContext: false,
+      toolDeny: [],
+    },
+  },
   {
     name: 'conservative',
     settings: {

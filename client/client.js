@@ -1275,6 +1275,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
 
     /** The bundles the host understands; the labels are what people read. */
     var PRESET_LIST = [
+      { id: 'treeOnly', label: '只建树', hint: '完全关掉注入、提示、候选、折叠与反思：插件只画树，不碰模型看到的任何东西' },
       { id: 'conservative', label: '保留', hint: '待折块 6 万 token 才折，保留最近 4 轮，不隐藏任何工具 —— 最接近原生行为' },
       { id: 'balanced', label: '默认', hint: '待折块 4 万 token、且 ≥5×保留窗口时折叠，保留 3 轮，不隐藏工具' },
       { id: 'learning', label: '学习', hint: '概念问答：保留 2 轮，候选问题给 6 条并每轮都给，摘要关闭，不隐藏工具' },
@@ -1303,9 +1304,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           if (payload && payload.ok === false) throw new Error(payload.error || 'preset failed')
           var picked = PRESET_LIST.filter(function (item) { return item.id === name })
           setNote(tf('已应用预设：{}', picked.length > 0 ? t(picked[0].label) : name))
-          return settingsGet()
+          // Re-read through the same path the tab switch uses: the returned effective is for the
+          // scope that was just written, and a stale panel is the bug this replaces.
+          return refreshSettings()
         })
-        .then(function (payload) { setSettings(payload) })
         .catch(function (error) { setNote(tf('应用预设失败：{}', error.message)) })
         .finally(function () { setBusy(false) })
     }
@@ -1532,407 +1534,210 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   }
 
   var settingsPanel = null
-    if (settings !== null) {
-      // Defensive: an older or partial payload must not take the editor down.
+  if (settings !== null) {
+    // Defensive: an older or partial payload must not take the editor down.
     var effective = (settings && settings.effective) || {}
-      advancedRowSink = []
-      settingsPanel = h('div', { className: 'twt-settings' },
-        h('p', { className: 'twt-hint' },
-          tf('这些开关立即生效，写入 {}，重启后仍然有效。', settings.path === null ? t('（未配置）') : settings.path)),
-        h('div', { className: 'twt-tabs', role: 'tablist' },
-          h('button', {
-            role: 'tab',
-            'aria-selected': settingsScopeId === null,
-            className: settingsScopeId === null ? 'twt-tab twt-tab-active' : 'twt-tab',
-            disabled: busy,
-            onClick: function () {
-              if (settingsScopeId === null) return
-              settingsScopeId = null
-              refreshSettings()
-            },
-          }, t('全局设置')),
-          h('button', {
-            role: 'tab',
-            'aria-selected': settingsScopeId !== null,
-            className: settingsScopeId === null ? 'twt-tab' : 'twt-tab twt-tab-active',
-            disabled: busy || typeof sessionId !== 'string' || sessionId.length === 0,
-            title: typeof sessionId !== 'string' || sessionId.length === 0 ? t('还没有绑定会话') : t('只覆盖当前这个对话'),
-            onClick: function () {
-              if (settingsScopeId !== null || typeof sessionId !== 'string' || sessionId.length === 0) return
-              settingsScopeId = sessionId
-              refreshSettings()
-            },
-          }, t('本对话'))),
-        h('p', { className: 'twt-hint twt-scopehint' },
-          settingsScopeId === null
-            ? t('改动影响所有对话；被改过的项会标「已覆盖」')
-            : t('只覆盖当前这个对话；清空某项就退回全局值')),
-        h('div', { className: 'twt-card twt-presets' },
-          h('div', { className: 'twt-cardhead' },
-            h('span', { className: 'twt-dtitle' }, t('预设')),
-            h('span', { className: 'twt-hint' }, t('整套参数，一次改完'))),
-          PRESET_LIST.map(function (preset) {
-            return h('button', {
-              key: preset.id,
-              className: 'twt-action',
-              disabled: busy,
-              title: t(preset.hint),
-              onClick: function () { applyPreset(preset.id) },
-            }, t(preset.label))
-          }),
-          h('span', { className: 'twt-hint' },
-            settingsScopeId === null
-              ? t('应用到所有对话，随时可以再点另一个')
-              : t('只改当前这个对话，随时可以再点另一个'))),
-        settingRow({
-          key: 'autoInject',
-          advanced: true,
-          label: t('自动注入检索结果'),
-          hint: t('每回合把检索到的节点作为一块推到上下文里，约 428 token/轮'),
-          control: h('input', {
-            type: 'checkbox',
-            checked: effective.autoInject === true,
-            disabled: busy,
-            onChange: function (event) { saveSetting('autoInject', event.target.checked) },
-          }),
+    advancedRowSink = []
+
+    /**
+     * One numeric row. The input is keyed by value so a preset change remounts it: a stale
+     * defaultValue is why the panel used to look unchanged after applying a preset.
+     */
+    function numericRow(options) {
+      var floor = options.min === undefined ? 0 : options.min
+      return settingRow({
+        key: options.key,
+        advanced: options.advanced === true,
+        label: t(options.label),
+        hint: t(options.hint),
+        control: h('input', {
+          key: options.key + ':' + String(options.value),
+          type: 'number',
+          min: String(floor),
+          step: String(options.step === undefined ? 1 : options.step),
+          defaultValue: String(options.value),
+          disabled: busy,
+          style: { width: (options.width === undefined ? 76 : options.width) + 'px' },
+          onBlur: function (event) {
+            var next = Number(event.target.value)
+            if (!Number.isFinite(next) || next < floor) {
+              event.target.value = String(options.value)
+              return
+            }
+            saveSetting(options.key, Math.round(next))
+          },
         }),
-        settingRow({
+      })
+    }
+
+    /** One checkbox row, bound to the value in force. */
+    function toggleRow(options) {
+      return settingRow({
+        key: options.key,
+        advanced: options.advanced === true,
+        label: t(options.label),
+        hint: t(options.hint),
+        control: h('input', {
+          type: 'checkbox',
+          checked: options.checked === true,
+          disabled: busy,
+          onChange: function (event) { saveSetting(options.key, event.target.checked) },
+        }),
+      })
+    }
+
+    settingsPanel = h('div', { className: 'twt-settings' },
+      h('div', { className: 'twt-tabs', role: 'tablist' },
+        h('button', {
+          role: 'tab',
+          'aria-selected': settingsScopeId === null,
+          className: settingsScopeId === null ? 'twt-tab twt-tab-active' : 'twt-tab',
+          disabled: busy,
+          onClick: function () {
+            if (settingsScopeId === null) return
+            settingsScopeId = null
+            refreshSettings()
+          },
+        }, t('全局设置')),
+        h('button', {
+          role: 'tab',
+          'aria-selected': settingsScopeId !== null,
+          className: settingsScopeId === null ? 'twt-tab' : 'twt-tab twt-tab-active',
+          disabled: busy || typeof sessionId !== 'string' || sessionId.length === 0,
+          title: typeof sessionId !== 'string' || sessionId.length === 0 ? t('还没有绑定会话') : t('只覆盖当前这个对话'),
+          onClick: function () {
+            if (settingsScopeId !== null || typeof sessionId !== 'string' || sessionId.length === 0) return
+            settingsScopeId = sessionId
+            refreshSettings()
+          },
+        }, t('本对话'))),
+      h('p', { className: 'twt-hint twt-scopehint' },
+        settingsScopeId === null
+          ? t('改动影响所有对话；被改过的项会标「已覆盖」')
+          : t('只覆盖当前这个对话；清空某项就退回全局值')),
+
+      h('div', { className: 'twt-card twt-presets' },
+        h('div', { className: 'twt-cardhead' },
+          h('span', { className: 'twt-dtitle' }, t('预设')),
+          h('span', { className: 'twt-hint' }, t('整套参数，一次改完'))),
+        PRESET_LIST.map(function (preset) {
+          return h('button', {
+            key: preset.id,
+            className: 'twt-action',
+            disabled: busy,
+            title: t(preset.hint),
+            onClick: function () { applyPreset(preset.id) },
+          }, t(preset.label))
+        }),
+        h('span', { className: 'twt-hint' },
+          settingsScopeId === null
+            ? t('应用到所有对话，随时可以再点另一个')
+            : t('只改当前这个对话，随时可以再点另一个'))),
+
+      numericRow({
+        key: 'foldKeepTurns',
+        label: '保留最近几轮原文',
+        hint: '折叠之后这几轮保持原样，保证正在用的上下文完整',
+        value: effective.foldKeepTurns === undefined ? 3 : effective.foldKeepTurns,
+        min: 0,
+        step: 1,
+        width: 76,
+      }),
+      settingRow({
+        key: 'toolDeny',
+        label: t('隐藏工具'),
+        hint: t('从清单里挑不需要的工具，模型就看不到它们。工具定义占 prompt 的大头：实测编码类工具合计约 2,300 token/请求，隐藏用得少的能明显省钱'),
+        control: h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+          h('span', { className: 'twt-hint', 'data-testid': 'tool-deny-count' },
+            tf('已隐藏 {} 个', deniedTools.length)),
+          h('button', {
+            className: 'twt-action',
+            disabled: busy || availableTools.length === 0,
+            title: availableTools.length === 0 ? t('先打开一个会话，宿主装配过提示词后才有工具清单') : undefined,
+            onClick: function () {
+              setToolDraft(deniedTools.slice())
+              setToolQuery('')
+              setToolPickerOpen(true)
+            },
+          }, availableTools.length === 0 ? t('暂无工具清单') : t('选择工具…'))),
+      }),
+      settings && settings.toolRestriction && settings.toolRestriction.applied === false && settings.toolRestriction.error
+        ? h('p', { className: 'twt-hint twt-err' }, t('上次隐藏失败：') + settings.toolRestriction.error)
+        : null,
+
+      h('details', { className: 'twt-advanced' },
+        h('summary', null, t('高级（一般不用改）')),
+        numericRow({
+          key: 'foldAboveTokens',
+          advanced: true,
+          label: '待折的旧内容至少多少 token',
+          hint: '准备折掉的那一段达到这个大小才折（0 = 只看相对规则）。折一次会让缓存失效，所以块太小就不值得',
+          value: effective.foldAboveTokens === undefined ? 0 : effective.foldAboveTokens,
+          min: 0,
+          step: 1000,
+          width: 92,
+        }),
+        numericRow({
+          key: 'foldBlockRatio',
+          advanced: true,
+          label: '待折块至少是保留窗口的几倍',
+          hint: '缓存命中价约是漏价的 1/50，折一次要把保留窗口按漏价重算；块 ≥ 5×窗口时约 10 轮回本，0 = 只看绝对阈值',
+          value: effective.foldBlockRatio === undefined ? 5 : effective.foldBlockRatio,
+          min: 0,
+          step: 1,
+          width: 76,
+        }),
+        numericRow({
+          key: 'foldCadence',
+          advanced: true,
+          label: '两次折叠至少间隔几轮',
+          hint: '折叠会重写提示前缀、让缓存失效；0 表示每轮都可以折叠（旧行为）',
+          value: effective.foldCadence === undefined ? 3 : effective.foldCadence,
+          min: 0,
+          step: 1,
+          width: 76,
+        }),
+        toggleRow({
           key: 'retrievalHint',
           advanced: true,
-          label: t('一行检索提示'),
-          hint: t('不注入整块，只在尾部加一行提醒模型可以调用 retrieve_context（约 57 token/轮）'),
-          control: h('input', {
-            type: 'checkbox',
-            checked: effective.retrievalHint === true,
-            disabled: busy,
-            onChange: function (event) { saveSetting('retrievalHint', event.target.checked) },
-          }),
+          label: '一行检索提示',
+          hint: '不注入整块，只在尾部加一行提醒模型可以调用 retrieve_context（约 57 token/轮）',
+          checked: effective.retrievalHint === true,
         }),
-        settingRow({
-          key: 'hintMinNodes',
+        numericRow({
+          key: 'attachChoices',
           advanced: true,
-          label: t('提示起始节点数'),
-          hint: t('节点数达到这个值才开始发提示；被压缩过的会话不受此限，会立即提示'),
-          control: h('input', {
-            type: 'number',
-            min: 1,
-            step: 10,
-            defaultValue: String(effective.hintMinNodes),
-            disabled: busy,
-            style: { width: '80px' },
-            onBlur: function (event) {
-              var next = Number(event.target.value)
-              if (!Number.isFinite(next) || next <= 0) { event.target.value = String(effective.hintMinNodes); return }
-              saveSetting('hintMinNodes', Math.round(next))
-            },
-          }),
-        }),
-        settingRow({
-          key: 'autoReflect',
-          advanced: true,
-          label: t('自动反思与回溯'),
-          hint: t('回合结束时评估失败、写反思节点，并把 Agent 拉回更优的兄弟分支'),
-          control: h('input', {
-            type: 'checkbox',
-            checked: effective.autoReflect === true,
-            disabled: busy,
-            onChange: function (event) { saveSetting('autoReflect', event.target.checked) },
-          }),
-        }),
-        settingRow({
-          key: 'admitRelevance',
-          advanced: true,
-          label: t('检索准入阈值'),
-          hint: t('相关度低于这个值的节点不进入排序（0 = 不设门槛）。0.3 实测比较稳，0.5 会让多数查询空手（空手时会自动放宽一次）'),
-          control: h('input', {
-            type: 'number',
-            min: 0,
-            max: 1,
-            step: 0.05,
-            defaultValue: String(effective.admitRelevance === undefined ? 0.3 : effective.admitRelevance),
-            disabled: busy,
-            style: { width: '76px' },
-            onBlur: function (event) {
-              var next = Number(event.target.value)
-              if (!Number.isFinite(next) || next < 0 || next > 1) {
-                event.target.value = String(effective.admitRelevance === undefined ? 0.3 : effective.admitRelevance)
-                return
-              }
-              saveSetting('admitRelevance', Math.round(next * 100) / 100)
-            },
-          }),
-        }),
-        settingRow({
-          key: 'hintAboveTokens',
-          advanced: true,
-          label: t('提示起始 token 数'),
-          hint: t('对话达到这个 token 数才发检索提示；有词表时按实测，没有时按估算'),
-          control: h('input', {
-            type: 'number',
-            min: 100,
-            step: 1000,
-            defaultValue: String(effective.hintAboveTokens === undefined ? 12000 : effective.hintAboveTokens),
-            disabled: busy,
-            style: { width: '92px' },
-            onBlur: function (event) {
-              var next = Number(event.target.value)
-              if (!Number.isFinite(next) || next < 100) {
-                event.target.value = String(effective.hintAboveTokens === undefined ? 12000 : effective.hintAboveTokens)
-                return
-              }
-              saveSetting('hintAboveTokens', Math.round(next))
-            },
-          }),
+          label: '候选条数（只给问题）',
+          hint: '每轮给模型看的候选问题数量（只给问题，不给回答正文）；0 关闭',
+          value: effective.attachChoices === undefined ? 10 : effective.attachChoices,
+          min: 0,
+          step: 1,
+          width: 72,
         }),
         settingRow({
           key: 'tokenizerVersion',
           advanced: true,
-          label: 'tokenizer',
-          hint: t('列出磁盘上实际找到的 tokenizer.json；「自主学习」不读词表，用估算加账单校准'),
+          label: t('tokenizer 版本'),
+          hint: t('词表决定 token 计数；换成最新一代更准，没有词表时用账单反推'),
           control: h('select', {
             className: 'twt-select',
             defaultValue: currentTokenizerChoice(effective, settings),
             disabled: busy,
-            style: { width: '184px' },
+            style: { width: '190px' },
             onChange: function (event) {
-              var next = String(event.target.value || '').trim()
-              saveSetting('tokenizerVersion', next === '' || next === 'auto' ? null : next)
+              var next = String(event.target.value || 'auto')
+              saveSetting('tokenizerVersion', next === 'auto' ? null : next)
             },
           }, tokenizerOptions(effective, settings)),
         }),
-        h('p', { className: 'twt-hint' },
-          tf('tokenizer: {} · 可用 {} · 预算折扣 {} · 账单拟合 {}',
-            settings.tokenizer === undefined
-              ? t(t('（未知）'))
-              : settings.tokenizer.state + (settings.tokenizer.version ? ' v' + settings.tokenizer.version : ''),
-            settings.tokenizer === undefined || settings.tokenizer.available.length === 0
-              ? t(t('无'))
-              : settings.tokenizer.available.join(', '),
-            settings.budget === undefined ? '-' : settings.budget.factor.toFixed(2),
-            settings.billing === undefined ? '-' : (settings.billing.active ? t(t('生效')) : t(t('样本不足'))))),
-        settings && settings.autoCompact && settings.autoCompact.estimate !== undefined && settings.autoCompact.estimate !== null
-          ? h('p', { className: 'twt-hint' },
-            tf('当前会话 {} tok；压缩一次会读 {} tok，之后每轮约省 {} tok，约 {} 轮回本（缓存价约为输入价的 1/10，实际花费远低于这些数字）',
-              settings.autoCompact.tokens,
-              settings.autoCompact.estimate.readTokens,
-              settings.autoCompact.estimate.savedPerTurn,
-              settings.autoCompact.estimate.turnsToBreakEven))
-          : null,
-        settingRow({
-          key: 'toolDeny',
-          label: t('隐藏工具'),
-          hint: t('从清单里挑不需要的工具，模型就看不到它们。工具定义占 prompt 的大头：实测编码类工具合计约 2,300 token/请求，隐藏用得少的能明显省钱'),
-          control: h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
-            h('span', { className: 'twt-hint', 'data-testid': 'tool-deny-count' },
-              tf('已隐藏 {} 个', deniedTools.length)),
-            h('button', {
-              className: 'twt-action',
-              disabled: busy || availableTools.length === 0,
-              title: availableTools.length === 0 ? t('先打开一个会话，宿主装配过提示词后才有工具清单') : undefined,
-              onClick: function () {
-                setToolDraft(deniedTools.slice())
-                setToolQuery('')
-                setToolPickerOpen(true)
-              },
-            }, availableTools.length === 0 ? t('暂无工具清单') : t('选择工具…'))),
-        }),
-        settings && settings.toolRestriction && settings.toolRestriction.applied === false && settings.toolRestriction.error
-          ? h('p', { className: 'twt-hint twt-err' }, t('上次隐藏失败：') + settings.toolRestriction.error)
-          : null,
-        settingRow({
-          key: 'foldAboveTokens',
-          advanced: true,
-          label: t('待折的旧内容至少多少 token'),
-          hint: t('准备折掉的那一段达到这个大小才折（0 = 只看相对规则）。折一次会让缓存失效，所以块太小就不值得'),
-          control: h('input', {
-            type: 'number',
-            min: 0,
-            step: 1000,
-            defaultValue: String(effective.foldAboveTokens === undefined ? 0 : effective.foldAboveTokens),
-            disabled: busy,
-            style: { width: '92px' },
-            onBlur: function (event) {
-              var next = Number(event.target.value)
-              if (!Number.isFinite(next) || next < 0) {
-                event.target.value = String(effective.foldAboveTokens === undefined ? 0 : effective.foldAboveTokens)
-                return
-              }
-              saveSetting('foldAboveTokens', Math.round(next))
-            },
-          }),
-        }),
-        settingRow({
-          key: 'foldBlockRatio',
-          advanced: true,
-          label: t('待折块至少是保留窗口的几倍'),
-          hint: t('缓存命中价约是漏价的 1/50，折一次要把保留窗口按漏价重算；块 ≥ 5×窗口时约 10 轮回本，0 = 只看绝对阈值'),
-          advanced: true,
-          control: h('input', {
-            type: 'number',
-            min: '0',
-            step: '1',
-            style: { width: '76px' },
-            defaultValue: String(effective.foldBlockRatio === undefined ? 5 : effective.foldBlockRatio),
-            disabled: busy,
-            onBlur: function (event) {
-              var next = Number(event.target.value)
-              if (!Number.isFinite(next) || next < 0) { event.target.value = String(effective.foldBlockRatio === undefined ? 5 : effective.foldBlockRatio); return }
-              saveSetting('foldBlockRatio', Math.round(next))
-            },
-          }),
-        }),
-        settingRow({
-          key: 'foldCadence',
-          advanced: true,
-          label: t('两次折叠至少间隔几轮'),
-          hint: t('折叠会重写提示前缀、让缓存失效；0 表示每轮都可以折叠（旧行为），3 表示最多每 3 轮折一次'),
-          advanced: true,
-          control: h('input', {
-            type: 'number',
-            min: '0',
-            step: '1',
-            style: { width: '76px' },
-            defaultValue: String(effective.foldCadence === undefined ? 3 : effective.foldCadence),
-            disabled: busy,
-            onBlur: function (event) {
-              var next = Number(event.target.value)
-              if (!Number.isFinite(next) || next < 0) { event.target.value = String(effective.foldCadence === undefined ? 3 : effective.foldCadence); return }
-              saveSetting('foldCadence', Math.round(next))
-            },
-          }),
-        }),
-        settingRow({
-          key: 'foldKeepTurns',
-          label: t('最近几轮保留原文'),
-          hint: t('最近这么多轮保持原样，保证正在用的上下文完整'),
-          control: h('input', {
-            type: 'number',
-            min: 0,
-            step: 1,
-            defaultValue: String(effective.foldKeepTurns === undefined ? 2 : effective.foldKeepTurns),
-            disabled: busy,
-            style: { width: '76px' },
-            onBlur: function (event) {
-              var next = Number(event.target.value)
-              if (!Number.isFinite(next) || next < 0) {
-                event.target.value = String(effective.foldKeepTurns === undefined ? 2 : effective.foldKeepTurns)
-                return
-              }
-              saveSetting('foldKeepTurns', Math.round(next))
-            },
-          }),
-        }),
-        settingRow({
-          key: 'fileRegion',
-          advanced: true,
-          label: t('文件区（检索返回文件内容）'),
-          hint: t('自动：预算够就给全文，不够给开头；也可以只给开头、总给全文，或关闭'),
-          control: h('select', {
-            value: effective === undefined || effective.fileRegion === undefined ? 'auto' : effective.fileRegion,
-            onChange: function (event) { saveSetting('fileRegion', event.target.value) },
-          },
-            h('option', { value: 'auto' }, t('自动（按预算）')),
-            h('option', { value: 'digest' }, t('只给开头')),
-            h('option', { value: 'content' }, t('总是全文')),
-            h('option', { value: 'off' }, t('关闭'))),
-        }),
-        settingRow({
-          key: 'attachGate',
-          advanced: true,
-          label: t('何时让模型看候选'),
-          hint: t('每轮：每轮都给（默认）。仅不确定时：本地没把握才给，省 token 但可能错过改挂'),
-          advanced: true,
-          control: h('select', {
-            className: 'twt-select',
-            defaultValue: effective.attachGate === 'uncertain' ? 'uncertain' : 'always',
-            disabled: busy,
-            onChange: function (event) { saveSetting('attachGate', event.target.value) },
-          },
-            h('option', { value: 'always' }, t('每轮')),
-            h('option', { value: 'uncertain' }, t('仅不确定时'))),
-        }),
-        settingRow({
-          key: 'attachPrompt',
-          advanced: true,
-          label: t('让模型自己选落点'),
-          hint: t('仅追问：只在指代时请模型点名；任何明确依赖：任何依赖都点名（实测误标更少）'),
-          control: h('select', {
-            value: effective === undefined || effective.attachPrompt === undefined ? 'any' : effective.attachPrompt,
-            onChange: function (event) { saveSetting('attachPrompt', event.target.value) },
-          },
-            h('option', { value: 'any' }, t('任何明确依赖（默认）')),
-            h('option', { value: 'follow' }, t('仅追问'))),
-        }),
-        settingRow({
-          key: 'attachChoices',
-          advanced: true,
-          label: t('候选条数（只给问题）'),
-          hint: t('每轮给模型看的候选问题数量（只给问题，不给回答正文）。每条约 15 token，10 条约 147 token/轮'),
-          control: h('input', {
-            type: 'number',
-            min: '0',
-            step: '1',
-            style: { width: '72px' },
-            defaultValue: String(effective === undefined || effective.attachChoices === undefined ? 10 : effective.attachChoices),
-            onChange: function (event) {
-              var next = Number(event.target.value)
-              if (!Number.isFinite(next) || next < 0) return
-              saveSetting('attachChoices', Math.round(next))
-            },
-          }),
-        }),
-        settingRow({
-          key: 'attachSummary',
-          advanced: true,
-          label: t('让模型写方面摘要'),
-          hint: t('回答末尾附一行"讲了哪些方面"，显示在候选列表里。实测无收益，还多约 30–40 输出 token/轮'),
-          control: h('input', {
-            type: 'checkbox',
-            checked: effective !== undefined && effective.attachSummary === true,
-            onChange: function (event) { saveSetting('attachSummary', event.target.checked) },
-          }),
-        }),
-        settingRow({
-          key: 'foldPolicy',
-          advanced: true,
-          label: t('每轮折叠全部历史'),
-          hint: t('只保留当前提问，强制模型先调用 retrieve_context'),
-          control: h('input', {
-            type: 'checkbox',
-            checked: effective !== undefined && effective.foldPolicy === 'always',
-            onChange: function (event) { saveSetting('foldPolicy', event.target.checked ? 'always' : 'threshold') },
-          }),
-        }),
-        settingRow({
-          key: 'foldScope',
-          advanced: true,
-          label: t('折叠范围'),
-          hint: t('工具输出：只移走旧的工具结果。整轮对话：整轮换成一行提示，工具调用与结果一起移走'),
-          control: h('select', {
-            className: 'twt-select',
-            defaultValue: effective.foldScope === 'turns' ? 'turns' : 'tools',
-            disabled: busy,
-            onChange: function (event) { saveSetting('foldScope', event.target.value) },
-          },
-            h('option', { value: 'tools' }, t('工具输出')),
-            h('option', { value: 'turns' }, t('整轮对话'))),
-        }),
-        settings && settings.fold && settings.fold.folded > 0
-          ? h('p', { className: 'twt-hint' },
-            settings.foldScope === 'tools'
-              ? tf('上次折叠：{} 条工具输出（会话 {} tok，阈值 {}）', settings.fold.folded, settings.fold.tokens, settings.fold.threshold)
-              : tf('上次折叠：{} 轮对话（会话 {} tok，阈值 {}）', settings.fold.folded, settings.fold.tokens, settings.fold.threshold))
-          : null,
-        settings && settings.fold && settings.fold.error
-          ? h('p', { className: 'twt-hint twt-err' }, tf('上次折叠被拒：{}', settings.fold.error))
-          : null,
         settingRow({
           key: 'locale',
           advanced: true,
           label: t('界面语言'),
-          hint: t('「自动」跟随浏览器/系统语言；选择后只影响这个插件，不影响宿主'),
+          hint: t('自动跟随系统；也可以固定中文或英文'),
           control: h('select', {
-            defaultValue: (settings && typeof settings.locale === 'string') ? settings.locale : 'auto',
+            className: 'twt-select',
+            defaultValue: effective.locale === 'zh' || effective.locale === 'en' ? effective.locale : 'auto',
             disabled: busy,
             style: { width: '150px' },
             onChange: function (event) {
@@ -1945,13 +1750,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             h('option', { value: 'zh' }, t('中文')),
             h('option', { value: 'en' }, t('English'))),
         }),
-        h('details', { className: 'twt-advanced' },
-          h('summary', null, t('高级（一般不用改）')),
-          advancedRowSink),
-        note === '' ? null : h('p', { className: 'twt-flash' }, note))
-    } else {
-      settingsPanel = h('div', { className: 'twt-settings' }, h('p', { className: 'twt-note' }, t('读取设置中…')), note === '' ? null : h('p', { className: 'twt-flash' }, note))
-    }
+        advancedRowSink),
+      note === '' ? null : h('p', { className: 'twt-flash' }, note))
+  } else {
+    settingsPanel = h('div', { className: 'twt-settings' }, h('p', { className: 'twt-note' }, t('读取设置中…')), note === '' ? null : h('p', { className: 'twt-flash' }, note))
+  }
 
     // Conversation mode is a live surface: new turns must appear without a click.
     React.useEffect(function () {

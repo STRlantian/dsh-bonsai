@@ -8,7 +8,17 @@ function f1(a) {
     }
 }
 
-let zz = { a: 1, b: 2 }
-for(const j of zz) {
-    console.log(j)
+class Test {
+
+    constructor(a, b) {
+        this.a = a
+        this.b = b
+    }
+
+    test() {
+        console.log("azzzzz")
+        console.log(this.a + this.b)
+    }
 }
+let a = new Test(1, 2)
+a.test()

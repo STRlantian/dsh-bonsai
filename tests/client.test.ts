@@ -515,7 +515,7 @@ test('the settings panel offers the three presets', { timeout: 30000 }, async t 
   const bar = client.document.querySelector('.twt-presets')
   assert.ok(bar !== null, 'the preset bar is present')
   const labels = [...bar.querySelectorAll('button')].map(button => button.textContent ?? '')
-  assert.deepEqual(labels, ['保留', '默认', '学习', '工程', '极省'], 'five presets, in order')
+  assert.deepEqual(labels, ['只建树', '保留', '默认', '学习', '工程', '极省'], 'six presets, in order')
   const aggressive = [...bar.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('极省'))
   await React.act(async () => { aggressive.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
   await client.flush()
@@ -779,12 +779,9 @@ test('the settings panel opens on the global scope with a tab switch', { timeout
   const titles = [...client.document.querySelectorAll('.twt-card .twt-dtitle')].map(node => node.textContent)
   assert.ok(titles.includes('预设'), 'presets are a card')
   assert.equal(titles.includes('快捷设置'), false, 'the overlapping guided card is gone')
-  // The gate switch existed as a setting but had no row; it now sits under 挂接.
-  const rowNodes = [...client.document.querySelectorAll('.twt-srow')]
-  const rows = rowNodes.map(row => row.textContent ?? '')
-  assert.ok(rows.some(text => text.includes('何时让模型看候选')), 'attachGate row present')
   // The first screen keeps two switches only: the keep window and the hidden tools. Everything
   // else lives inside the advanced disclosure, which is closed on open.
+  const rowNodes = [...client.document.querySelectorAll('.twt-srow')]
   const disclosure = client.document.querySelector('.twt-advanced')
   assert.ok(disclosure !== null, 'advanced disclosure exists')
   assert.equal(disclosure.hasAttribute('open'), false, 'advanced is closed on open')
@@ -792,7 +789,7 @@ test('the settings panel opens on the global scope with a tab switch', { timeout
     .filter(node => node.closest('.twt-advanced') === null)
     .map(node => node.textContent ?? '')
   assert.equal(visibleRows.length, 2, 'two rows on the first screen')
-  assert.ok(visibleRows.some(text => text.includes('最近几轮保留原文')), 'keep window is visible')
+  assert.ok(visibleRows.some(text => text.includes('保留最近几轮原文')), 'keep window is visible')
   assert.ok(visibleRows.some(text => text.includes('隐藏工具')), 'hidden tools is visible')
   // The rest still exist, inside the disclosure, in the order the fold decision is made.
   const advancedRows = [...disclosure.querySelectorAll('.twt-srow')].map(row => row.textContent ?? '')

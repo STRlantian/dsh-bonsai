@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import { apply } from '../src/index.ts'
 import { Config } from '../src/plugin/config.ts'
+import { SettingsStore } from '../src/plugin/settings.ts'
 
 /**
  * Drive the turn-end fold hook end to end: real plugin mount, real tree, a fake host session that
@@ -31,7 +32,18 @@ function mount(configOverrides: Record<string, unknown>) {
     inject: (_services: readonly string[], _callback: unknown) => undefined,
     get: () => undefined,
   }
-  apply(ctx as never, config)
+  const files = new Map<string, string>()
+  const settings = new SettingsStore({
+    path: 'C:/tmp/fold-live-settings.json',
+    io: {
+      readFile: path => files.get(path) ?? '{}',
+      writeFile: (path, text) => { files.set(path, text) },
+      exists: path => files.has(path),
+      makeDir: () => {},
+    },
+    onError: () => {},
+  })
+  apply(ctx as never, config, { settings })
 
   const events: Record<string, unknown>[] = []
   const session = {

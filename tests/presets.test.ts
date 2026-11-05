@@ -44,7 +44,19 @@ test('the presets differ in exactly the knobs they advertise', () => {
   assert.ok(Array.isArray(aggressive.settings.toolDeny), 'aggressive hides tools')
   assert.ok((aggressive.settings.toolDeny as string[]).includes('workflow'))
   assert.equal(presetOf('nope'), undefined)
-  assert.equal(PRESETS.length, 5)
+  assert.equal(PRESETS.length, 6)
+})
+
+test('the tree-only preset switches every model-facing behaviour off', () => {
+  const treeOnly = presetOf('treeOnly')
+  assert.ok(treeOnly !== undefined)
+  assert.equal(treeOnly.settings.autoInject, false)
+  assert.equal(treeOnly.settings.retrievalHint, false)
+  assert.equal(treeOnly.settings.attachChoices, 0, 'no candidate block')
+  assert.equal(treeOnly.settings.foldAboveTokens, 0, 'no folding')
+  assert.equal(treeOnly.settings.foldBlockRatio, 0)
+  assert.equal(treeOnly.settings.mandatoryContext, false)
+  assert.deepEqual(treeOnly.settings.toolDeny, [])
 })
 
 test('the two usage presets carry the switches that make them different', () => {
