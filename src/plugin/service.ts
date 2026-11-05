@@ -395,6 +395,8 @@ export class TokenTreeService {
     foldKeepTurns: number
     /** Minimum turns between two folds; 0 re-evaluates every turn. */
     foldCadence: number
+    /** Block size relative to the keep window; 0 disables the relative rule. */
+    foldBlockRatio: number
     foldScope: string
     foldPolicy: string
   /** What the file region may return in retrieval: off, a digest, the whole text, or by budget. */
@@ -424,6 +426,7 @@ export class TokenTreeService {
       foldAboveTokens: overrides.foldAboveTokens ?? this.config.foldAboveTokens,
       foldKeepTurns: overrides.foldKeepTurns ?? this.config.foldKeepTurns,
       foldCadence: overrides.foldCadence ?? this.config.foldCadence,
+      foldBlockRatio: overrides.foldBlockRatio ?? this.config.foldBlockRatio,
       foldScope: overrides.foldScope ?? this.config.foldScope,
       foldPolicy: overrides.foldPolicy ?? this.config.foldPolicy,
       fileRegion: (overrides.fileRegion ?? this.config.fileRegion) as FileRegionMode,
@@ -507,6 +510,22 @@ export class TokenTreeService {
    * @param sessionId - session identity.
    * @returns Sum of every node's tokens.
    */
+  /**
+   * Measured tokens per turn, for the fold economics.
+   * @param sessionId - session identity.
+   * @returns Turn number to token sum.
+   */
+  turnTokens(sessionId: string): Map<number, number> {
+    const byTurn = new Map<number, number>()
+    for (const node of this.stateOf(sessionId).tree.nodes.values()) {
+      if (node.kind === 'note') continue
+      const turn = node.metadata?.turn
+      if (typeof turn !== 'number' || turn <= 0) continue
+      byTurn.set(turn, (byTurn.get(turn) ?? 0) + node.tokens)
+    }
+    return byTurn
+  }
+
   /** The highest turn number the tree has seen, or 0 before the first turn. */
   sessionTurn(sessionId: string): number {
     let turn = 0
@@ -598,6 +617,7 @@ export class TokenTreeService {
         foldAboveTokens: this.config.foldAboveTokens,
         foldKeepTurns: this.config.foldKeepTurns,
         foldCadence: this.config.foldCadence,
+        foldBlockRatio: this.config.foldBlockRatio,
         foldScope: this.config.foldScope,
         foldPolicy: this.config.foldPolicy,
         fileRegion: this.config.fileRegion as FileRegionMode,

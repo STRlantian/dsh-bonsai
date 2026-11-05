@@ -1765,8 +1765,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           : null,
         settingRow({
           key: 'foldAboveTokens',
-          label: t('历史超过多少 token 开始省略旧轮次'),
-          hint: t('对话超过这个 token 数就把较早的内容移出模型视野（0 = 关闭）。只改模型看到的部分，日志和对话树里的原文不动，也不产生模型调用'),
+          label: t('待折的旧内容至少多少 token'),
+          hint: t('准备折掉的那一段达到这个大小才折（0 = 只看相对规则）。折一次会让缓存失效，所以块太小就不值得'),
           control: h('input', {
             type: 'number',
             min: 0,
@@ -1781,6 +1781,25 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
                 return
               }
               saveSetting('foldAboveTokens', Math.round(next))
+            },
+          }),
+        }),
+        settingRow({
+          key: 'foldBlockRatio',
+          label: t('待折块至少是保留窗口的几倍'),
+          hint: t('缓存命中价约是漏价的 1/50，折一次要把保留窗口按漏价重算；块 ≥ 5×窗口时约 10 轮回本，0 = 只看绝对阈值'),
+          advanced: true,
+          control: h('input', {
+            type: 'number',
+            min: '0',
+            step: '1',
+            style: { width: '76px' },
+            defaultValue: String(effective.foldBlockRatio === undefined ? 5 : effective.foldBlockRatio),
+            disabled: busy,
+            onBlur: function (event) {
+              var next = Number(event.target.value)
+              if (!Number.isFinite(next) || next < 0) { event.target.value = String(effective.foldBlockRatio === undefined ? 5 : effective.foldBlockRatio); return }
+              saveSetting('foldBlockRatio', Math.round(next))
             },
           }),
         }),

@@ -21,7 +21,7 @@ import type { ResolvedConfig } from './config.ts'
 import type { AgentLike, ContextLike, SessionLike } from './dsh.ts'
 import { agentRegistryOf } from './dsh.ts'
 import { buildInjectedMessage, isInjected, textOfContent } from './messages.ts'
-import { planFold, planTurnFold } from './fold.ts'
+import { blockTokensOf, foldWorthIt, keptTokensOf, planFold, planTurnFold } from './fold.ts'
 import type { TokenTreeService } from './service.ts'
 
 /** Longest query text taken from a user message. */
@@ -227,15 +227,13 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   // `always` folds every finished turn outside the keep window, whatever the size: the experiment
   // "fold everything, force the model to consult the tree" needs no threshold at all.
   const always = settings.foldPolicy === 'always'
-  const threshold = always ? 0 : settings.foldAboveTokens
-  if (!always && threshold <= 0) return
+  if (!always && settings.foldAboveTokens <= 0 && settings.foldBlockRatio <= 0) return
   if (typeof session.append !== 'function') return
   // The whole session, not the current branch: the next request carries all of it.
   const tokens = service.historyTokens(session.id)
-  if (!always && tokens < threshold) return
   const turn = service.sessionTurn(session.id)
   if (!always && settings.foldCadence > 0 && service.foldGap(session.id) < settings.foldCadence) {
-    service.noteFold(session.id, 0, tokens, threshold, { planned: 0, visible: 0, cadence: settings.foldCadence, gap: service.foldGap(session.id) })
+    service.noteFold(session.id, 0, tokens, settings.foldAboveTokens, { planned: 0, visible: 0, cadence: settings.foldCadence, gap: service.foldGap(session.id) })
     return
   }
   const events = (session.snapshotEvents?.() ?? []).map(event => ({
@@ -249,51 +247,66 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   if (settings.foldScope === 'turns') {
     const turns = planTurnFold(events, visible, settings.foldKeepTurns)
     if (turns.length === 0) {
-      service.noteFold(session.id, 0, tokens, threshold, { planned: 0, visible: visible.length })
+      service.noteFold(session.id, 0, tokens, settings.foldAboveTokens, { planned: 0, visible: visible.length })
       return
     }
+    // The threshold now measures the block about to leave, and the block must also be large
+    // relative to the keep window: a fold re-prices that window at the miss price, so a small
+    // block is a loss even when the total history is large.
+    if (!always) {
+      const perTurn = service.turnTokens(session.id)
+      const block = blockTokensOf(turns, perTurn)
+      const kept = keptTokensOf(turns, perTurn)
+      if (!foldWorthIt(block, kept, settings.foldAboveTokens, settings.foldBlockRatio)) {
+        service.noteFold(session.id, 0, tokens, block, { planned: turns.length, visible: visible.length, range: `block=${block} kept=${kept} ratio=${settings.foldBlockRatio}` })
+        return
+      }
+    }
     let folded = 0
-    for (const turn of turns) {
+    for (const planned of turns) {
       try {
-        session.append('user/message', turn.data, {
-          surfaceOp: { op: 'replace', startSeq: turn.startSeq, endSeq: turn.endSeq },
+        session.append('user/message', planned.data, {
+          surfaceOp: { op: 'replace', startSeq: planned.startSeq, endSeq: planned.endSeq },
           // The host requires every shadowed surface node to be named.
-          sourceEventSeqs: turn.seqs,
+          sourceEventSeqs: planned.seqs,
         })
         folded++
       } catch (error) {
-        ctx.logger.warn(`token-tree: could not fold turn ${turn.startSeq}-${turn.endSeq} (${describe(error)})`)
-        service.noteFold(session.id, folded, tokens, threshold, { planned: turns.length, visible: visible.length, range: `first=${turns[0].startSeq}-${turns[0].endSeq} seqs=${turns[0].seqs.join(',')} visible=${visible.join(',')}`, error: describe(error) })
+        ctx.logger.warn(`token-tree: could not fold turn ${planned.startSeq}-${planned.endSeq} (${describe(error)})`)
+        service.noteFold(session.id, folded, tokens, settings.foldAboveTokens, { planned: turns.length, visible: visible.length, range: `first=${planned.startSeq}-${planned.endSeq} seqs=${planned.seqs.join(',')} visible=${visible.join(',')}`, error: describe(error) })
         return
       }
     }
     if (folded > 0) service.noteFoldTurn(session.id, turn)
-    service.noteFold(session.id, folded, tokens, threshold, { planned: turns.length, visible: visible.length })
+    service.noteFold(session.id, folded, tokens, settings.foldAboveTokens, { planned: turns.length, visible: visible.length })
     return
   }
 
+  // Tool results are much smaller than a turn, so the absolute threshold still measures the whole
+  // history here; the relative block rule is a turn-level decision.
+  if (!always && tokens < settings.foldAboveTokens) return
   const plan = planFold(events, visible, settings.foldKeepTurns)
   if (plan.length === 0) {
-    service.noteFold(session.id, 0, tokens, threshold, { planned: 0, visible: visible.length })
+    service.noteFold(session.id, 0, tokens, settings.foldAboveTokens, { planned: 0, visible: visible.length })
     return
   }
   let folded = 0
-  for (const replacement of plan) {
+  for (const replacementEntry of plan) {
     try {
-      session.append(replacement.type, replacement.data, {
-        surfaceOp: { op: 'replace', startSeq: replacement.seq, endSeq: replacement.seq },
-        sourceEventSeqs: [replacement.seq],
+      session.append(replacementEntry.type, replacementEntry.data, {
+        surfaceOp: { op: 'replace', startSeq: replacementEntry.seq, endSeq: replacementEntry.seq },
+        sourceEventSeqs: [replacementEntry.seq],
       })
       folded++
     } catch (error) {
-      ctx.logger.warn(`token-tree: could not fold seq ${replacement.seq} (${describe(error)})`)
-      service.noteFold(session.id, folded, tokens, threshold, { planned: plan.length, visible: visible.length, error: describe(error) })
+      ctx.logger.warn(`token-tree: could not fold seq ${replacementEntry.seq} (${describe(error)})`)
+      service.noteFold(session.id, folded, tokens, settings.foldAboveTokens, { planned: plan.length, visible: visible.length, error: describe(error) })
       return
     }
   }
   if (folded > 0) service.noteFoldTurn(session.id, turn)
-  service.noteFold(session.id, folded, tokens, threshold, { planned: plan.length, visible: visible.length })
-  ctx.logger.info(`token-tree: folded ${folded} tool result(s) at ${tokens} tokens (threshold ${threshold})`)
+  service.noteFold(session.id, folded, tokens, settings.foldAboveTokens, { planned: plan.length, visible: visible.length })
+  ctx.logger.info(`token-tree: folded ${folded} tool result(s) at ${tokens} tokens (block threshold ${settings.foldAboveTokens})`)
 }
 
 /**

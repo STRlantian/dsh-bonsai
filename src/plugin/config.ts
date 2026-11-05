@@ -133,7 +133,10 @@ export interface ResolvedConfig {
   /** Minimum gap between automatic compactions. */
   /** Whether the first hint after a compaction lists the folded nodes. */
   compactionIndex: boolean
-  /** Conversation tokens above which old tool results are folded; `0` disables it. */
+  /**
+   * Folded-block size that justifies a fold: the turns about to be removed must reach this many
+   * tokens; `0` removes the absolute floor and leaves only the relative rule.
+   */
   foldAboveTokens: number
   /** Recent turns left unfolded. */
   foldKeepTurns: number
@@ -142,6 +145,11 @@ export interface ResolvedConfig {
    * turn. A fold rewrites the prompt prefix, so a cadence caps how often the prefix cache is lost.
    */
   foldCadence: number
+  /**
+   * The block must also be at least this many times the keep window, because a fold re-prices the
+   * window at the miss price; `0` disables the relative rule.
+   */
+  foldBlockRatio: number
   /** What folding removes: tool output only (`tools`) or whole turns (`turns`). */
   foldScope: string
   /**
@@ -383,6 +391,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 40000,
     foldCadence: scalar(source, 'foldCadence', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 3,
+    foldBlockRatio: scalar(source, 'foldBlockRatio', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 5,
     // Measured on the B/C scenario: the sub-concept instruction alone scores 5/5, adding summaries
     // 4/5. The summary stays available but off by default.
     attachSummary: scalar(source, 'attachSummary', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,

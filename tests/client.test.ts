@@ -780,8 +780,15 @@ test('the settings panel opens on the global scope with a tab switch', { timeout
   // The gate switch existed as a setting but had no row; it now sits under 挂接.
   const rows = [...client.document.querySelectorAll('.twt-srow')].map(row => row.textContent ?? '')
   assert.ok(rows.some(text => text.includes('何时让模型看候选')), 'attachGate row present')
-  // The fold body row sits directly under the threshold row.
-  const thresholdIndex = rows.findIndex(text => text.includes('历史超过多少 token 开始省略旧轮次'))
+  // The fold rows read in the order the decision is made: block size, block/window ratio,
+  // minimum gap, then the window itself.
+  const thresholdIndex = rows.findIndex(text => text.includes('待折的旧内容至少多少 token'))
+  const ratioIndex = rows.findIndex(text => text.includes('待折块至少是保留窗口的几倍'))
+  const cadenceIndex = rows.findIndex(text => text.includes('两次折叠至少间隔几轮'))
   const keepIndex = rows.findIndex(text => text.includes('最近几轮保留原文'))
-  assert.equal(keepIndex, thresholdIndex + 1, '保留轮数 follows the threshold')
+  // Advanced rows are collected into the disclosure, so only presence and relative order in the
+  // main list are stable.
+  assert.ok(thresholdIndex >= 0, 'the block floor is in the main list')
+  assert.ok(ratioIndex >= 0 && cadenceIndex >= 0, 'the ratio and the cadence are in the advanced block')
+  assert.ok(keepIndex > thresholdIndex, 'the keep window follows the block floor')
 })
