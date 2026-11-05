@@ -15,13 +15,15 @@ dsh-bonsai · DeepSeek Harness plugin · no runtime dependencies · MIT · Node 
 
 ## Evidence first
 
-Every number below is measured, not estimated. The raw records live in
-[`docs/experiment-context-cache.md`](docs/experiment-context-cache.md).
+Numbers come in two kinds, both recorded in
+[`docs/experiment-context-cache.md`](docs/experiment-context-cache.md): **measured** (live A/B, log
+replay, billing fields) and **modelled** (cost estimated from a stated price ratio). Each entry says
+which one it is.
 
 | Capability | Status | Measured |
 |---|---|---|
 | **Hide tools** | Optional (nothing hidden by default) | 37 → 28 tools: **10,453 → 7,076 tokens/turn (−32%)** |
-| **Fold history** | On by default, from 40,000 tokens | Live A/B: prompt/step **−9.2%**, but new input **+202%** (cache invalidated); short sessions cost **more** |
+| **Fold history** | On by default; the block must reach 40,000 tokens and 5x the keep window, at most every 3 turns | Live A/B: prompt/step **−9.2%**, but new input **+202%** (cache invalidated); short sessions cost **more** |
 | Effect of folding on the cache | — | Every fold rewrites the prefix, so the cache misses: this is its real cost (experiment 23) |
 | Graphical tree editing / recycle bin | Done | Fork, re-parent, hide, restore, jump, compare branches; **cancelled turns leave the tree on their own** |
 | Rule editor | Done | Hand-written and auto-detected rules as chips, add/edit/delete, sent with the retrieval hint |
@@ -83,7 +85,13 @@ shows the raw error).
 > six-turn session was about 23% **more expensive**.
 >
 > Folding pays off in **long sessions**, where folds are rare relative to turns and the folded content
-> is large. That is why the default threshold is 40,000 rather than lower. Details in
+> is large. That is why the default threshold is 40,000 rather than lower.
+>
+> The price ratio is an **assumption**, not a constant: with `miss/hit = p`, one fold costs
+> `(1-1/p) * keep window` and saves `(1/p) * block` per later turn, so the break-even is
+> `N* = (p-1) * window / block`. At p=10 a block of 5x the window pays back in about 2 turns; at p=50
+> it takes about 10. `foldBlockRatio = 5` is the conservative side of that (p~50); lower it if your
+> real price gap is smaller. Details in
 > `docs/experiment-context-cache.md`, experiment 23.
 
 Session history is derived by the host from the log. The plugin appends one
@@ -92,7 +100,7 @@ Session history is derived by the host from the log. The plugin appends one
 text.
 
 ```text
-Default: fold past 40,000 tokens, keep the latest 3 turns, fold whole turns
+Default: fold when the block reaches 40,000 tokens and 5x the keep window, at most every 3 turns
 Keep:    fold past 60,000, keep 4 turns
 Save:    fold past 20,000, keep 2 turns, and hide 9 heavy rarely-used tools
 ```
@@ -107,12 +115,15 @@ Three presets sit at the top of the settings page, and every value is adjustable
 
 | Setting | Default | Effect |
 |---|---|---|
-| `foldAboveTokens` | `40000` | Fold past this; `0` turns it off |
+| `foldAboveTokens` | `40000` | The block about to be removed must reach this; `0` leaves only the relative rule |
+| `foldBlockRatio` | `5` | The block must also be at least this many times the keep window; `0` disables it |
+| `foldCadence` | `3` | Minimum turns between two folds (a fold rewrites the prefix cache) |
+| `foldTrigger` | `block` | `block` decides by block size; `history` is the old whole-history rule |
 | `foldKeepTurns` | `3` | Keep this many recent turns verbatim |
 | `foldScope` | `turns` | `turns` folds whole turns, `tools` folds only tool output |
 | `attachChoices` | `10` | How many candidate questions the model sees each turn (questions only); `0` turns it off |
 | `attachPrompt` | `any` | `any`: dependency `[attach:nX]`, new topic `[attach:root]`, meta turn `[attach:here]`; `follow`: anaphora only |
-| `attachGate` | `always` | `uncertain`: offer candidates only when the local placement was unsure (measured 0%–100% depending on session shape) |
+| `attachGate` | `always` | `uncertain`: offer candidates only when the local placement was unsure; measured 0/259 firings in a coding session, 18/18 and 256/256 in two others |
 | `attachSummary` | `false` | Ask the model for an aspect summary shown in the candidate list; no measured benefit, off by default |
 | `mandatoryContext` | `true` | Force-injects the answer a turn hangs under plus its question; this is a wiring guarantee (~99%), not a scoring gain |
 | `fileRegion` | `auto` | Retrieval returns the current text of files this session read (auto/digest/content/off) |
@@ -172,7 +183,7 @@ user message
 
 **What the model actually sees**: the host's conversation history (full answer text) until folding or
 compaction trims it; folding replaces everything outside the last three turns once the estimated
-prompt passes `foldAboveTokens` (40,000 by default); the ten candidate *questions*; and whatever it
+prompt passes `foldAboveTokens` (40,000 by default) and is at least `foldBlockRatio` times the keep window; the ten candidate *questions*; and whatever it
 pulls with `retrieve_context`. "Only the previous turn" is true in long, already-folded sessions,
 not in short ones.
 
@@ -188,8 +199,8 @@ changed); precedence is **settings file > profile config**.
 | `hintAboveTokens` | `12000` | Send the hint only once the conversation reaches this size |
 | `autoReflect` | `true` | At turn end, grade the failure, write a reflection, retry a better sibling branch |
 | `admitRelevance` | `0.3` | Retrieval admission threshold; relaxes once when it comes back empty |
-| `toolDeny` | `[tree_mark, tree_focus]` | Tool names to hide (the picker fills it); neither was called in 201 sessions |
-| `foldAboveTokens` | `40000` | Fold threshold, `0` = off |
+| `toolDeny` | `[tree_mark, tree_focus]` | Tool names to hide (the picker fills it); neither was called in 238 session logs |
+| `foldAboveTokens` | `40000` | Block threshold; `0` leaves only the relative rule |
 | `foldKeepTurns` | `3` | Turns kept verbatim |
 | `foldScope` | `turns` | Fold scope |
 | `tokenizerVersion` | `auto` | `auto` / `3` / `4` / `off` (estimate + calibrate against the bill) |
@@ -214,8 +225,8 @@ tool/result   ─┘
 
 - The tree is rebuilt entirely from `user/message`, `assistant/message` and `tool/result`; no
   private events are appended.
-- Reasoning **counts towards tokens but is not stored** (one answer measured 9,454 output tokens
-  against 369 characters of body text; storing only the body would skew every threshold).
+- Reasoning **counts towards tokens but is not stored**: the billed output tokens far exceed the body
+  length, so storing only the body would skew every threshold.
 - Folding writes a single `surfaceOp: replace`; the log stays append-only.
 
 ## Honest limits
@@ -229,12 +240,34 @@ tool/result   ─┘
   system message can rewrite.
 - **Compaction ≠ data loss**: the tree keeps the full text; compaction only shortens the prompt.
 
+### What these numbers cover
+
+Every figure is reproducible with the scripts in this repository, but each has a scope. Quote the
+condition together with the number:
+
+| Claim | Sample | Condition |
+|---|---|---|
+| Tools -32% | one real assembly (37 -> 28 tools) | one machine, that profile's tool set |
+| Fold: prompt -9.2%, new input +202% | ABBA, two runs each | six-turn session, one model |
+| Block rule: 420 -> 44 folds, 68.7% of the cost | nine sessions replayed | cost model with a stated price ratio, not a bill |
+| Live arms 14,891 -> 8,544 | eight turns per arm, one run each | single run, noisy |
+| Placement 14/18 | eighteen hand labels (one session) | one labeller |
+| Paraphrase 3/8, jump set 6/15 | eight / fifteen synthetic probes | same session, appended questions |
+| No retrieval gain | 219 replayed questions | one session, production order |
+
+**Not claimed**: no overall "X% cheaper" (folding costs more in short sessions) and no recall gain
+for retrieval. Counter-examples and failed experiments are kept in `docs/experiment-context-cache.md`
+(BM25, jieba, BGE, admission thresholds).
+
+The cache price ratio is an **assumption**: it is parameterised as `p` with break-even given for both
+p=10 and p=50, so the "block = 5x window" default can be re-derived under your own pricing.
+
 ## Development
 
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 201 cases (176 backend + 25 browser)
+pnpm test           # 219 cases (193 backend + 26 browser)
 pnpm run check      # typecheck + tests
 ```
 
@@ -271,7 +304,7 @@ It validates, sets `x.y.z`, publishes `./plugin` with `--tag latest`, advances t
 | `src/core/` | Pure algorithms: graph, edge weights, path cost, weighted retrieval, grading and backtracking |
 | `src/plugin/` | The DSH wiring: `Config`, the session service, tools, event subscriptions, HTTP routes, fold planning |
 | `client/client.js` | Browser half: dock, editor, graph view, recycle bin, rule bar, settings panel, preset picker |
-| `tests/` | 201 cases, including client tests that mount real React under jsdom |
+| `tests/` | 219 cases, including client tests that mount real React under jsdom |
 | `docs/experiment-context-cache.md` | Every measurement (1–15) |
 
 ## License
