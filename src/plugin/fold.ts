@@ -171,28 +171,32 @@ export function planTurnFold(
   keepTurns: number,
   turnOf?: (seq: number) => number | undefined,
 ): TurnFold[] {
-  const indexOf = new Map<number, number>()
-  visible.forEach((seq, index) => indexOf.set(seq, index))
-  const byTurn = new Map<number, number[]>()
+  // A host may list its surface out of conversation order, so group by sequence instead of by
+  // position: the range the fold op cites must be a contiguous seq interval whose visible members
+  // all belong to the same turn.
+  const visibleSet = new Set(visible)
+  const turnOfSeq = new Map<number, number>()
   let current = 0
   for (const event of events) {
-    if (event.type === 'turn/start') {
+    if (event.type === "turn/start") {
       current = (event.data?.turn as number | undefined) ?? current + 1
       continue
     }
+    if (!visibleSet.has(event.seq)) continue
     if (!SURFACE_TYPES.has(event.type)) continue
-    const index = indexOf.get(event.seq)
-    if (index === undefined) continue
     const data = event.data ?? {}
     // A placeholder from an earlier fold is not a conversation turn.
-    if ((data.source as { kind?: string } | undefined)?.kind === 'token-tree') continue
-    // A surface view may not carry turn/start, and a user message may carry no turn field at all;
-    // the caller's resolver knows the turn from the events it did see.
-    const turn = typeof data.turn === 'number' ? data.turn : (turnOf?.(event.seq) ?? current)
-    if (turn <= 0) continue
+    if ((data.source as { kind?: string } | undefined)?.kind === "token-tree") continue
+    // The resolver is the plugin's own bookkeeping and is preferred: a host may stamp the same turn
+    // number on every surface event even though the conversation has moved on.
+    const turn = turnOf?.(event.seq) ?? (typeof data.turn === "number" ? data.turn : current)
+    if (turn > 0) turnOfSeq.set(event.seq, turn)
+  }
+  const byTurn = new Map<number, number[]>()
+  for (const [seq, turn] of turnOfSeq) {
     const list = byTurn.get(turn)
-    if (list === undefined) byTurn.set(turn, [index])
-    else list.push(index)
+    if (list === undefined) byTurn.set(turn, [seq])
+    else list.push(seq)
   }
   const turns = [...byTurn.keys()].sort((left, right) => left - right)
   if (turns.length === 0) return []
@@ -204,21 +208,28 @@ export function planTurnFold(
   if (chosen.length === 0) return []
   const folds: TurnFold[] = []
   for (const turn of chosen) {
-    const indices = [...(byTurn.get(turn) as number[])].sort((left, right) => left - right)
-    // A single span must be contiguous: interleaved turns cannot be replaced as one range.
-    if (indices[indices.length - 1] - indices[0] + 1 !== indices.length) continue
-    const seqs = indices.map(index => visible[index])
+    const seqs = [...(byTurn.get(turn) as number[])].sort((left, right) => left - right)
+    const first = seqs[0]
+    const last = seqs[seqs.length - 1]
+    // Every visible seq in the interval must belong to this turn, or the range would shadow a
+    // neighbour.
+    let foreign = false
+    for (let seq = first; seq <= last; seq++) {
+      if (!visibleSet.has(seq)) continue
+      if (turnOfSeq.get(seq) !== turn) { foreign = true; break }
+    }
+    if (foreign) continue
     folds.push({
       turn,
-      startSeq: seqs[0],
-      endSeq: seqs[seqs.length - 1],
+      startSeq: first,
+      endSeq: last,
       turns: 1,
       seqs,
       data: {
-        role: 'user',
+        role: "user",
         id: globalThis.crypto.randomUUID(),
-        content: [{ type: 'text', text: turnPlaceholder(1) }],
-        source: { kind: 'token-tree', id: 'fold' },
+        content: [{ type: "text", text: turnPlaceholder(1) }],
+        source: { kind: "token-tree", id: "fold" },
       },
     })
   }

@@ -95,6 +95,11 @@ interface AttachmentContext {
 export interface SessionState {
   /** Session identity. */
   readonly sessionId: string
+  /**
+   * Whether the host numbers turns itself. When it does, its numbers win; when it does not, a
+   * counter kept by this plugin takes over.
+   */
+  hostTurns?: boolean
   /** The memory tree. */
   readonly tree: MemoryTree
   /** Instructions that apply to everything after them, oldest first. */
@@ -347,6 +352,8 @@ export class TokenTreeService {
   private readonly lastFold = new Map<string, number>()
   /** Turn that each surface event belongs to, so folding works without turn markers in the view. */
   private readonly seqTurns = new Map<string, Map<number, number>>()
+  /** Turns counted by this plugin, for hosts whose events carry no turn number. */
+  private readonly localTurns = new Map<string, number>()
   private readonly states = new Map<string, SessionState>()
   private readonly store: EditStore | undefined
   private readonly settings: SettingsStore | undefined
@@ -921,7 +928,11 @@ export class TokenTreeService {
       case 'turn/start': {
         state.sawReduction = false
         state.pendingQuestionId = undefined
-        state.turn = numberField(data.turn) ?? state.turn + 1
+        // Turn numbers come from the user-question counter below; the host's marker only says a
+        // turn began, and it may stamp a stale number (or none at all).
+        if (numberField(data.turn) !== undefined && this.localTurns.get(state.sessionId) === undefined) {
+          this.localTurns.set(state.sessionId, (numberField(data.turn) as number) - 1)
+        }
         state.step = 0
         state.steps = 0
         state.reflections = 0
@@ -936,6 +947,18 @@ export class TokenTreeService {
         return
       }
       case 'user/message': {
+        // A host view may carry no turn number at all. A user question is the turn boundary we can
+        // always see, so count turns ourselves and use that number wherever the host is silent.
+        {
+          const source = objectField(data.source)
+          const kind = typeof source?.kind === 'string' ? source.kind : undefined
+          const fromUser = kind === undefined || kind === 'user' || kind === 'rpc'
+          if (fromUser) {
+            const next = (this.localTurns.get(state.sessionId) ?? state.turn) + 1
+            this.localTurns.set(state.sessionId, next)
+            state.turn = next
+          }
+        }
         this.ingestUserMessage(state, data, at)
         return
       }
