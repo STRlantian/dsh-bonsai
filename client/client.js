@@ -576,8 +576,6 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-dockactions-vertical .twt-action{width:100%;text-align:center}',
     // Settings tab: one row per switch, control on the right.
     '.twt-settings{flex:1;min-height:0;overflow:auto;padding:10px 14px;display:flex;flex-direction:column;gap:10px}',
-    '.twt-guide{display:flex;flex-direction:column;gap:6px;padding:8px 10px;border:1px solid var(--twt-border);border-radius:8px}',
-    '.twt-guide-buttons{display:flex;flex-wrap:wrap;gap:6px}',
     '.twt-srow{display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:8px;',
     'border:1px solid var(--twt-border);background:rgba(255,255,255,.02);transition:background .12s ease}',
     '.twt-srow:hover{background:rgba(255,255,255,.05)}',
@@ -1268,9 +1266,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
 
     /** The bundles the host understands; the labels are what people read. */
     var PRESET_LIST = [
-      { id: 'conservative', label: '保留', hint: '6 万 token 才折叠，保留 4 轮，不隐藏任何工具 —— 最接近原生行为' },
-      { id: 'balanced', label: '平衡', hint: '4 万 token 开始折叠，保留 3 轮，不隐藏工具（默认）' },
-      { id: 'aggressive', label: '节省', hint: '2 万就开始折叠、只留 2 轮，并隐藏 9 个少用的重工具 —— 这些能力会真的不可用' },
+      { id: 'conservative', label: '保留', hint: '待折块 6 万 token 才折，保留最近 4 轮，不隐藏任何工具 —— 最接近原生行为' },
+      { id: 'balanced', label: '默认', hint: '待折块 4 万 token、且 ≥5×保留窗口时折叠，保留 3 轮，不隐藏工具' },
+      { id: 'learning', label: '学习', hint: '概念问答：保留 2 轮，候选问题给 6 条并每轮都给，摘要关闭，不隐藏工具' },
+      { id: 'coding', label: '工程', hint: '反复改文件：工具输出占历史大头，折叠只针对工具输出，保留 3 轮' },
+      { id: 'aggressive', label: '极省', hint: '待折块 1 万就折、只留 1 轮，并隐藏 9 个少用的重工具 —— 这些能力会真的不可用' },
     ]
 
     /** Apply a preset, then refresh the panel so the numbers match. */
@@ -1372,26 +1372,6 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ preset: name }),
       }).then(function (response) { return response.json() })
-    }
-
-    /**
-     * Apply a whole situation at once.
-     *
-     * A guided choice is several keys, and writing them one by one would leave the page showing a
-     * half-applied state between requests.
-     * @param {object} patch - settings to write.
-     */
-    function applyGuided(patch) {
-      setBusy(true)
-      setNote('')
-      settingsPost(patch)
-        .then(function () {
-          setNote(t('已按这个情况设置好'))
-          return settingsGet()
-        })
-        .then(function (payload) { setSettings(payload) })
-        .catch(function (error) { setNote(tf('保存失败：{}', error.message)) })
-        .finally(function () { setBusy(false) })
     }
 
     function saveSetting(key, value) {
@@ -1578,25 +1558,6 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           settingsScopeId === null
             ? t('改动影响所有对话；被改过的项会标「已覆盖」')
             : t('只覆盖当前这个对话；清空某项就退回全局值')),
-        h('div', { className: 'twt-card twt-guide' },
-          h('div', { className: 'twt-cardhead' },
-            h('span', { className: 'twt-dtitle' }, t('快捷设置')),
-            h('span', { className: 'twt-hint' }, t('选一个最接近的情形'))),
-          h('p', { className: 'twt-hint' }, t('只保留三种；想微调下面的开关，随时可以换')),
-          h('div', { className: 'twt-guide-buttons' },
-            [
-              { id: 'learn', label: '学习、概念问答', patch: { foldAboveTokens: 20000, foldKeepTurns: 2, foldScope: 'turns', fileRegion: 'auto', mandatoryContext: true, attachChoices: 6, attachGate: 'always', attachSummary: false } },
-              { id: 'code', label: '工程、反复改文件', patch: { foldAboveTokens: 20000, foldKeepTurns: 3, foldScope: 'tools', fileRegion: 'auto', mandatoryContext: true } },
-              { id: 'save', label: '尽量省 token', patch: { foldAboveTokens: 10000, foldKeepTurns: 1, foldScope: 'turns', fileRegion: 'digest', mandatoryContext: true, toolDeny: ['workflow', 'schedule_create', 'schedule_update', 'schedule_delete', 'schedule_list', 'subagent_fork', 'ask_user_question', 'update_goal', 'get_goal'] } },
-            ].map(function (option) {
-              return h('button', {
-                key: option.id,
-                className: 'twt-action',
-                disabled: busy,
-                onClick: function () { applyGuided(option.patch) },
-              }, t(option.label))
-            })),
-          h('p', { className: 'twt-hint' }, t('详细说明见仓库 README 的「设置」与「两个省 token 的开关」'))),
         h('div', { className: 'twt-card twt-presets' },
           h('div', { className: 'twt-cardhead' },
             h('span', { className: 'twt-dtitle' }, t('预设')),

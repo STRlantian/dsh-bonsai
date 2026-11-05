@@ -11,7 +11,7 @@
  */
 
 /** The presets the settings panel offers. */
-export type PresetName = 'conservative' | 'balanced' | 'aggressive'
+export type PresetName = 'conservative' | 'balanced' | 'learning' | 'coding' | 'aggressive'
 
 /** One preset: a label, a one-line reason, and the overrides it writes. */
 export interface Preset {
@@ -64,11 +64,45 @@ export const PRESETS: readonly Preset[] = [
     },
   },
   {
-    name: 'aggressive',
+    name: 'learning',
     settings: {
+      // A concept conversation: short answers, follow-ups that jump back, no tool output to fold.
       foldAboveTokens: 20000,
       foldKeepTurns: 2,
       foldScope: 'turns',
+      fileRegion: 'auto',
+      mandatoryContext: true,
+      attachChoices: 6,
+      attachGate: 'always',
+      attachSummary: false,
+      toolDeny: [],
+      retrievalHint: true,
+      autoInject: false,
+    },
+  },
+  {
+    name: 'coding',
+    settings: {
+      // Editing files: tool output dominates the history, and turn boundaries matter less.
+      foldAboveTokens: 20000,
+      foldKeepTurns: 3,
+      foldScope: 'tools',
+      fileRegion: 'auto',
+      mandatoryContext: true,
+      toolDeny: [],
+      retrievalHint: true,
+      autoInject: false,
+    },
+  },
+  {
+    name: 'aggressive',
+    settings: {
+      // The cheapest bundle: fold early, keep one turn, and hide the heavy rarely-used tools.
+      foldAboveTokens: 10000,
+      foldKeepTurns: 1,
+      foldScope: 'turns',
+      fileRegion: 'digest',
+      mandatoryContext: true,
       toolDeny: [...AGGRESSIVE_HIDDEN_TOOLS],
       retrievalHint: true,
       autoInject: false,

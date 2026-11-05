@@ -31,18 +31,34 @@ test('the shipped default folds at 40k tokens', () => {
 test('the presets differ in exactly the knobs they advertise', () => {
   const conservative = presetOf('conservative')
   const balanced = presetOf('balanced')
+  const learning = presetOf('learning')
+  const coding = presetOf('coding')
   const aggressive = presetOf('aggressive')
-  assert.ok(conservative && balanced && aggressive)
+  assert.ok(conservative && balanced && learning && coding && aggressive)
   assert.equal(conservative.settings.foldAboveTokens, 60000)
   assert.equal(balanced.settings.foldAboveTokens, 40000)
-  assert.equal(aggressive.settings.foldAboveTokens, 20000)
+  assert.equal(aggressive.settings.foldAboveTokens, 10000)
   // An empty list is the explicit "show every tool"; only undefined falls back to the default.
   assert.deepEqual(conservative.settings.toolDeny, [], 'conservative hides nothing')
   assert.deepEqual(balanced.settings.toolDeny, [], 'balanced hides nothing either')
   assert.ok(Array.isArray(aggressive.settings.toolDeny), 'aggressive hides tools')
   assert.ok((aggressive.settings.toolDeny as string[]).includes('workflow'))
   assert.equal(presetOf('nope'), undefined)
-  assert.equal(PRESETS.length, 3)
+  assert.equal(PRESETS.length, 5)
+})
+
+test('the two usage presets carry the switches that make them different', () => {
+  const learning = presetOf('learning')
+  const coding = presetOf('coding')
+  assert.ok(learning && coding)
+  // Learning: turns are the unit, and the candidate block is small and always offered.
+  assert.equal(learning.settings.foldScope, 'turns')
+  assert.equal(learning.settings.attachChoices, 6)
+  assert.equal(learning.settings.attachSummary, false)
+  assert.equal(learning.settings.attachGate, 'always')
+  // Coding: tool output is the bulk of the history, so scope switches to tools.
+  assert.equal(coding.settings.foldScope, 'tools')
+  assert.equal(coding.settings.foldKeepTurns, 3)
 })
 
 test('applying a preset writes the whole bundle at once', () => {
@@ -55,10 +71,10 @@ test('applying a preset writes the whole bundle at once', () => {
   const applied = service.applyPreset('aggressive')
   assert.ok(applied !== undefined)
   assert.equal(applied.preset, 'aggressive')
-  assert.equal(applied.effective.foldAboveTokens, 20000)
-  assert.equal(applied.effective.foldKeepTurns, 2)
+  assert.equal(applied.effective.foldAboveTokens, 10000)
+  assert.equal(applied.effective.foldKeepTurns, 1)
   const written = JSON.parse(files.get('C:/tmp/settings.json') as string)
-  assert.equal(written.foldAboveTokens, 20000, 'persisted, not only in memory')
+  assert.equal(written.foldAboveTokens, 10000, 'persisted, not only in memory')
   assert.ok(Array.isArray(written.toolDeny), 'hidden tools persisted too')
 
   // Switching back clears what the previous preset added.

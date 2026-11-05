@@ -515,8 +515,8 @@ test('the settings panel offers the three presets', { timeout: 30000 }, async t 
   const bar = client.document.querySelector('.twt-presets')
   assert.ok(bar !== null, 'the preset bar is present')
   const labels = [...bar.querySelectorAll('button')].map(button => button.textContent ?? '')
-  assert.deepEqual(labels, ['保留', '平衡', '节省'], 'three presets, in order')
-  const aggressive = [...bar.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('节省'))
+  assert.deepEqual(labels, ['保留', '默认', '学习', '工程', '极省'], 'five presets, in order')
+  const aggressive = [...bar.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('极省'))
   await React.act(async () => { aggressive.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
   await client.flush()
   const posted = client.requests.find(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST')
@@ -690,19 +690,21 @@ test('a jump only lands on the row of its own turn', { timeout: 30000 }, async t
   assert.ok(renumbered.style.outline.includes('6ea8fe'), 'and lands on the user-message row')
 })
 
-test('the settings panel offers a guided setup', { timeout: 30000 }, async t => {
+test('the settings panel offers one preset row, not two overlapping ones', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)
   await client.click('盆栽')
   await client.click('设置')
-  const labels = [...client.document.querySelectorAll('.twt-guide button')].map(node => (node.textContent ?? '').trim())
-  assert.ok(labels.some(label => label.includes('工程')), 'an engineering option: ' + labels.join(','))
-  assert.ok(labels.some(label => label.includes('省 token')), 'a saving option')
-  const before = client.requests.filter(entry => entry.url.includes('/api/token-tree/settings') && entry.method === 'POST').length
-  await client.click('工程、反复改文件')
-  const posts = client.requests.filter(entry => entry.url.includes('/api/token-tree/settings') && entry.method === 'POST')
-  assert.ok(posts.length > before, 'the choice writes a settings patch')
-  assert.ok(String(posts.at(-1).body).includes('foldScope'), 'and the patch carries the scenario keys')
+  const labels = [...client.document.querySelectorAll('.twt-presets button')].map(node => (node.textContent ?? '').trim())
+  for (const expected of ['保留', '默认', '学习', '工程', '极省']) {
+    assert.ok(labels.includes(expected), `preset "${expected}" is offered: ${labels.join(',')}`)
+  }
+  assert.equal(client.document.querySelectorAll('.twt-guide').length, 0, 'the guided card is gone')
+  const before = client.requests.filter(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST').length
+  await client.click('工程')
+  const posts = client.requests.filter(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST')
+  assert.ok(posts.length > before, 'the choice goes through the preset route')
+  assert.ok(String(posts.at(-1).body).includes('coding'), 'and names the coding preset')
 })
 
 test('the settings panel can switch the interface language', { timeout: 30000 }, async t => {
@@ -775,8 +777,8 @@ test('the settings panel opens on the global scope with a tab switch', { timeout
   assert.equal(active.textContent, '全局设置', 'opens on the global scope')
   // The quick-setup blocks are cards with headings, not loose button rows.
   const titles = [...client.document.querySelectorAll('.twt-card .twt-dtitle')].map(node => node.textContent)
-  assert.ok(titles.includes('快捷设置'), 'guided setup is a card')
   assert.ok(titles.includes('预设'), 'presets are a card')
+  assert.equal(titles.includes('快捷设置'), false, 'the overlapping guided card is gone')
   // The gate switch existed as a setting but had no row; it now sits under 挂接.
   const rowNodes = [...client.document.querySelectorAll('.twt-srow')]
   const rows = rowNodes.map(row => row.textContent ?? '')

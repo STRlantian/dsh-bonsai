@@ -119,13 +119,15 @@ Keep:    fold past 60,000, keep 4 turns
 Save:    fold past 20,000, keep 2 turns, and hide 9 heavy rarely-used tools
 ```
 
-Three presets sit at the top of the settings page, and every value is adjustable:
+Five presets sit at the top of the settings page, and every value is adjustable:
 
-| Preset | Fold above | Turns kept | Tools hidden |
-|---|---|---|---|
-| **Keep** | 60,000 | 4 | none (closest to native behaviour) |
-| **Balanced** (default) | 40,000 | 3 | none |
-| **Save** | 20,000 | 2 | 9 heavy rarely-used tools |
+| Preset | For | Block floor | Turns kept | Fold scope | Tools hidden |
+|---|---|---|---|---|---|
+| **Keep** | closest to native behaviour | 60,000 | 4 | whole turns | none |
+| **Default** | when unsure | 40,000 | 3 | whole turns | none |
+| **Learning** | concept questions, many follow-ups | 20,000 | 2 | whole turns (6 candidates every turn, no summary) | none |
+| **Coding** | editing files | 20,000 | 3 | tool output only | none |
+| **Save** | cheapest | 10,000 | 1 | whole turns (retrieval returns digests) | 9 heavy rarely-used tools |
 
 | Setting | Default | Effect |
 |---|---|---|
