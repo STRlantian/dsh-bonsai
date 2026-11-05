@@ -378,10 +378,11 @@ test('the settings tab offers the tokenizer dropdown from the payload', { timeou
   assert.equal(select.value, '4', 'shows the generation actually in use')
 })
 
-test('the preset picker sits beside the mode chip', { timeout: 30000 }, async t => {
+test('the composer no longer grows a preset picker beside the mode chip', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)
-  // The hero row renders just the current mode, not a pair of options.
+  // The hero row renders just the current mode; the plugin must not inject a control there. Presets
+  // live in the settings panel only.
   const row = client.window.document.createElement('div')
   row.className = 'composer-row'
   const chip = client.window.document.createElement('button')
@@ -393,20 +394,8 @@ test('the preset picker sits beside the mode chip', { timeout: 30000 }, async t 
   await new Promise(resolve => setTimeout(resolve, 700))
   await client.flush()
 
-  const picker = row.querySelector('.twt-mode-preset select')
-  assert.ok(picker !== null, 'the picker attached beside the chip')
-  assert.equal(chip.nextElementSibling, picker.parentElement, 'it sits immediately to the right of the chip')
-  const values = [...picker.options].map(option => option.value)
-  assert.deepEqual(values, ['conservative', 'balanced', 'aggressive', 'custom'], 'three presets plus custom')
-
-  picker.value = 'aggressive'
-  await React.act(async () => { picker.dispatchEvent(new client.window.Event('change', { bubbles: true })) })
-  await client.flush()
-  const posted = client.requests.find(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST')
-  assert.ok(posted !== undefined, 'the picker posts to the preset route')
-  assert.ok(String(posted.body).includes('aggressive'), 'with the chosen preset')
-  await client.flush()
-  assert.equal(picker.value, 'aggressive', 'and the select settles on 节省 instead of 自定义')
+  assert.equal(row.querySelector('.twt-mode-preset'), null, 'no picker is injected beside the chip')
+  assert.equal(client.window.document.querySelectorAll('.twt-mode-preset').length, 0, 'nowhere else either')
 })
 
 test('the tool-result toggle sits on the right and only where it applies', { timeout: 30000 }, async t => {
