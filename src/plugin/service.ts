@@ -950,11 +950,14 @@ export class TokenTreeService {
         // A host view may carry no turn number at all. A user question is the turn boundary we can
         // always see, so count turns ourselves and use that number wherever the host is silent.
         {
+          // One turn per user input, and only for user input: an assistant message, a tool result,
+          // an injected harness reminder or our own hint never opens a turn. History replayed at
+          // mount time therefore gets its turns back instead of collapsing into one.
           const source = objectField(data.source)
           const kind = typeof source?.kind === 'string' ? source.kind : undefined
-          const fromUser = kind === undefined || kind === 'user' || kind === 'rpc'
+          const fromUser = kind === 'user' || (kind === undefined && !isInjected(data))
           if (fromUser) {
-            const next = (this.localTurns.get(state.sessionId) ?? state.turn) + 1
+            const next = (this.localTurns.get(state.sessionId) ?? 0) + 1
             this.localTurns.set(state.sessionId, next)
             state.turn = next
           }

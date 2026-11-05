@@ -1963,3 +1963,23 @@ turn/start 不再决定 turn 号，只用初始值对齐
 块不够大就不值得断缓存。
 
 **默认值**：`foldAboveTokens 40000`（待折块）、`foldBlockRatio 5`、`foldCadence 3`。
+
+
+### 实验 41b：中途安装时的轮次初始化
+
+插件是装在一段已有对话中间时，宿主不会重发 turn 标记，历史会被当成"一轮"。现在按用户输入切分：
+
+```text
+user/message 且 source.kind = "user"（或无 kind 且不是注入消息）→ 开一轮
+assistant/message、tool/result、注入的 runtime-context / 我们自己的 hint → 不开轮
+```
+
+重放历史时按同样规则逐个计数，所以中途安装会把已有对话还原成 1..N 轮，而不是 1 轮。
+
+三条测试（`tests/turn-init.test.ts`）：
+
+| 场景 | 断言 |
+|---|---|
+| 4 轮历史，只喂第一条事件触发重放 | `sessionTurn = 4`，每轮都有 token |
+| 历史里混入 runtime-context 与我们自己的 hint | 仍然只有 2 轮 |
+| 重放之后再来一个新问题 | 轮次继续 +1（不会重头开始） |
