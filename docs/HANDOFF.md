@@ -2,7 +2,7 @@
 
 给下一个对话的自己或别人：这份文件是当前状态的唯一入口。看完就不用去翻 300 多轮的历史。
 
-最后更新：2026-11-06 · commit `10ba3d9` · 未推送 14 个提交
+最后更新：2026-11-06 · 当前 HEAD · 未推送 18 个提交
 
 ## 这是什么
 
@@ -34,9 +34,9 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
 
 ## 关键设计（别改错）
 
-- **折叠阈值量的是"待折块"**，不是整段历史：块 ≥ `foldAboveTokens`(默认 40000) 且 ≥
-  `foldBlockRatio`(5) × 保留窗口，且距上次折叠 ≥ `foldCadence`(3) 轮。推导见
-  `docs/experiment-context-cache.md` 实验 38/39。
+- **折叠阈值量的是"待折块"**，不是整段历史：块 ≥ `foldAboveTokens`(默认 30000) 且 ≥
+  `foldBlockRatio`(8) × 保留窗口(2 轮)，且距上次折叠 ≥ `foldCadence`(10) 轮。参数扫描见
+  `docs/experiments/fold-param-sweep.md`，推导见 `docs/experiment-context-cache.md` 实验 38/39。
 - **折叠必须在 `agent/turn-stopping` 里追加**（此时轮次还开着）。宿主读取日志时会校验
   "surface 替换必须在打开的轮次内"，在 `turn/end` 之后追加会让日志**下次读取时**被判损坏。
 - **标记剥离也必须包在一个打开的 step 里**：`assistant/message` 的 surface 替换要求当前
@@ -71,7 +71,7 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
 
 ## 实验与数据
 
-- `docs/experiment-context-cache.md`：全部实测记录（50 节，含失败实验）。
+- `docs/experiment-context-cache.md`：全部实测记录（51 节，含失败实验）。
   **文档里的数字都有前提和样本量，引用时一起引。**
 - `docs/experiments/*.json`：标注集（18 条学习 / 8 条同义改写 / 15 条必须跳转）与探针结果。
 - 关键负结果：检索没有召回增益（父回答进结果 23%、rank1 11%）；BM25 / jieba / BGE 都没有显著提升；
@@ -92,4 +92,4 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
 3. `69ea4cc5` / `e8734fe5` 旧日志已无法靠当前代码恢复（`360db97` 只防再产生）；
 4. 复核本轮新加的回归测试：marker 结尾/围栏、fold turn 归属、surface replacement 去重、
    replay edits、node cap、settings scope、preset 整包、rule 持久化；
-5. 决定是否推送这 14 个提交（README 审计、诊断命令、设置页重写、预设合并、作用域修复、标记剥离…）。
+5. 决定是否推送这 18 个提交（README 审计、诊断命令、设置页重写、预设合并、作用域修复、标记剥离、调参…）。

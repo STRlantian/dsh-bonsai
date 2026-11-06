@@ -394,9 +394,9 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         ...(typeof source.modelId === 'string' && source.modelId.trim() !== '' ? { modelId: source.modelId.trim() } : {}),
         conservativeBudgetRatio: scalar(source, 'conservativeBudgetRatio', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input > 0 && input <= 1, issues, 'a number within (0, 1]') ?? 0.85,
         compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
-        foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 40000,
-    foldCadence: scalar(source, 'foldCadence', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 3,
-    foldBlockRatio: scalar(source, 'foldBlockRatio', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 5,
+        foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 30000,
+    foldCadence: scalar(source, 'foldCadence', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 10,
+    foldBlockRatio: scalar(source, 'foldBlockRatio', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 8,
     foldTrigger: ((): string => {
       const value = source === undefined ? undefined : (source as Record<string, unknown>).foldTrigger
       if (value === undefined) return 'block'
@@ -426,7 +426,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
       const policy = scalar(source, 'foldPolicy', (input): input is string => typeof input === 'string', issues, 'a string')
       return policy === 'always' ? 'always' : 'threshold'
     })(),
-        foldKeepTurns: scalar(source, 'foldKeepTurns', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 3,
+        foldKeepTurns: scalar(source, 'foldKeepTurns', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 2,
         foldScope: (() => {
           const scope = scalar(source, 'foldScope', (input): input is string => typeof input === 'string', issues, 'a string')
           return scope === 'tools' ? 'tools' : 'turns'

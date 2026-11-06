@@ -23,7 +23,7 @@ which one it is.
 | Capability | Status | Measured |
 |---|---|---|
 | **Hide tools** | Optional (defaults to hiding `tree_mark` and `tree_focus`; `[]` shows all) | 37 → 28 tools: **10,453 → 7,076 tokens/turn (−32%)** |
-| **Fold history** | On by default; the block must reach 40,000 tokens and 5x the keep window, at most every 3 turns | Live A/B: prompt/step **−9.2%**, but new input **+202%** (cache invalidated); short sessions cost **more** |
+| **Fold history** | On by default; the block must reach 30,000 tokens and 8x the keep window, at most every 10 turns | Live A/B: prompt/step **−9.2%**, but new input **+202%** (cache invalidated); short sessions cost **more**. The 60-turn cost model favours the tuned default |
 | Effect of folding on the cache | — | Every fold rewrites the prefix, so the cache misses: this is its real cost (experiment 23) |
 | Graphical tree editing / recycle bin | Done | Fork, re-parent, hide, restore, jump, compare branches; **cancelled turns leave the tree on their own** |
 | Rule editor | Done | Hand-written and auto-detected rules as chips, add/edit/delete, sent with the retrieval hint |
@@ -99,14 +99,15 @@ shows the raw error).
 > six-turn session was about 23% **more expensive**.
 >
 > Folding pays off in **long sessions**, where folds are rare relative to turns and the folded content
-> is large. That is why the default threshold is 40,000 rather than lower.
+> is large. A 100-turn sweep (`docs/experiments/fold-param-sweep.md`) puts the balanced default at
+> 30,000 / keep 2 / 8x / cadence 10; the old 40,000 / keep 3 / 5x / cadence 3 setting was too
+> conservative and only broke even around turn 45.
 >
 > The price ratio is an **assumption**, not a constant: with `miss/hit = p`, one fold costs
 > `(1-1/p) * keep window` and saves `(1/p) * block` per later turn, so the break-even is
-> `N* = (p-1) * window / block`. At p=10 a block of 5x the window pays back in about 2 turns; at p=50
-> it takes about 10. `foldBlockRatio = 5` is the conservative side of that (p~50); lower it if your
-> real price gap is smaller. Details in
-> `docs/experiment-context-cache.md`, experiment 23.
+> `N* = (p-1) * window / block`. At p=50 a block of 8x the window pays back in about 6 turns;
+> cadence 10 then amortises the rewrite. Lower the ratio if your real price gap is smaller. Details
+> in `docs/experiment-context-cache.md`, experiment 23, and the new sweep report.
 
 Session history is derived by the host from the log. The plugin appends one
 `surfaceOp: { op: 'replace', startSeq, endSeq }` event, and the covered range stops entering
@@ -114,7 +115,7 @@ Session history is derived by the host from the log. The plugin appends one
 text.
 
 ```text
-Default: fold when the block reaches 40,000 tokens and 5x the keep window, at most every 3 turns
+Default: fold when the block reaches 30,000 tokens and 8x the keep window, at most every 10 turns
 Keep:    fold past 60,000, keep 4 turns
 Save:    fold past 10,000, keep 1 turn, and hide 9 heavy rarely-used tools
 ```
@@ -125,18 +126,18 @@ Six presets sit at the top of the settings page, and every value is adjustable:
 |---|---|---|---|---|---|
 | **Tree only** | just the tree; no injection, hint, candidates, folding, reflection | 0 (off) | 0 | off | none |
 | **Keep** | closest to native behaviour | 60,000 | 4 | whole turns | none |
-| **Default** | when unsure | 40,000 | 3 | whole turns | none |
+| **Default** | when unsure | 30,000 | 2 | whole turns | none |
 | **Learning** | concept questions, many follow-ups | 20,000 | 2 | whole turns (6 candidates every turn, no summary) | none |
 | **Coding** | editing files | 20,000 | 3 | tool output only | none |
 | **Save** | cheapest | 10,000 | 1 | whole turns (retrieval returns digests) | 9 heavy rarely-used tools |
 
 | Setting | Default | Effect |
 |---|---|---|
-| `foldAboveTokens` | `40000` | The block about to be removed must reach this; `0` leaves only the relative rule |
-| `foldBlockRatio` | `5` | The block must also be at least this many times the keep window; `0` disables it |
-| `foldCadence` | `3` | Minimum turns between two folds (a fold rewrites the prefix cache) |
+| `foldAboveTokens` | `30000` | The block about to be removed must reach this; `0` leaves only the relative rule |
+| `foldBlockRatio` | `8` | The block must also be at least this many times the keep window; `0` disables it |
+| `foldCadence` | `10` | Minimum turns between two folds (a fold rewrites the prefix cache) |
 | `foldTrigger` | `block` | `block` decides by block size; `history` is the old whole-history rule |
-| `foldKeepTurns` | `3` | Keep this many recent turns verbatim |
+| `foldKeepTurns` | `2` | Keep this many recent turns verbatim |
 | `foldScope` | `turns` | `turns` folds whole turns, `tools` folds only tool output |
 | `attachChoices` | `10` | How many candidate questions the model sees each turn (questions only); `0` turns it off |
 | `attachPrompt` | `any` | `any`: dependency `[attach:nX]`, new topic `[attach:root]`, meta turn `[attach:here]`; `follow`: anaphora only |
@@ -199,8 +200,9 @@ user message
 ```
 
 **What the model actually sees**: the host's conversation history (full answer text) until folding or
-compaction trims it; folding replaces everything outside the last three turns once the estimated
-prompt passes `foldAboveTokens` (40,000 by default) and is at least `foldBlockRatio` times the keep window; the ten candidate *questions*; and whatever it
+compaction trims it; folding replaces everything outside the last two turns once the estimated
+block passes `foldAboveTokens` (30,000 by default) and is at least `foldBlockRatio` (8x) times the
+keep window, at most every `foldCadence` (10) turns; the ten candidate *questions*; and whatever it
 pulls with `retrieve_context`. "Only the previous turn" is true in long, already-folded sessions,
 not in short ones.
 
@@ -217,8 +219,10 @@ changed); precedence is **settings file > profile config**.
 | `autoReflect` | `true` | At turn end, grade the failure, write a reflection, retry a better sibling branch |
 | `admitRelevance` | `0.3` | Retrieval admission threshold; relaxes once when it comes back empty |
 | `toolDeny` | `[tree_mark, tree_focus]` | Tool names to hide (the picker fills it); neither was called in 201 session logs |
-| `foldAboveTokens` | `40000` | Block threshold; `0` leaves only the relative rule |
-| `foldKeepTurns` | `3` | Turns kept verbatim |
+| `foldAboveTokens` | `30000` | Block threshold; `0` leaves only the relative rule |
+| `foldBlockRatio` | `8` | Block must be at least this many times the keep window |
+| `foldCadence` | `10` | Minimum turns between folds |
+| `foldKeepTurns` | `2` | Turns kept verbatim |
 | `foldScope` | `turns` | Fold scope |
 | `tokenizerVersion` | `auto` | `auto` / `3` / `4` / `off` (estimate + calibrate against the bill) |
 | `locale` | `auto` | Interface language: `auto` / `zh` / `en` |
@@ -296,6 +300,8 @@ Zero-cost checks (no model needed):
 | `node scripts/probe-tree-of.mjs <session>` | Replay one session's tree offline |
 | `node scripts/probe-attach.mjs <session>` | Attachment score for every decision |
 | `node scripts/probe-fold-estimate.mjs <session>` | How much folding would save |
+| `node scripts/sweep-fold-params.mjs 100` | Fold-parameter grid over short/medium/long sessions |
+| `node scripts/experiment-default-vs-baseline.mjs 60 3500 default` | Per-turn default vs full-context cost |
 | `node scripts/inspect-compaction.mjs` | Count compaction events |
 
 Scripts that need a model in the loop are `scripts/ab-*.mjs` and `probe-*.mjs`; their results live in
@@ -322,7 +328,7 @@ It validates, sets `x.y.z`, publishes `./plugin` with `--tag latest`, advances t
 | `src/plugin/` | The DSH wiring: `Config`, the session service, tools, event subscriptions, HTTP routes, fold planning |
 | `client/client.js` | Browser half: dock, editor, graph view, recycle bin, rule bar, settings panel, preset picker |
 | `tests/` | 249 cases, including client tests that mount real React under jsdom |
-| `docs/experiment-context-cache.md` | Every measurement (50 sections) |
+| `docs/experiment-context-cache.md` | Every measurement (51 sections) |
 
 ## License
 

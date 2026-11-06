@@ -18,8 +18,8 @@ function turn(service: TokenTreeService, sessionId: string, number: number, seq:
   push('turn/end', { turn: number, reason: { kind: 'completed' } })
 }
 
-test('the cadence defaults to three turns and can be tuned', () => {
-  assert.equal(config.foldCadence, 3, 'folds batch up by default')
+test('the cadence defaults to ten turns and can be tuned', () => {
+  assert.equal(config.foldCadence, 10, 'folds batch up by default')
   const tuned = Config['~standard'].validate({ foldCadence: 5 }).value
   assert.equal(tuned.foldCadence, 5)
   assert.equal(Config['~standard'].validate({ foldCadence: 0 }).value.foldCadence, 0, 'zero means re-evaluate every turn')
@@ -58,5 +58,5 @@ test('the cadence is read through the session override', () => {
     } as never,
   })
   assert.equal(service.effective('a').foldCadence, 4, 'the session override wins')
-  assert.equal(service.effective('b').foldCadence, 3, 'other sessions keep the default')
+  assert.equal(service.effective('b').foldCadence, 10, 'other sessions keep the default')
 })

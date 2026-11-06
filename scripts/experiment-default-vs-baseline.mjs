@@ -14,7 +14,7 @@ const TURNS = Math.max(4, Number(process.argv[2] ?? 60))
 const TOOL_TOKENS = Math.max(0, Number(process.argv[3] ?? 3500))
 const PRESET_NAME = process.argv[4] === 'aggressive' ? 'aggressive' : 'default'
 const PRESETS = {
-  default: { foldAbove: 40_000, keep: 3, ratio: 5, cadence: 3 },
+  default: { foldAbove: 30_000, keep: 2, ratio: 8, cadence: 10 },
   aggressive: { foldAbove: 10_000, keep: 1, ratio: 5, cadence: 3 },
 }
 const PRESET = PRESETS[PRESET_NAME]

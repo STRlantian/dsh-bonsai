@@ -21,11 +21,13 @@ function store() {
   return { settings, files }
 }
 
-test('the shipped default folds at 40k tokens', () => {
+test('the shipped default folds at 30k tokens', () => {
   const config = Config['~standard'].validate({ logEdgeUpdates: false }).value!
-  assert.equal(config.foldAboveTokens, 40000)
+  assert.equal(config.foldAboveTokens, 30000)
   assert.equal(config.foldScope, 'turns')
-  assert.equal(config.foldKeepTurns, 3)
+  assert.equal(config.foldKeepTurns, 2)
+  assert.equal(config.foldBlockRatio, 8)
+  assert.equal(config.foldCadence, 10)
 })
 
 test('the presets differ in exactly the knobs they advertise', () => {
@@ -36,7 +38,7 @@ test('the presets differ in exactly the knobs they advertise', () => {
   const aggressive = presetOf('aggressive')
   assert.ok(conservative && balanced && learning && coding && aggressive)
   assert.equal(conservative.settings.foldAboveTokens, 60000)
-  assert.equal(balanced.settings.foldAboveTokens, 40000)
+  assert.equal(balanced.settings.foldAboveTokens, 30000)
   assert.equal(aggressive.settings.foldAboveTokens, 10000)
   // An empty list is the explicit "show every tool"; only undefined falls back to the default.
   assert.deepEqual(conservative.settings.toolDeny, [], 'conservative hides nothing')
@@ -125,7 +127,7 @@ test('a preset applies to the scope it is asked for', () => {
   const applied = service.applyPreset('learning', 'session-a')
   assert.ok(applied !== undefined)
   assert.equal(applied.effective.foldKeepTurns, 2, 'session sees the preset')
-  assert.equal(service.effective().foldKeepTurns, 3, 'global still has the profile default')
+  assert.equal(service.effective().foldKeepTurns, 2, 'global still has the profile default')
   const written = JSON.parse(files.get('C:/tmp/settings.json') as string)
   assert.deepEqual(Object.keys(written), ['sessions'], 'only the session map was written')
   assert.equal(written.sessions['session-a'].foldKeepTurns, 2)
