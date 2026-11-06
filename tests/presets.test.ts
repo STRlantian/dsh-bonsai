@@ -33,10 +33,9 @@ test('the shipped default folds at 30k tokens', () => {
 test('the presets differ in exactly the knobs they advertise', () => {
   const conservative = presetOf('conservative')
   const balanced = presetOf('balanced')
-  const learning = presetOf('learning')
   const coding = presetOf('coding')
   const aggressive = presetOf('aggressive')
-  assert.ok(conservative && balanced && learning && coding && aggressive)
+  assert.ok(conservative && balanced && coding && aggressive)
   assert.equal(conservative.settings.foldAboveTokens, 60000)
   assert.equal(balanced.settings.foldAboveTokens, 30000)
   assert.equal(aggressive.settings.foldAboveTokens, 10000)
@@ -45,8 +44,9 @@ test('the presets differ in exactly the knobs they advertise', () => {
   assert.deepEqual(balanced.settings.toolDeny, [], 'balanced hides nothing either')
   assert.ok(Array.isArray(aggressive.settings.toolDeny), 'aggressive hides tools')
   assert.ok((aggressive.settings.toolDeny as string[]).includes('workflow'))
+  assert.equal(presetOf('learning'), undefined, 'the niche learning preset was folded into balanced')
   assert.equal(presetOf('nope'), undefined)
-  assert.equal(PRESETS.length, 6)
+  assert.equal(PRESETS.length, 5)
 })
 
 test('the tree-only preset switches every model-facing behaviour off', () => {
@@ -61,16 +61,9 @@ test('the tree-only preset switches every model-facing behaviour off', () => {
   assert.deepEqual(treeOnly.settings.toolDeny, [])
 })
 
-test('the two usage presets carry the switches that make them different', () => {
-  const learning = presetOf('learning')
+test('the coding preset folds tool output instead of whole turns', () => {
   const coding = presetOf('coding')
-  assert.ok(learning && coding)
-  // Learning: turns are the unit, and the candidate block is small and always offered.
-  assert.equal(learning.settings.foldScope, 'turns')
-  assert.equal(learning.settings.attachChoices, 6)
-  assert.equal(learning.settings.attachSummary, false)
-  assert.equal(learning.settings.attachGate, 'always')
-  // Coding: tool output is the bulk of the history, so scope switches to tools.
+  assert.ok(coding)
   assert.equal(coding.settings.foldScope, 'tools')
   assert.equal(coding.settings.foldKeepTurns, 3)
 })
@@ -124,15 +117,15 @@ test('a preset applies to the scope it is asked for', () => {
     settings,
   })
   // Session scope: the bundle lands on that conversation, the global set stays untouched.
-  const applied = service.applyPreset('learning', 'session-a')
+  const applied = service.applyPreset('conservative', 'session-a')
   assert.ok(applied !== undefined)
-  assert.equal(applied.effective.foldKeepTurns, 2, 'session sees the preset')
+  assert.equal(applied.effective.foldKeepTurns, 4, 'session sees the preset')
   assert.equal(service.effective().foldKeepTurns, 2, 'global still has the profile default')
   const written = JSON.parse(files.get('C:/tmp/settings.json') as string)
   assert.deepEqual(Object.keys(written), ['sessions'], 'only the session map was written')
-  assert.equal(written.sessions['session-a'].foldKeepTurns, 2)
+  assert.equal(written.sessions['session-a'].foldKeepTurns, 4)
   // Global scope still works the old way.
-  service.applyPreset('learning')
+  service.applyPreset('conservative')
   const global = JSON.parse(files.get('C:/tmp/settings.json') as string)
-  assert.equal(global.foldKeepTurns, 2, 'global bundle written')
+  assert.equal(global.foldKeepTurns, 4, 'global bundle written')
 })

@@ -2,7 +2,7 @@
 
 给下一个对话的自己或别人：这份文件是当前状态的唯一入口。看完就不用去翻 300 多轮的历史。
 
-最后更新：2026-11-06 · 当前 HEAD · 未推送 18 个提交
+最后更新：2026-11-06 · 当前 HEAD · 未推送 19 个提交
 
 ## 这是什么
 
@@ -22,7 +22,7 @@ DSH 插件 **盆栽 / dsh-bonsai**：对话树的编辑与压缩。给一段对�
 | 折叠时机（轮次关闭前） | 已修 | `agent/turn-stopping` 而不是 `turn/end` |
 | attach / summary 标记 | 已修：只删结尾，合成 step 写入，保留非文本 block | `hooks.ts: stripMarkers`、`markers.ts` |
 | 设置页（首屏 2 行 + 高级） | 重写过 | `client/client.js` |
-| 预设（只建树/保留/默认/学习/工程/极省） | 可用；切换时整包清除旧键 | `src/plugin/presets.ts` |
+| 预设（只建树/日常默认/写代码/保上下文/极省） | 可用；切换时整包清除旧键；按钮下方带一行说明 | `src/plugin/presets.ts` |
 | 全局 / 本对话作用域 | 大部分可用；tokenizer 是全局设置 | `settings.ts`、`service.effective(sessionId)` |
 | 诊断命令 | 可用 | `/prompt` `/fold` `/usage` `/retrieve` `/tree` |
 
@@ -92,4 +92,4 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
 3. `69ea4cc5` / `e8734fe5` 旧日志已无法靠当前代码恢复（`360db97` 只防再产生）；
 4. 复核本轮新加的回归测试：marker 结尾/围栏、fold turn 归属、surface replacement 去重、
    replay edits、node cap、settings scope、preset 整包、rule 持久化；
-5. 决定是否推送这 18 个提交（README 审计、诊断命令、设置页重写、预设合并、作用域修复、标记剥离、调参…）。
+5. 决定是否推送这 19 个提交（README 审计、诊断命令、设置页重写、预设合并、作用域修复、标记剥离、调参…）。

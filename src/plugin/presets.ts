@@ -1,19 +1,17 @@
 /**
  * Named setting bundles.
  *
- * The UI offers these instead of making people tune four numbers to get one behaviour. Each
- * one states what it buys: the conservative bundle is the previous default (nothing hidden,
- * fold only very late), the aggressive one follows the measurements — tool schemas are 83% of
- * the prompt and hiding them saved 3,377 tokens per turn, so it hides the heavy, rarely needed
- * ones and folds earlier.
+ * The UI offers these instead of making people tune four numbers to get one behaviour. The list is
+ * deliberately short and named by intent: only-tree, daily default, coding, keep-context, and save.
+ * Each bundle states what it buys; the panel also shows a one-line explanation under each button.
  *
  * @module dsh-token-tree/plugin/presets
  */
 
 /** The presets the settings panel offers. */
-export type PresetName = 'treeOnly' | 'conservative' | 'balanced' | 'learning' | 'coding' | 'aggressive'
+export type PresetName = 'treeOnly' | 'conservative' | 'balanced' | 'coding' | 'aggressive'
 
-/** One preset: a label, a one-line reason, and the overrides it writes. */
+/** One preset: a stable id and the settings bundle it writes. The panel owns the label/description. */
 export interface Preset {
   /** Stable id used by the route and the UI. */
   name: PresetName
@@ -100,25 +98,6 @@ export const PRESETS: readonly Preset[] = [
       foldScope: 'turns',
       foldBlockRatio: 8,
       foldCadence: 10,
-      toolDeny: [],
-      retrievalHint: true,
-      autoInject: false,
-    },
-  },
-  {
-    name: 'learning',
-    settings: {
-      // A concept conversation: short answers, follow-ups that jump back, no tool output to fold.
-      foldAboveTokens: 20000,
-      foldKeepTurns: 2,
-      foldScope: 'turns',
-      foldBlockRatio: 5,
-      foldCadence: 3,
-      fileRegion: 'auto',
-      mandatoryContext: true,
-      attachChoices: 6,
-      attachGate: 'always',
-      attachSummary: false,
       toolDeny: [],
       retrievalHint: true,
       autoInject: false,

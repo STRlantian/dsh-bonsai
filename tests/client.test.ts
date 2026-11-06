@@ -496,7 +496,7 @@ test('an existing rule opens with its text and can be edited or deleted', { time
   assert.ok(String(removal.body).includes('rule-1'), 'for the existing rule')
 })
 
-test('the settings panel offers the three presets', { timeout: 30000 }, async t => {
+test('the settings panel offers five intent-named presets', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)
   await client.click('盆栽')
@@ -504,7 +504,10 @@ test('the settings panel offers the three presets', { timeout: 30000 }, async t 
   const bar = client.document.querySelector('.twt-presets')
   assert.ok(bar !== null, 'the preset bar is present')
   const labels = [...bar.querySelectorAll('button')].map(button => button.textContent ?? '')
-  assert.deepEqual(labels, ['只建树', '保留', '默认', '学习', '工程', '极省'], 'six presets, in order')
+  assert.deepEqual(labels, ['只建树', '日常默认', '写代码', '保上下文', '极省'], 'five presets, in order')
+  const hints = [...bar.querySelectorAll('.twt-preset-hint')].map(node => node.textContent ?? '')
+  assert.equal(hints.length, 5, 'every preset carries a visible explanation')
+  assert.ok(hints.some(hint => hint.includes('成本和上下文平衡')), 'the default explains its trade-off')
   const aggressive = [...bar.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('极省'))
   await React.act(async () => { aggressive.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
   await client.flush()
@@ -685,12 +688,12 @@ test('the settings panel offers one preset row, not two overlapping ones', { tim
   await client.click('盆栽')
   await client.click('设置')
   const labels = [...client.document.querySelectorAll('.twt-presets button')].map(node => (node.textContent ?? '').trim())
-  for (const expected of ['保留', '默认', '学习', '工程', '极省']) {
+  for (const expected of ['日常默认', '写代码', '保上下文', '极省']) {
     assert.ok(labels.includes(expected), `preset "${expected}" is offered: ${labels.join(',')}`)
   }
   assert.equal(client.document.querySelectorAll('.twt-guide').length, 0, 'the guided card is gone')
   const before = client.requests.filter(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST').length
-  await client.click('工程')
+  await client.click('写代码')
   const posts = client.requests.filter(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST')
   assert.ok(posts.length > before, 'the choice goes through the preset route')
   assert.ok(String(posts.at(-1).body).includes('coding'), 'and names the coding preset')

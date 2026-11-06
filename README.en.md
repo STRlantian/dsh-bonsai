@@ -115,21 +115,21 @@ Session history is derived by the host from the log. The plugin appends one
 text.
 
 ```text
-Default: fold when the block reaches 30,000 tokens and 8x the keep window, at most every 10 turns
-Keep:    fold past 60,000, keep 4 turns
-Save:    fold past 10,000, keep 1 turn, and hide 9 heavy rarely-used tools
+Daily default: fold when the block reaches 30,000 tokens and 8x the keep window, at most every 10 turns
+Keep context: fold past 60,000, keep 4 turns
+Save:         fold past 10,000, keep 1 turn, and hide 9 heavy rarely-used tools
 ```
 
-Six presets sit at the top of the settings page, and every value is adjustable:
+Five intent-named presets sit at the top of the settings page; each button carries a one-line
+explanation, and every value is still adjustable:
 
-| Preset | For | Block floor | Turns kept | Fold scope | Tools hidden |
-|---|---|---|---|---|---|
-| **Tree only** | just the tree; no injection, hint, candidates, folding, reflection | 0 (off) | 0 | off | none |
-| **Keep** | closest to native behaviour | 60,000 | 4 | whole turns | none |
-| **Default** | when unsure | 30,000 | 2 | whole turns | none |
-| **Learning** | concept questions, many follow-ups | 20,000 | 2 | whole turns (6 candidates every turn, no summary) | none |
-| **Coding** | editing files | 20,000 | 3 | tool output only | none |
-| **Save** | cheapest | 10,000 | 1 | whole turns (retrieval returns digests) | 9 heavy rarely-used tools |
+| Preset | When to pick it | What it does | Block floor | Turns kept | Fold scope | Tools hidden |
+|---|---|---|---|---|---|---|
+| **Tree only** | just the tree, no model-facing behaviour | turns off injection, hints, candidates, folding, reflection | 0 (off) | 0 | off | none |
+| **Daily default** | when unsure | balances cost and context | 30,000 | 2 | whole turns | none |
+| **Coding** | editing files, lots of tool output | folds tool results only, keeps whole-turn context | 20,000 | 3 | tool output | none |
+| **Keep context** | quality first, do not drop recent turns | folds rarely, closest to native | 60,000 | 4 | whole turns | none |
+| **Save** | cheapest, tight context window | folds earlier, keeps one turn, hides heavy tools; retrieve old detail on demand | 10,000 | 1 | whole turns (retrieval returns digests) | 9 heavy rarely-used tools |
 
 | Setting | Default | Effect |
 |---|---|---|
