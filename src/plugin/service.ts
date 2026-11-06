@@ -74,8 +74,6 @@ const NEW_TOPIC_MIN_FEATURES = 8
 
 /** Precomputed statistics for one attachment decision. */
 interface AttachmentContext {
-  /** Embedding of the incoming question. */
-  embedding: number[]
   /** Content features of the incoming question. */
   questionFeatures: Set<string>
   /** Content features of every node in the tree, computed once per decision. */
@@ -1118,7 +1116,7 @@ export class TokenTreeService {
     }
     const summary = summarize(text)
     const embedding = embedText(text, this.config.embeddingDimension)
-    const placement = this.pickQuestionParent(state, text, embedding)
+    const placement = this.pickQuestionParent(state, text)
     const parentId = placement.parentId
     // The node the turn would extend if it were not for the new-topic gate: [attach:here] means
     // "stay on this line", which is this node rather than the root.
@@ -1158,12 +1156,11 @@ export class TokenTreeService {
   /**
    * Similarity used to decide where a follow-up question belongs.
    *
-   * The local embedding is coarse, so most of the signal is lexical — but plain
-   * overlap fails on its own: "介绍" matches everything, and a long answer dilutes
-   * a short question's terms. So the lexical half is the *rarest shared term*,
-   * normalized by the rarest term of the question: sharing "线段树" scores near 1,
-   * sharing only "介绍" scores near 0.
-   * @param input - question embedding/features plus the tree-wide term statistics.
+   * The score is lexical: plain overlap fails on its own — "介绍" matches everything — so the
+   * signal is the *rarest shared term*, normalized by the rarest term of the question: sharing
+   * "线段树" scores near 1, sharing only "介绍" scores near 0. The embedding is not part of this
+   * formula; it exists for retrieval and node indexing.
+   * @param input - question features plus the tree-wide term statistics.
    * @param node - candidate parent.
    * @returns Score in `[0, 1]`.
    */
@@ -1235,10 +1232,8 @@ export class TokenTreeService {
     const discount = Math.max(baseDiscount, emphasis)
     // A 9k-token lecture shares *something* rare with almost any question, which is how an
     // unrelated question used to attach to whichever answer happened to be longest. Scale the
-    // lexical half down by how much bigger the node is than a typical answer.
+    // lexical score down by how much bigger the node is than a typical answer.
     const penalty = Math.min(1, Math.sqrt(input.referenceFeatures / Math.max(1, features.size)))
-    // Applied to the whole score: the semantic half is a bag-of-characters cosine that also
-    // rewards size, so scaling only the lexical half left long answers winning.
     // Prominence: a term the answer keeps coming back to is more likely to be what that answer is
     // *about*, rather than something it mentioned once in passing.
     const counts = input.counts.get(node.id)
@@ -1252,10 +1247,9 @@ export class TokenTreeService {
    * Precompute the term statistics one attachment decision needs.
    * @param state - session state.
    * @param text - incoming question.
-   * @param embedding - incoming question embedding.
    * @returns Question features plus document frequencies and their normalization.
    */
-  private attachmentContext(state: SessionState, text: string, embedding: number[]): AttachmentContext {
+  private attachmentContext(state: SessionState, text: string): AttachmentContext {
     const questionFeatures = contentFeatures(text)
     const nodeFeatures = new Map<NodeId, Set<string>>()
     const countsByNode = new Map<NodeId, Map<string, number>>()
@@ -1305,7 +1299,6 @@ export class TokenTreeService {
     const referenceFeatures = Math.max(1, nodeFeatures.get(state.tree.currentId)?.size ?? 1)
     const defaultNodeId = state.tree.currentId
     return {
-      embedding,
       questionFeatures,
       counts: countsByNode,
       docLength: lengthByNode,
@@ -1331,7 +1324,6 @@ export class TokenTreeService {
    * very deep line.
    * @param state - session state.
    * @param text - question text.
-   * @param embedding - question embedding.
    * @returns Parent node id.
    */
   /**
@@ -1357,7 +1349,6 @@ export class TokenTreeService {
   private pickQuestionParent(
     state: SessionState,
     text: string,
-    embedding: number[],
   ): { parentId: NodeId; score: number; manual?: boolean } {
     const tree = state.tree
     // A user-picked anchor wins over every heuristic, and steers exactly one turn.
@@ -1381,10 +1372,10 @@ export class TokenTreeService {
       this.logger.info('token-tree: anaphoric turn kept under the current node')
       // An anaphoric stay is a heuristic about a pronoun: worth a candidate list to confirm.
       state.uncertain = true
-      return { parentId: defaultId, score: this.attachmentScore(this.attachmentContext(state, text, embedding), tree.node(defaultId)) }
+      return { parentId: defaultId, score: this.attachmentScore(this.attachmentContext(state, text), tree.node(defaultId)) }
     }
     if (this.config.attachments === 'linear') return { parentId: defaultId, score: 0 }
-    const context = this.attachmentContext(state, text, embedding)
+    const context = this.attachmentContext(state, text)
     const defaultNode = tree.node(defaultId)
     const defaultScore = this.attachmentScore(context, defaultNode)
     let bestId = defaultId
@@ -1906,8 +1897,7 @@ export class TokenTreeService {
       return ''
     }
     const tree = state.tree
-    const embedding = embedText(query, this.config.embeddingDimension)
-    const context = this.attachmentContext(state, query, embedding)
+    const context = this.attachmentContext(state, query)
     const scored: { id: NodeId; score: number }[] = []
     for (const node of tree.nodes.values()) {
       if (node.kind !== 'answer' || tree.hidden(node.id)) continue

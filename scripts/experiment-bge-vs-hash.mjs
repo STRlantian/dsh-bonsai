@@ -107,14 +107,21 @@ for (const item of jumpLabels.items) {
 
 const extractor = await pipeline('feature-extraction', 'Xenova/bge-small-zh-v1.5', { dtype: 'q8' })
 const bgeWhole = async texts => (await extractor(texts.map(text => text.slice(0, 1500)), { pooling: 'mean', normalize: true })).tolist()
-const bgeChunks = async texts => {
+const bgeChunkVectors = async texts => {
   const all = []
   for (const text of texts) {
     const chunks = chunkText(text)
-    const vectors = (await extractor(chunks, { pooling: 'mean', normalize: true })).tolist()
-    const mean = new Array(vectors[0].length).fill(0)
-    for (const vector of vectors) for (let index = 0; index < vector.length; index++) mean[index] += vector[index]
-    for (let index = 0; index < mean.length; index++) mean[index] /= Math.max(1, vectors.length)
+    all.push((await extractor(chunks, { pooling: 'mean', normalize: true })).tolist())
+  }
+  return all
+}
+
+const bgeChunkMeanVectors = async texts => {
+  const all = []
+  for (const chunks of await bgeChunkVectors(texts)) {
+    const mean = new Array(chunks[0].length).fill(0)
+    for (const vector of chunks) for (let index = 0; index < vector.length; index++) mean[index] += vector[index]
+    for (let index = 0; index < mean.length; index++) mean[index] /= Math.max(1, chunks.length)
     all.push(mean)
   }
   return all
@@ -123,21 +130,57 @@ const bgeChunks = async texts => {
 const answerTexts = answers.map(node => node.content)
 const hashVectors = answerTexts.map(text => embedText(text))
 const wholeVectors = await bgeWhole(answerTexts)
-const chunkVectors = await bgeChunks(answerTexts)
+const chunkVectors = await bgeChunkVectors(answerTexts)
+const chunkMeanVectors = await bgeChunkMeanVectors(answerTexts)
+
+const aggregate = (scores, mode) => {
+  if (scores.length === 0) return 0
+  if (mode === 'best') return Math.max(...scores)
+  if (mode === 'meanTop3') {
+    const top = [...scores].sort((left, right) => right - left).slice(0, 3)
+    return top.reduce((sum, value) => sum + value, 0) / top.length
+  }
+  return scores.reduce((sum, value) => sum + value, 0) / scores.length
+}
 
 const methods = [
-  { id: 'hash', label: 'hash 256d (current)', embed: async texts => texts.map(text => embedText(text)), answerVectors: hashVectors },
-  { id: 'bge', label: 'BGE whole answer', embed: async texts => bgeWhole(texts), answerVectors: wholeVectors },
-  { id: 'bge-chunk', label: 'BGE chunk mean vector', embed: async texts => bgeChunks(texts), answerVectors: chunkVectors },
+  {
+    id: 'hash', label: 'hash 256d (current)',
+    queryEmbed: async text => embedText(text),
+    score: (query, index) => cosine(query, hashVectors[index]),
+  },
+  {
+    id: 'bge', label: 'BGE whole answer',
+    queryEmbed: async text => (await bgeWhole([text]))[0],
+    score: (query, index) => cosine(query, wholeVectors[index]),
+  },
+  {
+    id: 'bge-chunk-meanvec', label: 'BGE chunk mean vector',
+    queryEmbed: async text => (await bgeWhole([text]))[0],
+    score: (query, index) => cosine(query, chunkMeanVectors[index]),
+  },
+  {
+    id: 'bge-chunk-best', label: 'BGE chunk best',
+    queryEmbed: async text => (await bgeWhole([text]))[0],
+    score: (query, index) => aggregate(chunkVectors[index].map(vector => cosine(query, vector)), 'best'),
+  },
+  {
+    id: 'bge-chunk-meanTop3', label: 'BGE chunk meanTop3',
+    queryEmbed: async text => (await bgeWhole([text]))[0],
+    score: (query, index) => aggregate(chunkVectors[index].map(vector => cosine(query, vector)), 'meanTop3'),
+  },
+  {
+    id: 'bge-chunk-meanAll', label: 'BGE chunk meanAll',
+    queryEmbed: async text => (await bgeWhole([text]))[0],
+    score: (query, index) => aggregate(chunkVectors[index].map(vector => cosine(query, vector)), 'meanAll'),
+  },
 ]
 
 const rows = []
 for (const method of methods) {
   for (const item of sets) {
-    const [query] = await method.embed([item.question])
-    const targetIndex = answers.findIndex(node => node.id === item.target.id)
-    if (targetIndex < 0) continue
-    const scored = answers.map((node, index) => ({ node, score: cosine(query, method.answerVectors[index]) }))
+    const query = await method.queryEmbed(item.question)
+    const scored = answers.map((node, index) => ({ node, score: method.score(query, index) }))
       .sort((left, right) => right.score - left.score)
     const rank = scored.findIndex(row => row.node.id === item.target.id) + 1
     rows.push({ method: method.id, set: item.set, question: item.question, target: item.target.id, targetTurn: item.target.metadata?.turn, rank, score: scored[rank - 1]?.score ?? 0, bestTurn: scored[0]?.node.metadata?.turn })

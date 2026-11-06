@@ -2027,29 +2027,34 @@ assistant/message、tool/result、注入的 runtime-context / 我们自己的 hi
 |---|---|
 | hash | 当前 256 维 FNV 哈希（英文词 + 汉字/双字） |
 | BGE whole | `Xenova/bge-small-zh-v1.5`，回答截到 1,500 字符 |
-| BGE chunk | 按 300 字切块，块向量取平均成一个节点向量 |
+| BGE chunk meanvec | 按 300 字切块，块向量取平均成一个节点向量 |
+| BGE chunk best / meanTop3 / meanAll | 每块单独和问题算余弦，再按最大/前3平均/全部平均汇总 |
 
 只用余弦排序所有回答，不带路径权重、不施加阈值，所以这是**嵌入层**的对照：
 
 | 方法 | 学习 rank1/top3 | 同义改写 | 跳转 | 全部 40 题 rank1/top3 | MRR |
 |---|---|---:|---:|---:|---:|
 | hash | 0/17, 3 | 1/8, 4 | 3/15, 7 | 4/40, 14 | 0.292 |
-| **BGE whole** | **1/17, 4** | **5/8, 5** | **10/15, 11** | **16/40, 20** | **0.500** |
-| BGE chunk mean | 1/17, 3 | 3/8, 5 | 11/15, 12 | 15/40, 20 | 0.500 |
+| BGE whole | 1/17, 4 | 5/8, 5 | 10/15, 11 | 16/40, 20 | 0.500 |
+| BGE chunk meanvec | 1/17, 3 | 3/8, 5 | 11/15, 12 | 15/40, 20 | 0.500 |
+| BGE chunk best | 2/17, 6 | 3/8, 5 | 7/15, 11 | 12/40, 22 | 0.435 |
+| BGE chunk meanTop3 | 1/17, 5 | 3/8, 4 | 5/15, 8 | 9/40, 17 | 0.384 |
+| **BGE chunk meanAll** | **1/17, 3** | **5/8, 7** | **11/15, 12** | **17/40, 22** | **0.541** |
 
-配对比较（同一题，BGE whole vs hash）：**21 题更好、9 题更差、9 题持平**。同义改写
-4 好 / 1 差 / 2 平，跳转 10 好 / 1 差 / 4 平，学习 7 好 / 7 差 / 3 平。
+配对比较（同一题）：BGE whole vs hash **21 好 / 9 差 / 9 平**；BGE chunk meanAll vs hash
+**24 好 / 10 差 / 5 平**；meanAll vs whole **12 好 / 11 差 / 16 平**。
 
 结论：
 
-- **检索排序上 BGE 确实有改善**，尤其同义改写和跳转；MRR 从 0.292 到 0.500。
+- **检索排序上 BGE 确实有改善**，尤其同义改写和跳转；BGE chunk meanAll 把 MRR 从 0.292
+  提到 0.541，rank1 从 4/40 提到 17/40。
+- 单向量 BGE whole 已经明显好于 hash；**分块后每块单独比较再提升一档**，
+  比把块平均成一个向量更好。`best` 的 top3 更高但 rank1 更差，不适合当默认聚合。
 - 学习标注仍只有 1/17，因为目标往往是"上一轮/父回答"，不是语义最相似答案；
   现有 lexical + new-topic 挂树规则在这套标注上是 14/18，BGE 不能替代它。
-- BGE 分块只在跳转上略好（11/15），整体 rank1 不如 whole，且需要保存多向量；
-  不作为单向量替换的首选。
 - 模型 512 token 截断、依赖 `@huggingface/transformers`/ONNX 和模型下载，不能直接塞进
-  零依赖默认包。若接入，应做成**可选、异步的检索 embedding provider**，而不是全局替换
-  `embedText`；挂树评分仍走现有规则。
+  零依赖默认包。若接入，应做成**可选、异步的检索 embedding provider**，保存每节点多块向量，
+  而不是全局替换 `embedText`；挂树评分仍走现有规则。
 
 脚本：`scripts/experiment-bge-vs-hash.mjs`；结果：
 `docs/experiments/bge-vs-hash-embedding.{md,csv,json}`。
