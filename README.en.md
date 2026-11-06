@@ -328,7 +328,7 @@ It validates, sets `x.y.z`, publishes `./plugin` with `--tag latest`, advances t
 | `src/plugin/` | The DSH wiring: `Config`, the session service, tools, event subscriptions, HTTP routes, fold planning |
 | `client/client.js` | Browser half: dock, editor, graph view, recycle bin, rule bar, settings panel, preset picker |
 | `tests/` | 249 cases, including client tests that mount real React under jsdom |
-| `docs/experiment-context-cache.md` | Every measurement (51 sections) |
+| `docs/experiment-context-cache.md` | Every measurement (52 sections) |
 
 ## License
 

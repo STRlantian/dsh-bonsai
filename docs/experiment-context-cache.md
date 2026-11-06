@@ -2014,3 +2014,42 @@ assistant/message、tool/result、注入的 runtime-context / 我们自己的 hi
 成本优先（keep 1）再省约 6%，但只保留最后一轮，依赖 `retrieve_context` 找回旧上下文，
 所以作为可选值而不是默认。脚本：`scripts/sweep-fold-params.mjs`；完整网格：
 `docs/experiments/fold-param-sweep.csv`。
+
+## 实验 43：BGE 替换哈希 embedding（只改向量，不改挂树规则）
+
+实验 34/35 测的是"BGE 排序能不能直接替代挂树"，结论是不能；这次反过来，只比较
+**同一个答案节点用 hash 向量还是 BGE 向量时，问题能不能排到目标回答**。
+
+方法：会话 `2ba794ae`，18 条学习标注（去掉 root 为 17 条）、8 条同义改写、15 条必须跳转；
+所有回答节点各算三种向量：
+
+| 方法 | 说明 |
+|---|---|
+| hash | 当前 256 维 FNV 哈希（英文词 + 汉字/双字） |
+| BGE whole | `Xenova/bge-small-zh-v1.5`，回答截到 1,500 字符 |
+| BGE chunk | 按 300 字切块，块向量取平均成一个节点向量 |
+
+只用余弦排序所有回答，不带路径权重、不施加阈值，所以这是**嵌入层**的对照：
+
+| 方法 | 学习 rank1/top3 | 同义改写 | 跳转 | 全部 40 题 rank1/top3 | MRR |
+|---|---|---:|---:|---:|---:|
+| hash | 0/17, 3 | 1/8, 4 | 3/15, 7 | 4/40, 14 | 0.292 |
+| **BGE whole** | **1/17, 4** | **5/8, 5** | **10/15, 11** | **16/40, 20** | **0.500** |
+| BGE chunk mean | 1/17, 3 | 3/8, 5 | 11/15, 12 | 15/40, 20 | 0.500 |
+
+配对比较（同一题，BGE whole vs hash）：**21 题更好、9 题更差、9 题持平**。同义改写
+4 好 / 1 差 / 2 平，跳转 10 好 / 1 差 / 4 平，学习 7 好 / 7 差 / 3 平。
+
+结论：
+
+- **检索排序上 BGE 确实有改善**，尤其同义改写和跳转；MRR 从 0.292 到 0.500。
+- 学习标注仍只有 1/17，因为目标往往是"上一轮/父回答"，不是语义最相似答案；
+  现有 lexical + new-topic 挂树规则在这套标注上是 14/18，BGE 不能替代它。
+- BGE 分块只在跳转上略好（11/15），整体 rank1 不如 whole，且需要保存多向量；
+  不作为单向量替换的首选。
+- 模型 512 token 截断、依赖 `@huggingface/transformers`/ONNX 和模型下载，不能直接塞进
+  零依赖默认包。若接入，应做成**可选、异步的检索 embedding provider**，而不是全局替换
+  `embedText`；挂树评分仍走现有规则。
+
+脚本：`scripts/experiment-bge-vs-hash.mjs`；结果：
+`docs/experiments/bge-vs-hash-embedding.{md,csv,json}`。

@@ -284,7 +284,7 @@ powershell -File scripts/release.ps1           # 发布并推进到下一个测�
 | `src/plugin/` | DSH 接线：`Config`、会话服务、工具、事件订阅、HTTP 路由、折叠规划 |
 | `client/client.js` | 浏览器端：dock、编辑器、图形视图、回收站、规则栏、设置面板、预设选择器 |
 | `tests/` | 249 个用例，含 jsdom 挂载真实 React 的客户端测试 |
-| `docs/experiment-context-cache.md` | 全部实测记录（51 节，含失败实验） |
+| `docs/experiment-context-cache.md` | 全部实测记录（52 节，含失败实验） |
 
 ## License
 

@@ -1,0 +1,1285 @@
+{
+  "generatedAt": "2026-11-06T12:27:58.921Z",
+  "model": "Xenova/bge-small-zh-v1.5",
+  "sets": {
+    "learning": 18,
+    "paraphrase": 8,
+    "jump": 15
+  },
+  "metrics": {
+    "hash:learning": {
+      "total": 17,
+      "rank1": 0,
+      "top3": 3,
+      "mrr": 0.18571493865611513
+    },
+    "hash:paraphrase": {
+      "total": 8,
+      "rank1": 1,
+      "top3": 4,
+      "mrr": 0.35535714285714287
+    },
+    "hash:jump": {
+      "total": 15,
+      "rank1": 3,
+      "top3": 7,
+      "mrr": 0.37762527233115467
+    },
+    "hash:all": {
+      "total": 40,
+      "rank1": 4,
+      "top3": 14,
+      "mrr": 0.2916097546244605
+    },
+    "bge:learning": {
+      "total": 17,
+      "rank1": 1,
+      "top3": 4,
+      "mrr": 0.21802603394298897
+    },
+    "bge:paraphrase": {
+      "total": 8,
+      "rank1": 5,
+      "top3": 5,
+      "mrr": 0.6919642857142857
+    },
+    "bge:jump": {
+      "total": 15,
+      "rank1": 10,
+      "top3": 11,
+      "mrr": 0.7174891774891775
+    },
+    "bge:all": {
+      "total": 40,
+      "rank1": 16,
+      "top3": 20,
+      "mrr": 0.5001123631270691
+    },
+    "bge-chunk:learning": {
+      "total": 17,
+      "rank1": 1,
+      "top3": 3,
+      "mrr": 0.21829749450856717
+    },
+    "bge-chunk:paraphrase": {
+      "total": 8,
+      "rank1": 3,
+      "top3": 5,
+      "mrr": 0.5647321428571428
+    },
+    "bge-chunk:jump": {
+      "total": 15,
+      "rank1": 11,
+      "top3": 12,
+      "mrr": 0.7856902356902357
+    },
+    "bge-chunk:all": {
+      "total": 40,
+      "rank1": 15,
+      "top3": 20,
+      "mrr": 0.500356702121408
+    }
+  },
+  "rows": [
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "你把我当成只会矩阵乘法和微积分的人讲",
+      "target": "n3",
+      "targetTurn": 1,
+      "rank": 11,
+      "score": 0.15903801450752117,
+      "bestTurn": 2
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "举例第一部分的y的更详细的含义",
+      "target": "n5",
+      "targetTurn": 2,
+      "rank": 10,
+      "score": 0.216777261216009,
+      "bestTurn": 7
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "y_i表示，当前这个词应该对第i个词分配多少注意力？这个第i个是对于词表中的词而言的",
+      "target": "n7",
+      "targetTurn": 3,
+      "rank": 12,
+      "score": 0.27999049576311963,
+      "bestTurn": 4
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "这样，你先说y在后面会有什么用。n轮查询这个n是怎么来的",
+      "target": "n10",
+      "targetTurn": 4,
+      "rank": 7,
+      "score": 0.3457601313226518,
+      "bestTurn": 12
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "你从 注意力机制是为了解决什么问题，而为了解决这个问题自然的思路是什么 这样出发来讲",
+      "target": "n3",
+      "targetTurn": 1,
+      "rank": 6,
+      "score": 0.2456215117001679,
+      "bestTurn": 12
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "为什么说内积可以表达相似度？两个长度差很多的不同向向量和两个长度一样的同向向量内积相等",
+      "target": "n14",
+      "targetTurn": 6,
+      "rank": 11,
+      "score": 0.25222895577947024,
+      "bestTurn": 12
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "我来问，你来看对不对，不要解释太多。我要得知一句话中一个词在整个语境中的含义。我们先把这一句话分成好多词（token），每个词都有自己的特征。我的目的是得到第i个词和其他词的关联程度。",
+      "target": "n14",
+      "targetTurn": 6,
+      "rank": 9,
+      "score": 0.3903352909832999,
+      "bestTurn": 8
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "不说总体目的，先说局部目的。我应该如何查询这个词和其他词的关系？我可以把两个词的向量内积，看大小，做排序，最后从上往下就是相似度从高到低",
+      "target": "n18",
+      "targetTurn": 8,
+      "rank": 4,
+      "score": 0.39283953913953124,
+      "bestTurn": 4
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "每个词一开始都有q k v，分别表示：我找别人的时候找什么，别人找我的时候找什么，我自己有什么含义。这是它根据一个自己的向量x乘以矩阵Q K V得到的。",
+      "target": "n20",
+      "targetTurn": 9,
+      "rank": 18,
+      "score": 0.24801494087151338,
+      "bestTurn": 10
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "优化模型的目的，就是优化每个词自己的x和QKV矩阵",
+      "target": "n22",
+      "targetTurn": 10,
+      "rank": 10,
+      "score": 0.23809755120996048,
+      "bestTurn": 11
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "e(w)是词表中的向量，pi是位置向量，他们加起来表示了这个词是什么内容以及在句子中是什么位置",
+      "target": "n24",
+      "targetTurn": 11,
+      "rank": 3,
+      "score": 0.3670503745783577,
+      "bestTurn": 12
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "反正xi涵盖了这个词以及它的位置。在读到一句话后，我把他们拆成那么多token，算好所有的sij，此时我得知了每个词应该对其他词的重视程度",
+      "target": "n26",
+      "targetTurn": 12,
+      "rank": 13,
+      "score": 0.3220070213372028,
+      "bestTurn": 13
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "我得到了A，表示每个词应该对每个词的分配的权重。然后我将它乘以V。这一步的含义是什么",
+      "target": "n28",
+      "targetTurn": 13,
+      "rank": 2,
+      "score": 0.4110645248992516,
+      "bestTurn": 8
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "这里的V是指xi*V后组成的矩阵，还是就是原始的V",
+      "target": "n28",
+      "targetTurn": 13,
+      "rank": 2,
+      "score": 0.3746089336697443,
+      "bestTurn": 15
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "我将A*V，得到Y。Y就表示了，每一个词实际从其他词获取了多少信息",
+      "target": "n32",
+      "targetTurn": 15,
+      "rank": 18,
+      "score": 0.12136612651123746,
+      "bestTurn": 16
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "一个token的x向量包含了许多机器学习得到的特征。比如我可以说x1是“可食用”，x2是“地点”等。乘以WQ WK WV，按照符合正常讲话逻辑的思维来说，就是 我要给别人展现可食用的程度 我提供给别人我可使用的程度 我自己可食用的程度",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 4,
+      "score": 0.3692069555639357,
+      "bestTurn": 17
+    },
+    {
+      "method": "hash",
+      "set": "learning",
+      "question": "那对于 苹果 这个词，它的可食用程度那一栏经过WQ可以引申出什么含义",
+      "target": "n36",
+      "targetTurn": 17,
+      "rank": 4,
+      "score": 0.2615030237905943,
+      "bestTurn": 18
+    },
+    {
+      "method": "hash",
+      "set": "paraphrase",
+      "question": "模型在阅读一段话时，怎么决定该重点参考哪几个字？",
+      "target": "n3",
+      "targetTurn": 1,
+      "rank": 7,
+      "score": 0.2284926199062471,
+      "bestTurn": 11
+    },
+    {
+      "method": "hash",
+      "set": "paraphrase",
+      "question": "两个长度不同的箭头放在一起点乘出来的那个数，能说明方向一致吗？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 4,
+      "score": 0.3311369933885412,
+      "bestTurn": 3
+    },
+    {
+      "method": "hash",
+      "set": "paraphrase",
+      "question": "词的编号查出来的那串数字，跟它出现的位置怎么合到一起？",
+      "target": "n26",
+      "targetTurn": 12,
+      "rank": 4,
+      "score": 0.3913852404627381,
+      "bestTurn": 11
+    },
+    {
+      "method": "hash",
+      "set": "paraphrase",
+      "question": "把某一栏属性乘上一个可训练矩阵之后，那一栏还单独存在吗？",
+      "target": "n38",
+      "targetTurn": 18,
+      "rank": 5,
+      "score": 0.21833833495381527,
+      "bestTurn": 3
+    },
+    {
+      "method": "hash",
+      "set": "paraphrase",
+      "question": "把配比套到内容上，得到的到底是数量，还是一个全新的东西？",
+      "target": "n30",
+      "targetTurn": 14,
+      "rank": 1,
+      "score": 0.3695942127516292,
+      "bestTurn": 14
+    },
+    {
+      "method": "hash",
+      "set": "paraphrase",
+      "question": "每个位置最后拿到的那个向量，长度变了吗，还是只有内容变了？",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 3,
+      "score": 0.36824881778330787,
+      "bestTurn": 6
+    },
+    {
+      "method": "hash",
+      "set": "paraphrase",
+      "question": "为什么说内积可以表达相似度？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 3,
+      "score": 0.17455295598639725,
+      "bestTurn": 16
+    },
+    {
+      "method": "hash",
+      "set": "paraphrase",
+      "question": "为什么说内积可以表达相似度？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 3,
+      "score": 0.17455295598639725,
+      "bestTurn": 16
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "模型是怎么决定该关注哪些位置的？",
+      "target": "n3",
+      "targetTurn": 1,
+      "rank": 9,
+      "score": 0.17980940640150211,
+      "bestTurn": 11
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "两个向量方向一致但长度不同时，用点积判断相似可靠吗？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 6,
+      "score": 0.2832677742872719,
+      "bestTurn": 18
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "词向量和位置向量相加之后，还能分辨每一维代表什么吗？",
+      "target": "n26",
+      "targetTurn": 12,
+      "rank": 9,
+      "score": 0.2565341066580481,
+      "bestTurn": 16
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "三个参数矩阵为什么能在所有位置之间共享？",
+      "target": "n22",
+      "targetTurn": 10,
+      "rank": 1,
+      "score": 0.33951616122011385,
+      "bestTurn": 10
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "权重矩阵的一行加起来等于 1 意味着什么？",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 17,
+      "score": 0.10777702012182193,
+      "bestTurn": 13
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "输入句子变长时，中间那些矩阵的形状怎么变？",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 10,
+      "score": 0.24921846992223484,
+      "bestTurn": 4
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "softmax 之前的分数为什么说没有统一单位？",
+      "target": "n28",
+      "targetTurn": 13,
+      "rank": 1,
+      "score": 0.3774535334892178,
+      "bestTurn": 13
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "位置信息和词义信息在向量里是叠加还是拼接？",
+      "target": "n26",
+      "targetTurn": 12,
+      "rank": 3,
+      "score": 0.29526478853869054,
+      "bestTurn": 16
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "哪一个矩阵是给别人看的标签？",
+      "target": "n22",
+      "targetTurn": 10,
+      "rank": 2,
+      "score": 0.32356725267181285,
+      "bestTurn": 17
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "输出向量的维度会随句子长度变化吗？",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 4,
+      "score": 0.24869564352393267,
+      "bestTurn": 3
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "训练的时候到底在调整哪些数值？",
+      "target": "n24",
+      "targetTurn": 11,
+      "rank": 3,
+      "score": 0.22409768959494586,
+      "bestTurn": 3
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "被优化的是输入本身还是可训练的参数？",
+      "target": "n24",
+      "targetTurn": 11,
+      "rank": 1,
+      "score": 0.34595725487580686,
+      "bestTurn": 11
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "两个词的匹配强度是怎么算出来的？",
+      "target": "n20",
+      "targetTurn": 9,
+      "rank": 10,
+      "score": 0.2693818672686557,
+      "bestTurn": 13
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "为什么内积会偏好模长大的向量？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 10,
+      "score": 0.20488973982067504,
+      "bestTurn": 16
+    },
+    {
+      "method": "hash",
+      "set": "jump",
+      "question": "公式里的 V 是原始输入还是变换之后的？",
+      "target": "n32",
+      "targetTurn": 15,
+      "rank": 2,
+      "score": 0.26912380521003926,
+      "bestTurn": 4
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "你把我当成只会矩阵乘法和微积分的人讲",
+      "target": "n3",
+      "targetTurn": 1,
+      "rank": 12,
+      "score": 0.5143039635187675,
+      "bestTurn": 2
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "举例第一部分的y的更详细的含义",
+      "target": "n5",
+      "targetTurn": 2,
+      "rank": 14,
+      "score": 0.529467257021735,
+      "bestTurn": 4
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "y_i表示，当前这个词应该对第i个词分配多少注意力？这个第i个是对于词表中的词而言的",
+      "target": "n7",
+      "targetTurn": 3,
+      "rank": 14,
+      "score": 0.6283508562575699,
+      "bestTurn": 8
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "这样，你先说y在后面会有什么用。n轮查询这个n是怎么来的",
+      "target": "n10",
+      "targetTurn": 4,
+      "rank": 10,
+      "score": 0.5264698490375594,
+      "bestTurn": 6
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "你从 注意力机制是为了解决什么问题，而为了解决这个问题自然的思路是什么 这样出发来讲",
+      "target": "n3",
+      "targetTurn": 1,
+      "rank": 6,
+      "score": 0.4667246975331197,
+      "bestTurn": 6
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "为什么说内积可以表达相似度？两个长度差很多的不同向向量和两个长度一样的同向向量内积相等",
+      "target": "n14",
+      "targetTurn": 6,
+      "rank": 5,
+      "score": 0.5465508196457637,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "我来问，你来看对不对，不要解释太多。我要得知一句话中一个词在整个语境中的含义。我们先把这一句话分成好多词（token），每个词都有自己的特征。我的目的是得到第i个词和其他词的关联程度。",
+      "target": "n14",
+      "targetTurn": 6,
+      "rank": 3,
+      "score": 0.6952843161046167,
+      "bestTurn": 8
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "不说总体目的，先说局部目的。我应该如何查询这个词和其他词的关系？我可以把两个词的向量内积，看大小，做排序，最后从上往下就是相似度从高到低",
+      "target": "n18",
+      "targetTurn": 8,
+      "rank": 1,
+      "score": 0.6605629678565342,
+      "bestTurn": 8
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "每个词一开始都有q k v，分别表示：我找别人的时候找什么，别人找我的时候找什么，我自己有什么含义。这是它根据一个自己的向量x乘以矩阵Q K V得到的。",
+      "target": "n20",
+      "targetTurn": 9,
+      "rank": 14,
+      "score": 0.6067684005870668,
+      "bestTurn": 10
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "优化模型的目的，就是优化每个词自己的x和QKV矩阵",
+      "target": "n22",
+      "targetTurn": 10,
+      "rank": 3,
+      "score": 0.5743103744559549,
+      "bestTurn": 11
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "e(w)是词表中的向量，pi是位置向量，他们加起来表示了这个词是什么内容以及在句子中是什么位置",
+      "target": "n24",
+      "targetTurn": 11,
+      "rank": 10,
+      "score": 0.5922861699314163,
+      "bestTurn": 12
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "反正xi涵盖了这个词以及它的位置。在读到一句话后，我把他们拆成那么多token，算好所有的sij，此时我得知了每个词应该对其他词的重视程度",
+      "target": "n26",
+      "targetTurn": 12,
+      "rank": 6,
+      "score": 0.644855579014344,
+      "bestTurn": 8
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "我得到了A，表示每个词应该对每个词的分配的权重。然后我将它乘以V。这一步的含义是什么",
+      "target": "n28",
+      "targetTurn": 13,
+      "rank": 2,
+      "score": 0.6545675577075643,
+      "bestTurn": 8
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "这里的V是指xi*V后组成的矩阵，还是就是原始的V",
+      "target": "n28",
+      "targetTurn": 13,
+      "rank": 10,
+      "score": 0.5485623572614714,
+      "bestTurn": 15
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "我将A*V，得到Y。Y就表示了，每一个词实际从其他词获取了多少信息",
+      "target": "n32",
+      "targetTurn": 15,
+      "rank": 17,
+      "score": 0.47185343827224907,
+      "bestTurn": 12
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "一个token的x向量包含了许多机器学习得到的特征。比如我可以说x1是“可食用”，x2是“地点”等。乘以WQ WK WV，按照符合正常讲话逻辑的思维来说，就是 我要给别人展现可食用的程度 我提供给别人我可使用的程度 我自己可食用的程度",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 4,
+      "score": 0.6770144394272801,
+      "bestTurn": 18
+    },
+    {
+      "method": "bge",
+      "set": "learning",
+      "question": "那对于 苹果 这个词，它的可食用程度那一栏经过WQ可以引申出什么含义",
+      "target": "n36",
+      "targetTurn": 17,
+      "rank": 10,
+      "score": 0.5269309757536874,
+      "bestTurn": 18
+    },
+    {
+      "method": "bge",
+      "set": "paraphrase",
+      "question": "模型在阅读一段话时，怎么决定该重点参考哪几个字？",
+      "target": "n3",
+      "targetTurn": 1,
+      "rank": 7,
+      "score": 0.5066024944763822,
+      "bestTurn": 6
+    },
+    {
+      "method": "bge",
+      "set": "paraphrase",
+      "question": "两个长度不同的箭头放在一起点乘出来的那个数，能说明方向一致吗？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 1,
+      "score": 0.5713043059402024,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge",
+      "set": "paraphrase",
+      "question": "词的编号查出来的那串数字，跟它出现的位置怎么合到一起？",
+      "target": "n26",
+      "targetTurn": 12,
+      "rank": 1,
+      "score": 0.5477232112582022,
+      "bestTurn": 12
+    },
+    {
+      "method": "bge",
+      "set": "paraphrase",
+      "question": "把某一栏属性乘上一个可训练矩阵之后，那一栏还单独存在吗？",
+      "target": "n38",
+      "targetTurn": 18,
+      "rank": 4,
+      "score": 0.5026057443352974,
+      "bestTurn": 11
+    },
+    {
+      "method": "bge",
+      "set": "paraphrase",
+      "question": "把配比套到内容上，得到的到底是数量，还是一个全新的东西？",
+      "target": "n30",
+      "targetTurn": 14,
+      "rank": 1,
+      "score": 0.5060036978487623,
+      "bestTurn": 14
+    },
+    {
+      "method": "bge",
+      "set": "paraphrase",
+      "question": "每个位置最后拿到的那个向量，长度变了吗，还是只有内容变了？",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 7,
+      "score": 0.48349375267318767,
+      "bestTurn": 6
+    },
+    {
+      "method": "bge",
+      "set": "paraphrase",
+      "question": "为什么说内积可以表达相似度？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 1,
+      "score": 0.5685021371405983,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge",
+      "set": "paraphrase",
+      "question": "为什么说内积可以表达相似度？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 1,
+      "score": 0.5685021371405983,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "模型是怎么决定该关注哪些位置的？",
+      "target": "n3",
+      "targetTurn": 1,
+      "rank": 6,
+      "score": 0.41752236965932377,
+      "bestTurn": 6
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "两个向量方向一致但长度不同时，用点积判断相似可靠吗？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 1,
+      "score": 0.6127861967908764,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "词向量和位置向量相加之后，还能分辨每一维代表什么吗？",
+      "target": "n26",
+      "targetTurn": 12,
+      "rank": 1,
+      "score": 0.6021039000551721,
+      "bestTurn": 12
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "三个参数矩阵为什么能在所有位置之间共享？",
+      "target": "n22",
+      "targetTurn": 10,
+      "rank": 1,
+      "score": 0.5004386452630227,
+      "bestTurn": 10
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "权重矩阵的一行加起来等于 1 意味着什么？",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 14,
+      "score": 0.4503677075843428,
+      "bestTurn": 13
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "输入句子变长时，中间那些矩阵的形状怎么变？",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 11,
+      "score": 0.47833511852699906,
+      "bestTurn": 12
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "softmax 之前的分数为什么说没有统一单位？",
+      "target": "n28",
+      "targetTurn": 13,
+      "rank": 1,
+      "score": 0.5930761898486676,
+      "bestTurn": 13
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "位置信息和词义信息在向量里是叠加还是拼接？",
+      "target": "n26",
+      "targetTurn": 12,
+      "rank": 1,
+      "score": 0.5945240143097119,
+      "bestTurn": 12
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "哪一个矩阵是给别人看的标签？",
+      "target": "n22",
+      "targetTurn": 10,
+      "rank": 1,
+      "score": 0.4428279294830656,
+      "bestTurn": 10
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "输出向量的维度会随句子长度变化吗？",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 3,
+      "score": 0.5163162733237521,
+      "bestTurn": 6
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "训练的时候到底在调整哪些数值？",
+      "target": "n24",
+      "targetTurn": 11,
+      "rank": 1,
+      "score": 0.5376107469885287,
+      "bestTurn": 11
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "被优化的是输入本身还是可训练的参数？",
+      "target": "n24",
+      "targetTurn": 11,
+      "rank": 1,
+      "score": 0.575515056471253,
+      "bestTurn": 11
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "两个词的匹配强度是怎么算出来的？",
+      "target": "n20",
+      "targetTurn": 9,
+      "rank": 10,
+      "score": 0.5307575041422515,
+      "bestTurn": 8
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "为什么内积会偏好模长大的向量？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 1,
+      "score": 0.5379233161362205,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge",
+      "set": "jump",
+      "question": "公式里的 V 是原始输入还是变换之后的？",
+      "target": "n32",
+      "targetTurn": 15,
+      "rank": 1,
+      "score": 0.5402120873526786,
+      "bestTurn": 15
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "你把我当成只会矩阵乘法和微积分的人讲",
+      "target": "n3",
+      "targetTurn": 1,
+      "rank": 5,
+      "score": 0.5641135934211244,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "举例第一部分的y的更详细的含义",
+      "target": "n5",
+      "targetTurn": 2,
+      "rank": 17,
+      "score": 0.5420712585012131,
+      "bestTurn": 8
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "y_i表示，当前这个词应该对第i个词分配多少注意力？这个第i个是对于词表中的词而言的",
+      "target": "n7",
+      "targetTurn": 3,
+      "rank": 13,
+      "score": 0.6796680685261085,
+      "bestTurn": 4
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "这样，你先说y在后面会有什么用。n轮查询这个n是怎么来的",
+      "target": "n10",
+      "targetTurn": 4,
+      "rank": 11,
+      "score": 0.5870425291973084,
+      "bestTurn": 5
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "你从 注意力机制是为了解决什么问题，而为了解决这个问题自然的思路是什么 这样出发来讲",
+      "target": "n3",
+      "targetTurn": 1,
+      "rank": 2,
+      "score": 0.5614106149639518,
+      "bestTurn": 6
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "为什么说内积可以表达相似度？两个长度差很多的不同向向量和两个长度一样的同向向量内积相等",
+      "target": "n14",
+      "targetTurn": 6,
+      "rank": 4,
+      "score": 0.5822536664166734,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "我来问，你来看对不对，不要解释太多。我要得知一句话中一个词在整个语境中的含义。我们先把这一句话分成好多词（token），每个词都有自己的特征。我的目的是得到第i个词和其他词的关联程度。",
+      "target": "n14",
+      "targetTurn": 6,
+      "rank": 5,
+      "score": 0.7103723422267134,
+      "bestTurn": 8
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "不说总体目的，先说局部目的。我应该如何查询这个词和其他词的关系？我可以把两个词的向量内积，看大小，做排序，最后从上往下就是相似度从高到低",
+      "target": "n18",
+      "targetTurn": 8,
+      "rank": 1,
+      "score": 0.7022160761027637,
+      "bestTurn": 8
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "每个词一开始都有q k v，分别表示：我找别人的时候找什么，别人找我的时候找什么，我自己有什么含义。这是它根据一个自己的向量x乘以矩阵Q K V得到的。",
+      "target": "n20",
+      "targetTurn": 9,
+      "rank": 13,
+      "score": 0.6560506104833392,
+      "bestTurn": 10
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "优化模型的目的，就是优化每个词自己的x和QKV矩阵",
+      "target": "n22",
+      "targetTurn": 10,
+      "rank": 4,
+      "score": 0.6407672267199707,
+      "bestTurn": 1
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "e(w)是词表中的向量，pi是位置向量，他们加起来表示了这个词是什么内容以及在句子中是什么位置",
+      "target": "n24",
+      "targetTurn": 11,
+      "rank": 8,
+      "score": 0.6324115450595633,
+      "bestTurn": 12
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "反正xi涵盖了这个词以及它的位置。在读到一句话后，我把他们拆成那么多token，算好所有的sij，此时我得知了每个词应该对其他词的重视程度",
+      "target": "n26",
+      "targetTurn": 12,
+      "rank": 13,
+      "score": 0.6720690455579709,
+      "bestTurn": 8
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "我得到了A，表示每个词应该对每个词的分配的权重。然后我将它乘以V。这一步的含义是什么",
+      "target": "n28",
+      "targetTurn": 13,
+      "rank": 3,
+      "score": 0.6920402148818396,
+      "bestTurn": 8
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "这里的V是指xi*V后组成的矩阵，还是就是原始的V",
+      "target": "n28",
+      "targetTurn": 13,
+      "rank": 18,
+      "score": 0.572473119732343,
+      "bestTurn": 10
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "我将A*V，得到Y。Y就表示了，每一个词实际从其他词获取了多少信息",
+      "target": "n32",
+      "targetTurn": 15,
+      "rank": 18,
+      "score": 0.516639964085806,
+      "bestTurn": 10
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "一个token的x向量包含了许多机器学习得到的特征。比如我可以说x1是“可食用”，x2是“地点”等。乘以WQ WK WV，按照符合正常讲话逻辑的思维来说，就是 我要给别人展现可食用的程度 我提供给别人我可使用的程度 我自己可食用的程度",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 9,
+      "score": 0.7105723781203548,
+      "bestTurn": 18
+    },
+    {
+      "method": "bge-chunk",
+      "set": "learning",
+      "question": "那对于 苹果 这个词，它的可食用程度那一栏经过WQ可以引申出什么含义",
+      "target": "n36",
+      "targetTurn": 17,
+      "rank": 4,
+      "score": 0.6165939782529462,
+      "bestTurn": 18
+    },
+    {
+      "method": "bge-chunk",
+      "set": "paraphrase",
+      "question": "模型在阅读一段话时，怎么决定该重点参考哪几个字？",
+      "target": "n3",
+      "targetTurn": 1,
+      "rank": 2,
+      "score": 0.5786770847274896,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge-chunk",
+      "set": "paraphrase",
+      "question": "两个长度不同的箭头放在一起点乘出来的那个数，能说明方向一致吗？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 1,
+      "score": 0.5917400321172885,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge-chunk",
+      "set": "paraphrase",
+      "question": "词的编号查出来的那串数字，跟它出现的位置怎么合到一起？",
+      "target": "n26",
+      "targetTurn": 12,
+      "rank": 8,
+      "score": 0.5716569806072097,
+      "bestTurn": 4
+    },
+    {
+      "method": "bge-chunk",
+      "set": "paraphrase",
+      "question": "把某一栏属性乘上一个可训练矩阵之后，那一栏还单独存在吗？",
+      "target": "n38",
+      "targetTurn": 18,
+      "rank": 7,
+      "score": 0.5447903367982272,
+      "bestTurn": 10
+    },
+    {
+      "method": "bge-chunk",
+      "set": "paraphrase",
+      "question": "把配比套到内容上，得到的到底是数量，还是一个全新的东西？",
+      "target": "n30",
+      "targetTurn": 14,
+      "rank": 4,
+      "score": 0.5476562559398216,
+      "bestTurn": 16
+    },
+    {
+      "method": "bge-chunk",
+      "set": "paraphrase",
+      "question": "每个位置最后拿到的那个向量，长度变了吗，还是只有内容变了？",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 2,
+      "score": 0.5453180795792342,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge-chunk",
+      "set": "paraphrase",
+      "question": "为什么说内积可以表达相似度？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 1,
+      "score": 0.5507775040825676,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge-chunk",
+      "set": "paraphrase",
+      "question": "为什么说内积可以表达相似度？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 1,
+      "score": 0.5507775040825676,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "模型是怎么决定该关注哪些位置的？",
+      "target": "n3",
+      "targetTurn": 1,
+      "rank": 1,
+      "score": 0.5201615181279236,
+      "bestTurn": 1
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "两个向量方向一致但长度不同时，用点积判断相似可靠吗？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 1,
+      "score": 0.6188273555094971,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "词向量和位置向量相加之后，还能分辨每一维代表什么吗？",
+      "target": "n26",
+      "targetTurn": 12,
+      "rank": 1,
+      "score": 0.5961309327695185,
+      "bestTurn": 12
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "三个参数矩阵为什么能在所有位置之间共享？",
+      "target": "n22",
+      "targetTurn": 10,
+      "rank": 1,
+      "score": 0.5499380567151729,
+      "bestTurn": 10
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "权重矩阵的一行加起来等于 1 意味着什么？",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 12,
+      "score": 0.509005110471485,
+      "bestTurn": 8
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "输入句子变长时，中间那些矩阵的形状怎么变？",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 11,
+      "score": 0.510944894414729,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "softmax 之前的分数为什么说没有统一单位？",
+      "target": "n28",
+      "targetTurn": 13,
+      "rank": 1,
+      "score": 0.6130358440232526,
+      "bestTurn": 13
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "位置信息和词义信息在向量里是叠加还是拼接？",
+      "target": "n26",
+      "targetTurn": 12,
+      "rank": 1,
+      "score": 0.5836662980269157,
+      "bestTurn": 12
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "哪一个矩阵是给别人看的标签？",
+      "target": "n22",
+      "targetTurn": 10,
+      "rank": 1,
+      "score": 0.48446992363919567,
+      "bestTurn": 10
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "输出向量的维度会随句子长度变化吗？",
+      "target": "n34",
+      "targetTurn": 16,
+      "rank": 1,
+      "score": 0.5651186326974971,
+      "bestTurn": 16
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "训练的时候到底在调整哪些数值？",
+      "target": "n24",
+      "targetTurn": 11,
+      "rank": 1,
+      "score": 0.5411876865942281,
+      "bestTurn": 11
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "被优化的是输入本身还是可训练的参数？",
+      "target": "n24",
+      "targetTurn": 11,
+      "rank": 1,
+      "score": 0.6117535163279476,
+      "bestTurn": 11
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "两个词的匹配强度是怎么算出来的？",
+      "target": "n20",
+      "targetTurn": 9,
+      "rank": 9,
+      "score": 0.5727344764650409,
+      "bestTurn": 10
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "为什么内积会偏好模长大的向量？",
+      "target": "n16",
+      "targetTurn": 7,
+      "rank": 1,
+      "score": 0.5221382181260444,
+      "bestTurn": 7
+    },
+    {
+      "method": "bge-chunk",
+      "set": "jump",
+      "question": "公式里的 V 是原始输入还是变换之后的？",
+      "target": "n32",
+      "targetTurn": 15,
+      "rank": 2,
+      "score": 0.5669960870007559,
+      "bestTurn": 10
+    }
+  ]
+}
