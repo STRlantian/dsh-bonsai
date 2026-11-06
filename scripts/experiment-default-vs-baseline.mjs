@@ -1,19 +1,10 @@
 #!/usr/bin/env node
 /**
- * Offline cost comparison: default preset vs no plugin (full context).
- *
- * The conversation is synthetic but the counts are real: every message is measured with the
- * installed DeepSeek v4 tokenizer. Each turn has a user question, an assistant answer, and a
- * tool result; the default preset also injects a retrieval hint + candidate block (~300 tokens)
- * per turn. The default fold rule is applied after each turn: block >= 40,000 tokens, block >=
- * 5x the keep window, keep the last 3 turns, at least 3 turns between folds.
- *
- * Cache model: input hit = 0.02, input miss = 1.0 per million prompt tokens. A fold invalidates
- * the prefix at the first folded turn, so everything from that point is a miss; without a fold,
- * the previous prompt is a hit and only the newly appended messages miss. Output tokens are not
- * included.
- *
- * Usage: node scripts/experiment-default-vs-baseline.mjs [turns] [toolTokens]
+ * Offline cost comparison: one preset vs no plugin (full context). The default invocation runs
+ * the default preset; pass `aggressive` as the fourth argument for the aggressive preset with
+ * the same (empty) tool-deny list, so the comparison isolates folding.
+...
+ * Usage: node scripts/experiment-default-vs-baseline.mjs [turns] [toolTokens] [default|aggressive]
  */
 import { writeFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -21,14 +12,21 @@ import { loadTokenizer } from './tokenizer-lib.mjs'
 
 const TURNS = Math.max(4, Number(process.argv[2] ?? 60))
 const TOOL_TOKENS = Math.max(0, Number(process.argv[3] ?? 3500))
+const PRESET_NAME = process.argv[4] === 'aggressive' ? 'aggressive' : 'default'
+const PRESETS = {
+  default: { foldAbove: 40_000, keep: 3, ratio: 5, cadence: 3 },
+  aggressive: { foldAbove: 10_000, keep: 1, ratio: 5, cadence: 3 },
+}
+const PRESET = PRESETS[PRESET_NAME]
 const SYSTEM_TOKENS = 10_453
 const HIT_PRICE = 0.02
 const MISS_PRICE = 1
 const PRICE_PER = 1_000_000
-const FOLD_ABOVE = 40_000
-const KEEP = 3
-const RATIO = 5
-const CADENCE = 3
+const FOLD_ABOVE = PRESET.foldAbove
+const KEEP = PRESET.keep
+const RATIO = PRESET.ratio
+const CADENCE = PRESET.cadence
+const FILE_PREFIX = PRESET_NAME === 'default' ? 'default-vs-baseline' : `${PRESET_NAME}-vs-baseline`
 
 const tokenizer = loadTokenizer('C:/Users/ASUS/.dsh/token-tree/deepseek_v4_tokenizer/tokenizer.json')
 const count = text => tokenizer.count(text)
@@ -146,8 +144,8 @@ const csv = [
   ].join(',')),
 ].join('\n') + '\n'
 const outDir = fileURLToPath(new URL('../docs/experiments/', import.meta.url))
-writeFileSync(`${outDir}default-vs-baseline.csv`, csv)
-writeFileSync(`${outDir}default-vs-baseline.json`, JSON.stringify({
+writeFileSync(`${outDir}${FILE_PREFIX}.csv`, csv)
+writeFileSync(`${outDir}${FILE_PREFIX}.json`, JSON.stringify({
   generatedAt: new Date().toISOString(),
   assumptions: {
     turns: TURNS,
@@ -172,29 +170,30 @@ writeFileSync(`${outDir}default-vs-baseline.json`, JSON.stringify({
 }, undefined, 2) + '\n')
 
 const md = [
-  '# Default preset vs full context',
+  '# ' + (PRESET_NAME === 'aggressive' ? 'Aggressive preset' : 'Default preset') + ' vs full context',
   '',
-  `Generated ${new Date().toISOString()} by \`scripts/experiment-default-vs-baseline.mjs ${TURNS} ${TOOL_TOKENS}\`.`,
+  `Generated ${new Date().toISOString()} by \`scripts/experiment-default-vs-baseline.mjs ${TURNS} ${TOOL_TOKENS} ${PRESET_NAME}\`.`,
   '',
   '## Assumptions',
   '',
   `- Synthetic ${TURNS}-turn conversation; every user/assistant/tool message is counted with the real DeepSeek v4 tokenizer.`,
   `- System prompt + tool schemas: ${SYSTEM_TOKENS.toLocaleString()} tokens (constant; all tools visible).`,
-  `- Each turn: ~120 user + ~650 assistant + ${TOOL_TOKENS.toLocaleString()} tool-result tokens; the default preset adds ~300 tokens of hint/candidate overhead per turn.`,
-  `- Default preset: fold when the block (turns older than the last ${KEEP}) is >= ${FOLD_ABOVE.toLocaleString()} tokens and >= ${RATIO}x the kept window, at most every ${CADENCE} turns.`,
+  `- Each turn: ~120 user + ~650 assistant + ${TOOL_TOKENS.toLocaleString()} tool-result tokens; the preset adds ~300 tokens of hint/candidate overhead per turn.`,
+  `- ${PRESET_NAME === 'aggressive' ? 'Aggressive' : 'Default'} preset, but with \`toolDeny: []\` so the number of hidden tools is zero in both presets.`,
+  `- Fold rule: block (turns older than the last ${KEEP}) >= ${FOLD_ABOVE.toLocaleString()} tokens and >= ${RATIO}x the kept window, at most every ${CADENCE} turns.`,
   '- Cache model: prefix cache only. A fold invalidates the prefix at the first folded turn. Without a fold, the previous prompt is a hit and only newly appended messages miss.',
   `- Prices: hit ${HIT_PRICE}/M, miss ${MISS_PRICE}/M prompt tokens; output tokens are excluded.`,
   '',
   '## Totals',
   '',
-  '| | baseline | default preset | change |',
+  `| | baseline | ${PRESET_NAME} preset | change |`,
   '|---|---:|---:|---:|',
   `| prompt tokens | ${sum('bPrompt').toLocaleString()} | ${sum('pPrompt').toLocaleString()} | ${pct(sum('pPrompt'), sum('bPrompt'))} |`,
   `| hit tokens | ${sum('bHit').toLocaleString()} | ${sum('pHit').toLocaleString()} | ${pct(sum('pHit'), sum('bHit'))} |`,
   `| miss tokens | ${sum('bMiss').toLocaleString()} | ${sum('pMiss').toLocaleString()} | ${pct(sum('pMiss'), sum('bMiss'))} |`,
   `| cost (USD) | ${money(baselineCumulative)} | ${money(pluginCumulative)} | ${money(baselineCumulative - pluginCumulative)} (${pct(pluginCumulative, baselineCumulative)}) |`,
   '',
-  `Folds occurred at turns ${rows.filter(row => row.n > 1 && row.pMiss > 10_000).map(row => row.n).join(', ')}.`,
+  `Folds affected the prompt at turns ${rows.filter((row, index) => index > 0 && row.pPrompt < rows[index - 1].pPrompt).map(row => row.n).join(', ')}.`,
   `First cumulative break-even: turn ${(() => { let c = 0; for (const row of rows) { c += row.bCost - row.pCost; if (c > 0) return row.n } return 'not reached' })()}.`,
   `Last prompt: ${rows.at(-1).bPrompt.toLocaleString()} -> ${rows.at(-1).pPrompt.toLocaleString()} tokens.`,
   '',
@@ -202,14 +201,14 @@ const md = [
   '',
   '| turn | base prompt | base hit | base miss | base $ | plugin prompt | plugin hit | plugin miss | plugin $ | base - plugin | fold |',
   '|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|:---:|',
-  ...rows.map(row => `| ${row.n} | ${row.bPrompt} | ${row.bHit} | ${row.bMiss} | ${row.bCost.toFixed(4)} | ${row.pPrompt} | ${row.pHit} | ${row.pMiss} | ${row.pCost.toFixed(4)} | ${(row.bCost - row.pCost).toFixed(4)} | ${row.n > 1 && row.pMiss > 10_000 ? 'yes' : ''} |`),
+  ...rows.map((row, index) => `| ${row.n} | ${row.bPrompt} | ${row.bHit} | ${row.bMiss} | ${row.bCost.toFixed(4)} | ${row.pPrompt} | ${row.pHit} | ${row.pMiss} | ${row.pCost.toFixed(4)} | ${(row.bCost - row.pCost).toFixed(4)} | ${index > 0 && row.pPrompt < rows[index - 1].pPrompt ? 'yes' : ''} |`),
   '',
   '`yes` marks the turn where a fold was just applied; the big miss is the re-priced prompt suffix.',
   '',
 ].join('\n') + '\n'
-writeFileSync(`${outDir}default-vs-baseline.md`, md)
+writeFileSync(`${outDir}${FILE_PREFIX}.md`, md)
 
-console.log(`turns=${TURNS}  tool=${TOOL_TOKENS} tok  system+tools=${SYSTEM_TOKENS} tok  default preset (40000 / 5x / keep 3 / cadence 3)`)
+console.log(`turns=${TURNS}  tool=${TOOL_TOKENS} tok  system+tools=${SYSTEM_TOKENS} tok  ${PRESET_NAME} preset (${FOLD_ABOVE} / ${RATIO}x / keep ${KEEP} / cadence ${CADENCE})`)
 console.log(`folds=${folds}  baseline prompt@last=${rows.at(-1).bPrompt}  plugin prompt@last=${rows.at(-1).pPrompt}`)
 console.log(`hit price=${HIT_PRICE}/M  miss price=${MISS_PRICE}/M  (USD per million prompt tokens; output excluded)\n`)
 console.log('turn | base prompt | base hit | base miss | base cost | plugin prompt | plugin hit | plugin miss | plugin cost | cost delta')

@@ -1,13 +1,14 @@
 # Default preset vs full context
 
-Generated 2026-11-06T03:28:13.051Z by `scripts/experiment-default-vs-baseline.mjs 60 3500`.
+Generated 2026-11-06T03:33:02.014Z by `scripts/experiment-default-vs-baseline.mjs 60 3500 default`.
 
 ## Assumptions
 
 - Synthetic 60-turn conversation; every user/assistant/tool message is counted with the real DeepSeek v4 tokenizer.
 - System prompt + tool schemas: 10,453 tokens (constant; all tools visible).
-- Each turn: ~120 user + ~650 assistant + 3,500 tool-result tokens; the default preset adds ~300 tokens of hint/candidate overhead per turn.
-- Default preset: fold when the block (turns older than the last 3) is >= 40,000 tokens and >= 5x the kept window, at most every 3 turns.
+- Each turn: ~120 user + ~650 assistant + 3,500 tool-result tokens; the preset adds ~300 tokens of hint/candidate overhead per turn.
+- Default preset, but with `toolDeny: []` so the number of hidden tools is zero in both presets.
+- Fold rule: block (turns older than the last 3) >= 40,000 tokens and >= 5x the kept window, at most every 3 turns.
 - Cache model: prefix cache only. A fold invalidates the prefix at the first folded turn. Without a fold, the previous prompt is a hit and only newly appended messages miss.
 - Prices: hit 0.02/M, miss 1/M prompt tokens; output tokens are excluded.
 
@@ -20,7 +21,7 @@ Generated 2026-11-06T03:28:13.051Z by `scripts/experiment-default-vs-baseline.mj
 | miss tokens | 268,093 | 334,540 | 24.8% |
 | cost (USD) | 0.4324 | 0.4028 | 0.0296 (-6.8%) |
 
-Folds occurred at turns 20, 35, 50.
+Folds affected the prompt at turns 20, 35, 50.
 First cumulative break-even: turn 45.
 Last prompt: 268,093 -> 82,738 tokens.
 
