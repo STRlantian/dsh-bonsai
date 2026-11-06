@@ -777,6 +777,7 @@ test('the settings panel opens on the global scope with a tab switch', { timeout
   const rowNodes = [...client.document.querySelectorAll('.twt-srow')]
   const disclosure = client.document.querySelector('.twt-advanced')
   assert.ok(disclosure !== null, 'advanced disclosure exists')
+  assert.ok(disclosure.querySelector('.twt-advanced-grid') !== null, 'advanced rows use the explicit two-column wrapper')
   assert.equal(disclosure.hasAttribute('open'), false, 'advanced is closed on open')
   const visibleRows = rowNodes
     .filter(node => node.closest('.twt-advanced') === null)

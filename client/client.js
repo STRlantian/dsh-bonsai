@@ -623,9 +623,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-scontrol .twt-action{font-size:11px;padding:2px 8px}',
     '.twt-scontrol .twt-select{font-size:11px;padding:3px 6px}',
     '.twt-scontrol input[type="number"]{font-size:11px;padding:3px 5px;border-radius:6px;border:1px solid var(--twt-border);background:var(--twt-surface);color:var(--twt-text);color-scheme:light dark}',
-    '.twt-advanced{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px}',
-    '.twt-advanced>summary{grid-column:1/-1}',
-    '@media (max-width:620px){.twt-settings,.twt-advanced{grid-template-columns:1fr;width:100%}.twt-preset{flex-basis:100%}}',
+    '.twt-advanced{display:block}',
+    '.twt-advanced-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px;margin-top:6px}',
+    '@media (max-width:620px){.twt-settings,.twt-advanced-grid{grid-template-columns:1fr;width:100%}.twt-preset{flex-basis:100%}}',
     // Embedded, not floating: the dock stays a normal flex item of the composer row, so
     // the transcript keeps its own space. Expanding only adds breathing room on both
     // sides, which pushes the tok/s, cache-hit and context widgets away from the graph
@@ -1702,6 +1702,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
 
       h('details', { className: 'twt-advanced' },
         h('summary', null, t('高级（一般不用改）')),
+        h('div', { className: 'twt-advanced-grid' },
         numericRow({
           key: 'foldAboveTokens',
           advanced: true,
@@ -1785,7 +1786,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             h('option', { value: 'zh' }, t('中文')),
             h('option', { value: 'en' }, t('English'))),
         }),
-        advancedRowSink),
+        advancedRowSink)),
       note === '' ? null : h('p', { className: 'twt-flash' }, note))
   } else {
     settingsPanel = h('div', { className: 'twt-settings' }, h('p', { className: 'twt-note' }, t('读取设置中…')), note === '' ? null : h('p', { className: 'twt-flash' }, note))
