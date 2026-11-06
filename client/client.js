@@ -535,10 +535,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-tool-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Consolas,monospace}',
     '.twt-tool-size{font-size:10px;opacity:.6}',
     '.twt-modal-foot{display:flex;align-items:center;gap:8px}',
-    '.twt-presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:8px 10px;border:1px solid var(--twt-border);border-radius:10px;background:var(--twt-hover)}',
-    '@media (max-width:620px){.twt-presets{grid-template-columns:1fr}}',
-    '.twt-presets>.twt-cardhead,.twt-presets>.twt-hint{grid-column:1/-1}',
-    '.twt-preset{display:flex;flex-direction:column;gap:4px;min-width:0}',
+    '.twt-presets{display:flex;flex-direction:column;gap:8px;padding:8px 10px;border:1px solid var(--twt-border);border-radius:10px;background:var(--twt-hover)}',
+    '.twt-preset-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}',
+    '.twt-preset{display:flex;flex:0 1 calc(50% - 4px);flex-direction:column;gap:4px;min-width:0}',
     '.twt-preset .twt-action{width:100%;justify-content:center}',
     '.twt-preset-hint{font-size:10px;line-height:1.35;opacity:.6}',
     '.twt-togglerow{display:flex;align-items:center;gap:6px;cursor:pointer;padding:2px 0 6px;border-bottom:1px solid var(--twt-border);margin-bottom:2px}',
@@ -594,7 +593,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-dockactions-vertical{flex-direction:column;align-items:stretch}',
     '.twt-dockactions-vertical .twt-action{width:100%;text-align:center}',
     // Settings tab: compact cards in two columns, not one full-width row per switch.
-    '.twt-settings{flex:1;min-height:0;overflow:auto;padding:8px 10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:6px 8px;align-content:start}',
+    '.twt-settings{flex:1;min-height:0;overflow:auto;width:min(100%,760px);margin:0 auto;padding:8px 10px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px;align-content:start}',
     '.twt-settings>.twt-tabs,.twt-settings>.twt-scopehint,.twt-settings>.twt-presets,.twt-settings>.twt-advanced,.twt-settings>.twt-flash,.twt-settings>.twt-note{grid-column:1/-1}',
     '.twt-srow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:4px 8px;padding:6px 8px;border-radius:8px;',
     'border:1px solid var(--twt-border);background:rgba(255,255,255,.02);transition:background .12s ease}',
@@ -624,8 +623,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-scontrol .twt-action{font-size:11px;padding:2px 8px}',
     '.twt-scontrol .twt-select{font-size:11px;padding:3px 6px}',
     '.twt-scontrol input[type="number"]{font-size:11px;padding:3px 5px;border-radius:6px;border:1px solid var(--twt-border);background:var(--twt-surface);color:var(--twt-text);color-scheme:light dark}',
-    '.twt-advanced{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:6px 8px}',
+    '.twt-advanced{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 8px}',
     '.twt-advanced>summary{grid-column:1/-1}',
+    '@media (max-width:620px){.twt-settings,.twt-advanced{grid-template-columns:1fr;width:100%}.twt-preset{flex-basis:100%}}',
     // Embedded, not floating: the dock stays a normal flex item of the composer row, so
     // the transcript keeps its own space. Expanding only adds breathing room on both
     // sides, which pushes the tok/s, cache-hit and context widgets away from the graph
@@ -1653,16 +1653,17 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         h('div', { className: 'twt-cardhead' },
           h('span', { className: 'twt-dtitle' }, t('预设')),
           h('span', { className: 'twt-hint' }, t('整套参数，一次改完'))),
-        PRESET_LIST.map(function (preset) {
-          return h('div', { key: preset.id, className: 'twt-preset' },
-            h('button', {
-              className: 'twt-action',
-              disabled: busy,
-              title: t(preset.hint),
-              onClick: function () { applyPreset(preset.id) },
-            }, t(preset.label)),
-            h('span', { className: 'twt-preset-hint' }, t(preset.hint)))
-        }),
+        h('div', { className: 'twt-preset-grid' },
+          PRESET_LIST.map(function (preset) {
+            return h('div', { key: preset.id, className: 'twt-preset' },
+              h('button', {
+                className: 'twt-action',
+                disabled: busy,
+                title: t(preset.hint),
+                onClick: function () { applyPreset(preset.id) },
+              }, t(preset.label)),
+              h('span', { className: 'twt-preset-hint' }, t(preset.hint)))
+          })),
         h('span', { className: 'twt-hint' },
           settingsScopeId === null
             ? t('应用到所有对话，随时可以再点另一个')

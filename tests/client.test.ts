@@ -503,6 +503,7 @@ test('the settings panel offers five intent-named presets', { timeout: 30000 }, 
   await client.click('设置')
   const bar = client.document.querySelector('.twt-presets')
   assert.ok(bar !== null, 'the preset bar is present')
+  assert.ok(bar.querySelector('.twt-preset-grid') !== null, 'presets use the two-column grid wrapper')
   const labels = [...bar.querySelectorAll('button')].map(button => button.textContent ?? '')
   assert.deepEqual(labels, ['只建树', '日常默认', '写代码', '保上下文', '极省'], 'five presets, in order')
   const hints = [...bar.querySelectorAll('.twt-preset-hint')].map(node => node.textContent ?? '')
