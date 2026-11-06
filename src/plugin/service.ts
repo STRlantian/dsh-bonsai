@@ -12,6 +12,12 @@ function advanceSeq(state: { lastSeq: number }, seq: number | undefined): void {
 }
 
 /**
+ * Node kinds that are actually replayed to the model by the host. Reflections, notes and goals
+ * are plugin-side bookkeeping and must not inflate prompt-size decisions.
+ */
+const MODEL_VISIBLE_KINDS = new Set(['question', 'answer', 'tool_result'])
+
+/**
  * The session-scoped memory service.
  *
  * One `TokenTreeService` instance holds one tree per session. It is the only
@@ -37,7 +43,7 @@ import { loadTokenizerFile } from '../core/tokenizer.ts'
 import { TokenRatio } from '../core/ratio.ts'
 import { BillingFit, classCounts } from '../core/billing.ts'
 import { resolveTokenizer, defaultTokenizerDir, discoverTokenizers } from './tokenizer-select.ts'
-import { presetOf } from './presets.ts'
+import { presetOf, PRESET_KEYS } from './presets.ts'
 import type { Tokenize } from '../core/tokenizer.ts'
 import { contentFeatures, embedText, termCounts } from '../core/embedding.ts'
 import type { RetrieveOptions, RetrieveResult, SelectedNode } from '../core/retrieve.ts'
@@ -52,6 +58,7 @@ import { asMessage, buildInjectedMessage, isInjected, reasoningOfContent, superv
 import type { Classification, Constraint } from './requirements.ts'
 import { activeConstraints, applyConstraint, applyRuleEdit, classifyTurn } from './requirements.ts'
 import { FileRegion, digestOf, shortLabel, type FileRegionMode } from './file-region.ts'
+import { readTrailingMarkers } from './markers.ts'
 import { anaphoraScore } from '../core/anaphora.ts'
 import { excerptFor, reductionNote, referentLine } from '../core/excerpt.ts'
 import type { RuleEdit } from './requirements.ts'
@@ -120,6 +127,8 @@ export interface SessionState {
   applied: WeakSet<object>
   /** Observations of the current turn, oldest first. */
   observations: Observation[]
+  /** Whether the soft cap has already reported that it cannot prune a linear session. */
+  pruneWarned?: boolean
   /** Tool names by call id, filled on `tool/call`. */
   readonly callNames: Map<string, string>
   /** Argument renderings by call id, used to detect an identical retry. */
@@ -401,6 +410,7 @@ export class TokenTreeService {
     retrievalHint: boolean
     autoReflect: boolean
     hintMinNodes: number
+    hintAboveTokens: number
     admitRelevance: number
     summaryMatch: boolean
     compactionIndex: boolean
@@ -426,6 +436,12 @@ export class TokenTreeService {
   attachGate: string
   /** Whether the model is asked for an aspect summary. */
   attachSummary: boolean
+  /** Interface language for this scope. */
+  locale: string
+  /** Tokenizer generation/name; the tokenizer itself is process-global. */
+  tokenizerVersion: string
+  /** Tool names hidden from this scope. */
+  toolDeny: string[]
   } {
     const overrides = sessionId === undefined
       ? this.settings?.all() ?? {}
@@ -435,6 +451,7 @@ export class TokenTreeService {
       retrievalHint: overrides.retrievalHint ?? this.config.retrievalHint,
       autoReflect: overrides.autoReflect ?? this.config.autoReflect,
       hintMinNodes: overrides.hintMinNodes ?? this.config.hintMinNodes,
+      hintAboveTokens: overrides.hintAboveTokens ?? this.config.hintAboveTokens,
       admitRelevance: overrides.admitRelevance ?? this.config.weights.admitRelevance,
       summaryMatch: overrides.summaryMatch ?? this.config.weights.summaryMatch,
       compactionIndex: overrides.compactionIndex ?? this.config.compactionIndex,
@@ -451,6 +468,11 @@ export class TokenTreeService {
       attachSummary: overrides.attachSummary ?? this.config.attachSummary,
       attachChoices: overrides.attachChoices ?? this.config.attachChoices,
       mandatoryContext: overrides.mandatoryContext ?? this.config.mandatoryContext,
+      locale: overrides.locale ?? 'auto',
+      // The tokenizer is a process-wide cache; a per-session choice cannot be honoured by the
+      // current counter, so the panel shows the global choice rather than a value that is inert.
+      tokenizerVersion: this.settings?.all().tokenizerVersion ?? this.config.tokenizerVersion,
+      toolDeny: this.toolDeny(sessionId),
     }
   }
 
@@ -463,6 +485,10 @@ export class TokenTreeService {
     effective: ReturnType<TokenTreeService['effective']>
     overrides: Record<string, boolean | number | string | string[]>
   } {
+    // The tokenizer is a process-wide cache; a per-session choice would be silently inert.
+    if (sessionId !== undefined && Object.prototype.hasOwnProperty.call(patch, 'tokenizerVersion')) {
+      throw new Error('tokenizerVersion is a global setting; switch to 全局设置 to change it')
+    }
     // With a session id the patch lands on that conversation only, and falls back to the global
     // value when a key is cleared.
     const overrides = this.settings === undefined
@@ -488,10 +514,16 @@ export class TokenTreeService {
     const preset = presetOf(name)
     if (preset === undefined) return undefined
     if (this.settings === undefined) return undefined
+    // A preset is a whole bundle: clear every key it owns first, then write its values. Otherwise
+    // switching from the aggressive bundle to the conservative one leaves the old fileRegion,
+    // cadence, missing candidate block, and so on behind.
+    const patch: Record<string, unknown> = {}
+    for (const key of PRESET_KEYS) patch[key] = null
+    Object.assign(patch, preset.settings)
     // With a session id the bundle lands on that conversation only, matching the scope the panel is
     // editing; without one it is the global bundle.
-    if (sessionId === undefined) this.settings.apply(preset.settings)
-    else this.settings.applyFor(sessionId, preset.settings)
+    if (sessionId === undefined) this.settings.apply(patch)
+    else this.settings.applyFor(sessionId, patch)
     this.logger.info(`token-tree: applied preset ${preset.name}${sessionId === undefined ? '' : ' to ' + sessionId}`)
     return { preset: preset.name, effective: this.effective(sessionId) }
   }
@@ -514,21 +546,12 @@ export class TokenTreeService {
       seen.add(cursor)
       const node = tree.nodes.get(cursor)
       if (node === undefined) break
-      total += node.tokens
+      if (MODEL_VISIBLE_KINDS.has(node.kind)) total += node.tokens
       cursor = node.parentId
     }
     return total
   }
 
-  /**
-   * Model-visible size of the whole session, across every branch.
-   *
-   * This is the number folding and compaction should compare against a threshold: the next
-   * request carries the conversation, not just the path to the current node. Hidden nodes are
-   * included, because they still sit in the log the host replays.
-   * @param sessionId - session identity.
-   * @returns Sum of every node's tokens.
-   */
   /**
    * The turn a surface event belongs to.
    * @param sessionId - session identity.
@@ -539,6 +562,16 @@ export class TokenTreeService {
     return this.seqTurns.get(sessionId)?.get(seq)
   }
 
+  /** Record the local turn that owns one surface event. */
+  private rememberSeqTurn(state: SessionState, seq: number, turn: number): void {
+    let map = this.seqTurns.get(state.sessionId)
+    if (map === undefined) {
+      map = new Map()
+      this.seqTurns.set(state.sessionId, map)
+    }
+    map.set(seq, turn)
+  }
+
   /**
    * Measured tokens per turn, for the fold economics.
    * @param sessionId - session identity.
@@ -547,7 +580,7 @@ export class TokenTreeService {
   turnTokens(sessionId: string): Map<number, number> {
     const byTurn = new Map<number, number>()
     for (const node of this.stateOf(sessionId).tree.nodes.values()) {
-      if (node.kind === 'note') continue
+      if (!MODEL_VISIBLE_KINDS.has(node.kind)) continue
       const turn = node.metadata?.turn
       if (typeof turn !== 'number' || turn <= 0) continue
       byTurn.set(turn, (byTurn.get(turn) ?? 0) + node.tokens)
@@ -559,6 +592,7 @@ export class TokenTreeService {
   sessionTurn(sessionId: string): number {
     let turn = 0
     for (const node of this.stateOf(sessionId).tree.nodes.values()) {
+      if (!MODEL_VISIBLE_KINDS.has(node.kind)) continue
       const value = node.metadata?.turn
       if (typeof value === 'number' && value > turn) turn = value
     }
@@ -573,7 +607,7 @@ export class TokenTreeService {
   foldGap(sessionId: string): number {
     const last = this.lastFold.get(sessionId)
     if (last === undefined) return Number.POSITIVE_INFINITY
-    return this.sessionTurn(sessionId) - last
+    return Math.max(0, this.sessionTurn(sessionId) - last)
   }
 
   /**
@@ -585,11 +619,20 @@ export class TokenTreeService {
     this.lastFold.set(sessionId, turn)
   }
 
+  /**
+   * Model-visible size of the whole session, across every branch.
+   *
+   * This is the number folding should compare against a threshold: the next request carries the
+   * conversation, not just the path to the current node. Hidden nodes are included because the
+   * host still replays them; plugin-only reflections and notes are excluded.
+   * @param sessionId - session identity.
+   * @returns Sum of every model-visible node's tokens.
+   */
   historyTokens(sessionId: string): number {
     const tree = this.stateOf(sessionId).tree
     let total = 0
     for (const node of tree.nodes.values()) {
-      if (tree.hidden(node.id)) continue
+      if (!MODEL_VISIBLE_KINDS.has(node.kind)) continue
       total += node.tokens
     }
     return total
@@ -631,7 +674,7 @@ export class TokenTreeService {
       path: this.settings === undefined ? null : this.settings.path,
       overrides: (sessionId === undefined
         ? { ...(this.settings?.all() ?? {}) }
-        : { ...(this.settings?.allFor?.(sessionId) ?? this.settings?.all() ?? {}) }) as Record<string, boolean | number | string | string[]>,
+        : { ...(this.settings?.overridesFor?.(sessionId) ?? {}) }) as Record<string, boolean | number | string | string[]>,
       /** Overrides that are global, regardless of the scope being edited. */
       globalOverrides: { ...(this.settings?.all() ?? {}) } as Record<string, boolean | number | string | string[]>,
       sessions: (this.settings?.allSessions?.() ?? {}) as Record<string, Record<string, boolean | number | string | string[]>>,
@@ -657,6 +700,9 @@ export class TokenTreeService {
         attachChoices: this.config.attachChoices,
         mandatoryContext: this.config.mandatoryContext,
         hintAboveTokens: this.config.hintAboveTokens,
+        locale: 'auto',
+        tokenizerVersion: this.config.tokenizerVersion,
+        toolDeny: ['tree_mark', 'tree_focus'],
         tokenizerPath: this.config.tokenizerPath ?? null,
       },
       tokenizer: {
@@ -665,7 +711,7 @@ export class TokenTreeService {
         version: this.tokenizerVersion,
         name: this.tokenizerName,
         available: this.tokenizerAvailable,
-        requested: this.config.tokenizerVersion,
+        requested: this.tokenizerRequested(),
         // Options for the settings dropdown: whatever is installed, discovered by scanning
         // for `tokenizer.json`, plus the two always-available choices.
         choices: this.tokenizerChoices(),
@@ -674,7 +720,7 @@ export class TokenTreeService {
       billing: this.billingInfo(),
       budget: { factor: Number(this.safeBudget(1000) / 1000), conservative: this.config.conservativeBudgetRatio },
       // Interface language: `auto` means "let the client follow the system".
-      locale: this.settings?.all().locale ?? 'auto',
+      locale: this.effective(sessionId).locale,
       lastPrompt: this.lastPromptInfo(),
       lastDecision: this.lastDecisionInfo(),
       lastAssembly: this.assemblyInfo(),
@@ -689,7 +735,7 @@ export class TokenTreeService {
 
   /** Sessions currently tracked. */
   get sessionIds(): string[] {
-    return [...this.states.keys()]
+    return [...this.states.keys()].filter(id => id !== 'assembly')
   }
 
   /**
@@ -756,6 +802,9 @@ export class TokenTreeService {
    * @returns `true` when a tree was removed.
    */
   forget(sessionId: string): boolean {
+    this.seqTurns.delete(sessionId)
+    this.lastFold.delete(sessionId)
+    this.localTurns.delete(sessionId)
     return this.states.delete(sessionId)
   }
 
@@ -772,17 +821,8 @@ export class TokenTreeService {
   handleEvent(session: SessionLike, event: SessionEventLike): void {
     const state = this.stateOf(session.id)
     if (!state.backfilled) {
+      this.replayHistory(state, session)
       state.backfilled = true
-      const history = session.snapshotEvents?.() ?? []
-      if (history.length > 0) {
-        for (const entry of history) {
-          if (state.applied.has(entry)) continue
-          this.applyEvent(state, entry)
-          state.applied.add(entry)
-          advanceSeq(state, entry.seq)
-        }
-        this.logger.info(`token-tree: replayed ${history.length} event(s) for session ${session.id}`)
-      }
     }
     // A replay can hand back events the snapshot already contained. Applying one again duplicates
     // nodes (a doubled first turn), so a re-delivered envelope is dropped. Identity, not sequence:
@@ -800,11 +840,26 @@ export class TokenTreeService {
   backfillFromSession(session: SessionLike): void {
     const state = this.stateOf(session.id)
     if (state.backfilled) return
+    this.replayHistory(state, session)
     state.backfilled = true
+  }
+
+  /**
+   * Replay one session's durable history and re-apply the state that is not in the log.
+   *
+   * Both entry points (the first live event and the pre-step backfill) use this so a process
+   * cannot replay the tree without also replaying user edits, or mark itself backfilled before
+   * the repair succeeds.
+   * @param state - session state to fill.
+   * @param session - session whose snapshot is replayed.
+   */
+  private replayHistory(state: SessionState, session: SessionLike): void {
     const history = session.snapshotEvents?.() ?? []
     for (const entry of history) {
+      if (state.applied.has(entry)) continue
       this.applyEvent(state, entry)
-      state.lastSeq = Math.max(state.lastSeq, entry.seq)
+      state.applied.add(entry)
+      advanceSeq(state, entry.seq)
     }
     // A replayed log can reference nodes this instance never created (compaction
     // markers, pruned branches). Re-attach them so no branch is invisible.
@@ -832,7 +887,7 @@ export class TokenTreeService {
     const state = this.stateOf(sessionId)
     const before = state.constraints
     const after = applyRuleEdit(before, { ...edit, at: Date.now() })
-    if (after === before) return undefined
+    if (JSON.stringify(after) === JSON.stringify(before)) return undefined
     state.constraints = after
     this.remember({
       session: sessionId,
@@ -914,15 +969,15 @@ export class TokenTreeService {
   private applyEvent(state: SessionState, event: SessionEventLike): void {
     const data = objectField(event.data) ?? {}
     const at = numberField(event.time) ?? Date.now()
+    // A surface replacement is a view operation, not new conversation content. Ingesting it would
+    // create a second node for the same message (and reprice its edge); the host already owns the
+    // fold. Keep the original event as the tree's only source.
+    if (event.surfaceOp !== undefined && event.surfaceOp !== 'append') return
     // Remember the turn of every surface event: a host view may drop turn/start and omit the turn
     // field, and the fold planner still has to group messages by turn.
-    if (event.type === 'user/message' || event.type === 'assistant/message' || event.type === 'tool/result') {
-      const turn = numberField(data.turn) ?? state.turn
-      if (turn > 0 && typeof event.seq === 'number') {
-        let map = this.seqTurns.get(state.sessionId)
-        if (map === undefined) { map = new Map(); this.seqTurns.set(state.sessionId, map) }
-        map.set(event.seq, turn)
-      }
+    if (event.type === 'assistant/message' || event.type === 'tool/result') {
+      const turn = state.turn > 0 ? state.turn : numberField(data.turn) ?? 0
+      if (turn > 0 && typeof event.seq === 'number') this.rememberSeqTurn(state, event.seq, turn)
     }
     switch (event.type) {
       case 'compaction/start':
@@ -969,6 +1024,7 @@ export class TokenTreeService {
             state.turn = next
           }
         }
+        if (typeof event.seq === 'number' && state.turn > 0) this.rememberSeqTurn(state, event.seq, state.turn)
         this.ingestUserMessage(state, data, at)
         return
       }
@@ -1060,9 +1116,7 @@ export class TokenTreeService {
       )
       return
     }
-    const described = this.takeSummary(text)
-    const textWithoutSummary = described.text
-    const summary = described.summary ?? summarize(textWithoutSummary)
+    const summary = summarize(text)
     const embedding = embedText(text, this.config.embeddingDimension)
     const placement = this.pickQuestionParent(state, text, embedding)
     const parentId = placement.parentId
@@ -1379,7 +1433,8 @@ export class TokenTreeService {
     // The marker needs the pending question to move it; the answer then belongs to that question
     // even after it moved, so the id is kept until the node is created.
     const questionParent = state.pendingQuestionId
-    const text = this.applyAttachMarker(state, textOfContent(message.content))
+    const parsed = this.applyAttachMarker(state, textOfContent(message.content))
+    const text = parsed.text
     // `pendingQuestionId` stays set: `settleTurn` uses it to drop the question of an aborted turn.
     if (text.length === 0) return
     if (state.skipNextAnswer) {
@@ -1389,9 +1444,8 @@ export class TokenTreeService {
     }
     // The model's own summary of what the answer covers, when it wrote one; the heuristic is the
     // fallback. This is what the candidate list shows instead of the answer text.
-    const described = this.takeSummary(text)
-    const bodyText = described.text
-    const summary = described.summary ?? summarize(bodyText)
+    const bodyText = text
+    const summary = parsed.summary ?? summarize(bodyText)
     // The reasoning is measured and dropped: it costs tokens in every later request, but it is
     // neither what the user asked nor what the answer says. Storing the count keeps the
     // thresholds honest without keeping the text.
@@ -1444,6 +1498,7 @@ export class TokenTreeService {
     const node = state.tree.addNode({
       kind: 'tool_result',
       content,
+      tokens: this.countTokens(content),
       timestamp: at,
       metadata: {
         toolName,
@@ -1503,12 +1558,17 @@ export class TokenTreeService {
       const branches = tree.node(tree.rootId).children
         .filter(child => !keep.has(child) && tree.node(child).metadata.pinned !== true)
       if (branches.length === 0) {
-        this.logger.warn(`token-tree: session ${state.sessionId} reached ${tree.nodes.size} nodes and nothing is prunable`)
+        if (state.pruneWarned !== true) {
+          state.pruneWarned = true
+          this.logger.warn(`token-tree: session ${state.sessionId} reached ${tree.nodes.size} nodes; the current path has no inactive branch to prune`)
+        }
         return
       }
       branches.sort((left, right) => this.branchTimestamp(tree, left) - this.branchTimestamp(tree, right))
       const victim = branches[0]
-      const removed = tree.detach(victim)
+      // `detach` only unlinks; it leaves the nodes in the map and `repair()` re-attaches them.
+      // The cap is a memory bound, so actually remove the oldest inactive branch.
+      const removed = tree.remove(victim)
       this.logger.info(`token-tree: pruned ${removed.length} node(s) from branch ${victim} (session ${state.sessionId})`)
     }
   }
@@ -1539,9 +1599,9 @@ export class TokenTreeService {
     const state = this.stateOf(sessionId)
     // Both retrieval switches are adjustable at runtime, so the two modes can be
     // compared without editing the profile.
-    const overrides = this.settings?.all() ?? {}
-    const admitRelevance = options.admitRelevance ?? overrides.admitRelevance ?? this.config.weights.admitRelevance
-    const summaryMatch = options.summaryMatch ?? overrides.summaryMatch ?? this.config.weights.summaryMatch
+    const effective = this.effective(sessionId)
+    const admitRelevance = options.admitRelevance ?? effective.admitRelevance
+    const summaryMatch = options.summaryMatch ?? effective.summaryMatch
     const originId = options.originId ?? state.tree.currentId
     const budget = this.safeBudget(options.budgetTokens ?? this.config.weights.tokenBudget)
     const result = retrieveContext(state.tree, {
@@ -1557,7 +1617,7 @@ export class TokenTreeService {
     // under. Scoring alone returned that answer in only a third of measured turns - anaphora
     // ("这里的 V 是指...") shares no words with the text it refers to - so it is put in the
     // buffer unconditionally, ahead of the scored hits.
-    const final = !this.effective().mandatoryContext || options.query.trim().length === 0
+    const final = !this.effective(sessionId).mandatoryContext || options.query.trim().length === 0
       ? result
       : this.withMandatoryContext(state.tree, result, originId, budget, state, options.query)
     state.lastRetrieve = {
@@ -1596,7 +1656,11 @@ export class TokenTreeService {
     const seen = new Set(result.selected.map(entry => entry.nodeId))
     const stickyNodes = state.sticky
       .map(id => tree.nodes.get(id))
-      .filter((node): node is NonNullable<typeof node> => node !== undefined)
+      .filter((node): node is NonNullable<typeof node> => node !== undefined && !tree.hidden(node.id))
+    // A question placed by the new-topic gate under the root is not an anaphor, even when it is
+    // short and shares no content word with the previous answer.
+    const originNode = tree.nodes.get(originId)
+    const newTopic = originNode?.kind === 'question' && originNode.metadata.attached === 'topic'
     // A short question that shares no word of two characters or more with the referent is pointing
     // back at it ("它还有别的限制吗"). Counting single characters made almost everything "related",
     // so the chain was dropped on the second "它".
@@ -1609,7 +1673,7 @@ export class TokenTreeService {
       if (term.length >= 2 && referentTerms.has(term)) shared++
     }
     const shortQuestion = query.trim().length <= 24
-    const carryReferent = stickyNodes.length > 0 && shared === 0 && shortQuestion
+    const carryReferent = !newTopic && stickyNodes.length > 0 && shared === 0 && shortQuestion
 
     let cursor = tree.nodes.get(originId)
     if (cursor !== undefined && cursor.kind === 'question') {
@@ -1618,7 +1682,7 @@ export class TokenTreeService {
     const pair: NodeId[] = []
     let guard = 0
     while (cursor !== undefined && guard < 8) {
-      if ((cursor.kind === 'answer' || cursor.kind === 'question') && !pair.includes(cursor.id)) pair.push(cursor.id)
+      if ((cursor.kind === 'answer' || cursor.kind === 'question') && !tree.hidden(cursor.id) && !pair.includes(cursor.id)) pair.push(cursor.id)
       if (pair.length >= 2) break
       cursor = cursor.parentId === null ? undefined : tree.nodes.get(cursor.parentId)
       guard++
@@ -1629,7 +1693,7 @@ export class TokenTreeService {
     const mandatory: SelectedNode[] = []
     for (const id of chosen) {
       const node = tree.nodes.get(id)
-      if (node === undefined || seen.has(node.id)) continue
+      if (node === undefined || seen.has(node.id) || tree.hidden(node.id)) continue
       seen.add(node.id)
       const times = (state.served.get(node.id) ?? 0) + 1
       state.served.set(node.id, times)
@@ -1673,26 +1737,28 @@ export class TokenTreeService {
       })
     }
     if (mandatory.length === 0) return result
-    // Two short nodes can still exceed a small budget; keep the first and shrink the rest.
-    while (mandatory.length > 1
-      && mandatory.reduce((sum, entry) => sum + entry.tokens, 0) > budget) {
+    // A mandatory pair can exceed a small budget even when the scored hits fit. Drop or shorten
+    // from the tail; a single mandatory node is shortened to the budget or dropped, never passed
+    // through whole.
+    while (mandatory.reduce((sum, entry) => sum + entry.tokens, 0) > budget) {
       const last: SelectedNode | undefined = mandatory.pop()
       if (last === undefined) break
       const node = tree.nodes.get(last.nodeId)
       if (node === undefined) break
       const room = budget - mandatory.reduce((sum, entry) => sum + entry.tokens, 0)
-      if (room < 80) break
+      if (room < 20) continue
       const shortened = leadingSentences(node.content, room * 3)
+      const tokens = this.estimateTokens(shortened)
+      if (tokens > room) continue
       mandatory.push({
         nodeId: last.nodeId,
         kind: last.kind,
         weight: last.weight,
-        tokens: this.estimateTokens(shortened),
+        tokens,
         compressed: true,
         text: shortened,
         breakdown: last.breakdown,
       })
-      break
     }
     const kept: SelectedNode[] = []
     let used = mandatory.reduce((sum, entry) => sum + entry.tokens, 0)
@@ -1767,15 +1833,16 @@ export class TokenTreeService {
   }
 
   memoryBlock(sessionId: string, query: string, budgetTokens?: number): string | undefined {
-    const result = this.retrieve(sessionId, {
-      query,
-      budgetTokens: budgetTokens ?? this.config.injectBudgetTokens,
-    })
+    const total = budgetTokens ?? this.config.injectBudgetTokens
+    const result = this.retrieve(sessionId, { query, budgetTokens: total })
     const constraints = activeConstraints(this.stateOf(sessionId).constraints)
     const preamble = constraints.length === 0
       ? ''
       : `[token-tree constraints] still in force: ${constraints.map(entry => entry.text).join(' | ')}\n`
-    const fileSection = this.fileBlock(sessionId, query, Math.max(120, Math.floor((budgetTokens ?? this.config.injectBudgetTokens) / 2)))
+    // The tree half has already spent its budget; the file region only gets what is left after
+    // the constraints preamble, so the composed block cannot grow past the requested total.
+    const remaining = Math.max(0, total - result.tokensUsed - this.estimateTokens(preamble))
+    const fileSection = remaining <= 0 ? '' : this.fileBlock(sessionId, query, remaining)
     const treeBlock = result.selected.length === 0 ? '' : renderContextBlock(result)
     const body = [treeBlock, fileSection].filter(part => part !== '').join('\n\n')
     if (body === '') return preamble.length === 0 ? undefined : preamble.trimEnd()
@@ -1900,31 +1967,26 @@ export class TokenTreeService {
    * @returns The text without the marker.
    */
   /**
-   * Read the model's aspect summary, strip it, and return it for the node.
+   * Read trailing placement and summary markers, apply the placement, and return the clean text.
    *
-   * The summary is what the candidate list shows instead of the whole answer, so a follow-up about a
-   * side concept can see which answer introduced it.
+   * Only a marker on its own line at the very end is recognized; an answer that quotes the syntax
+   * keeps its example. Only an id offered this turn is honoured, so a model that invents a node
+   * cannot re-parent anything.
+   * @param state - session state.
    * @param text - assistant text.
-   * @returns The text without the marker and the summary, when present.
+   * @returns Cleaned text plus the model's summary, when present.
    */
-  private takeSummary(text: string): { text: string; summary?: string } {
-    const match = /\[summary:([^\]]{0,120})\]/.exec(text)
-    if (match === null) return { text }
-    const summary = match[1].trim().slice(0, 60)
-    const stripped = text.replace(match[0], '').trim()
-    return summary.length === 0 ? { text: stripped } : { text: stripped, summary }
-  }
-
-  private applyAttachMarker(state: SessionState, text: string): string {
-    const match = /\[attach:(n\d+|root|here)\]/.exec(text)
-    if (match === null) return text
-    const cleaned = text.replace(match[0], '').trim()
-    const target = match[1]
+  private applyAttachMarker(state: SessionState, text: string): { text: string; summary?: string } {
+    const parsed = readTrailingMarkers(text)
+    const target = parsed.attach
+    const cleaned = parsed.text
+    const result = { text: cleaned, ...(parsed.summary === undefined ? {} : { summary: parsed.summary }) }
+    if (target === undefined) return result
     const questionId = state.pendingQuestionId
     if (target === 'here') {
-      if (state.offeredRoot !== true || questionId === undefined) return cleaned
+      if (state.offeredRoot !== true || questionId === undefined) return result
       const home = state.defaultParentId
-      if (home === undefined || questionId === home || !state.tree.nodes.has(home)) return cleaned
+      if (home === undefined || questionId === home || !state.tree.nodes.has(home)) return result
       try {
         state.tree.reparent(questionId, home)
         this.remember({ session: state.sessionId, action: 'reparent', nodeId: questionId, parentId: home, at: Date.now() })
@@ -1932,12 +1994,12 @@ export class TokenTreeService {
       } catch (error) {
         this.logger.debug('token-tree: here marker could not be applied: ' + String(error))
       }
-      return cleaned
+      return result
     }
     if (target === 'root') {
-      if (state.offeredRoot !== true || questionId === undefined) return cleaned
+      if (state.offeredRoot !== true || questionId === undefined) return result
       const rootId = state.tree.rootId
-      if (questionId === rootId || !state.tree.nodes.has(rootId)) return cleaned
+      if (questionId === rootId || !state.tree.nodes.has(rootId)) return result
       try {
         state.tree.reparent(questionId, rootId)
         this.remember({ session: state.sessionId, action: 'reparent', nodeId: questionId, parentId: rootId, at: Date.now() })
@@ -1945,14 +2007,14 @@ export class TokenTreeService {
       } catch (error) {
         this.logger.debug('token-tree: root marker could not be applied: ' + String(error))
       }
-      return cleaned
+      return result
     }
     if (!state.offered.includes(target)) {
       this.logger.debug('token-tree: attach marker named a node that was not offered; ignored')
-      return cleaned
+      return result
     }
-    if (questionId === undefined || questionId === target) return cleaned
-    if (!state.tree.nodes.has(target) || state.tree.hidden(target)) return cleaned
+    if (questionId === undefined || questionId === target) return result
+    if (!state.tree.nodes.has(target) || state.tree.hidden(target)) return result
     try {
       state.tree.reparent(questionId, target)
       this.remember({ session: state.sessionId, action: 'reparent', nodeId: questionId, parentId: target, at: Date.now() })
@@ -1960,7 +2022,7 @@ export class TokenTreeService {
     } catch (error) {
       this.logger.debug('token-tree: attach marker could not be applied: ' + String(error))
     }
-    return cleaned
+    return result
   }
 
   retrievalHint(sessionId: string): string | undefined {
@@ -2018,7 +2080,7 @@ export class TokenTreeService {
     // threshold applied to them never fires — measured on a live host: 394 tokens on
     // turn one while the conversation was already growing.
     const tokenizer = this.loadTokenizer()
-    const above = this.aboveTokens()
+    const above = this.aboveTokens(sessionId)
     if (tokenizer !== undefined) {
       const counted = this.conversationTokens(sessionId)
       state.promptTokens = counted
@@ -2172,12 +2234,14 @@ export class TokenTreeService {
     let counted = 0
     for (const state of this.states.values()) {
       for (const node of state.tree.nodes.values()) {
-        const tokens = tokenizer.count(node.content)
+        const reasoningTokens = numberField(node.metadata.reasoningTokens) ?? 0
+        const contentTokens = tokenizer.count(node.content)
+        const tokens = contentTokens + reasoningTokens
         if (tokens > 0) node.tokens = tokens
         if (node.summary !== undefined) {
           node.summaryTokens = tokenizer.count(node.summary)
         }
-        this.ratio.observe(node.content, tokens)
+        this.ratio.observe(node.content, contentTokens)
         counted++
       }
       state.tokenCounts.clear()
@@ -2359,8 +2423,9 @@ export class TokenTreeService {
   }
 
   /** The tool names the user asked to hide. */
-  toolDeny(): string[] {
-    const override = this.settings?.all().toolDeny
+  toolDeny(sessionId?: string): string[] {
+    const scoped = sessionId === undefined ? undefined : this.settings?.allFor?.(sessionId)
+    const override = scoped?.toolDeny ?? this.settings?.all().toolDeny
     // Measured across 201 sessions: tree_mark and tree_focus were never called, while their schemas
     // cost about 570 tokens per request. The supervisor prompt names tree_query/tree_reflect, so
     // those stay.
@@ -2666,9 +2731,8 @@ export class TokenTreeService {
    * The measured-context threshold in force, honouring a runtime override.
    * @returns Token count at which the hint starts appearing.
    */
-  private aboveTokens(): number {
-    const override = this.settings?.all().hintAboveTokens
-    return override ?? this.config.hintAboveTokens
+  private aboveTokens(sessionId?: string): number {
+    return this.effective(sessionId).hintAboveTokens
   }
 
   /**

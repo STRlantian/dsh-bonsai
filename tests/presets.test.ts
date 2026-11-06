@@ -96,6 +96,24 @@ test('applying a preset writes the whole bundle at once', () => {
   assert.equal(service.applyPreset('nope'), undefined)
 })
 
+test('switching presets clears the previous bundle entirely', () => {
+  const { settings } = store()
+  const service = new TokenTreeService({
+    config: Config['~standard'].validate({ logEdgeUpdates: false }).value!,
+    logger,
+    settings,
+  })
+  service.applyPreset('treeOnly')
+  service.applyPreset('conservative')
+  const effective = service.effective()
+  assert.equal(effective.autoReflect, true, 'reflection comes back')
+  assert.equal(effective.attachChoices, 10, 'the candidate block comes back')
+  assert.equal(effective.foldCadence, 3, 'the cadence comes back')
+  assert.equal(effective.foldBlockRatio, 5, 'the block ratio comes back')
+  assert.equal(effective.fileRegion, 'auto', 'the file region comes back')
+  assert.equal(effective.mandatoryContext, true, 'mandatory context comes back')
+})
+
 test('a preset applies to the scope it is asked for', () => {
   const { settings, files } = store()
   const service = new TokenTreeService({

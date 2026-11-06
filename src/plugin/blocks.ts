@@ -360,7 +360,7 @@ export function nodesOf(
   // separate nodes in the log, but one exchange to read: fold consecutive answers of the same
   // turn and the same parent into the first of them, summing their tokens.
   const rows: NodeRow[] = []
-  const answerRowByTurn = new Map<number, NodeRow>()
+  const answerRowByTurn = new Map<string, NodeRow>()
   const mergedInto = new Map<NodeId, NodeId>()
   for (const row of visitedRows) {
     // A row whose parent was merged away follows the surviving row instead of dangling.
@@ -372,7 +372,8 @@ export function nodesOf(
     }
     row.parentId = parentId
     if (row.kind === 'answer' && row.turn !== undefined) {
-      const existing = answerRowByTurn.get(row.turn)
+      const key = `${row.turn}:${row.parentId ?? ''}`
+      const existing = answerRowByTurn.get(key)
       if (existing !== undefined) {
         existing.tokens += row.tokens
         existing.merged = (existing.merged ?? 1) + 1
@@ -382,7 +383,7 @@ export function nodesOf(
         mergedInto.set(row.id, existing.id)
         continue
       }
-      answerRowByTurn.set(row.turn, row)
+      answerRowByTurn.set(key, row)
     }
     rows.push(row)
   }

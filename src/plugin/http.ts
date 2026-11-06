@@ -74,9 +74,12 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
         const sessionId = requested.length > 0 ? requested : (service.sessionIds.at(-1) ?? '')
         const agent = sessionId.length > 0 ? agentRegistryOf(ctx)?.get(sessionId) : undefined
         if (agent !== undefined) service.backfillFromSession(agent.session)
+        // Do not create a tree for an arbitrary `?session=` value: that pollutes the fallback
+        // "newest session" and lets an unknown id allocate state.
+        const known = agent !== undefined || service.sessionIds.includes(sessionId)
         // `view=nodes` is the editor's full-tree mode: every node, not just blocks.
         const wantsNodes = url.searchParams.get('view') === 'nodes'
-        const tree = sessionId.length > 0 ? service.treeOf(sessionId) : undefined
+        const tree = sessionId.length > 0 && known ? service.treeOf(sessionId) : undefined
         const payload = tree === undefined
           ? (wantsNodes ? emptyNodesPayload() : emptyPayload())
           : wantsNodes
@@ -104,15 +107,14 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
       methods: ['POST'],
       requestBody: 'buffered',
       fetch: async (request: Request): Promise<Response> => {
-        let body: { session?: unknown; nodeId?: unknown; clear?: unknown }
-        try {
-          body = await request.json() as typeof body
-        } catch {
-          return Response.json({ ok: false, error: 'body must be json' }, { status: 400 })
-        }
+        const body = await readJsonObject(request)
+        if (body === undefined) return Response.json({ ok: false, error: 'body must be a JSON object' }, { status: 400 })
         const requested = typeof body.session === 'string' ? body.session : ''
         const sessionId = requested.length > 0 ? requested : (service.sessionIds.at(-1) ?? '')
         if (sessionId.length === 0) return Response.json({ ok: false, error: 'no session' }, { status: 409 })
+        if (!service.sessionIds.includes(sessionId) && agentRegistryOf(ctx)?.get(sessionId) === undefined) {
+          return Response.json({ ok: false, error: 'unknown session' }, { status: 404 })
+        }
         if (body.clear === true) {
           service.unfocus(sessionId)
           return Response.json({ ok: true, anchored: null }, { headers: { 'cache-control': 'no-store' } })
@@ -140,15 +142,14 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
       methods: ['POST'],
       requestBody: 'buffered',
       fetch: async (request: Request): Promise<Response> => {
-        let body: { session?: unknown; action?: unknown; nodeId?: unknown; parentId?: unknown; pinned?: unknown; ignored?: unknown; rule?: unknown }
-        try {
-          body = await request.json() as typeof body
-        } catch {
-          return Response.json({ ok: false, error: 'body must be json' }, { status: 400 })
-        }
+        const body = await readJsonObject(request)
+        if (body === undefined) return Response.json({ ok: false, error: 'body must be a JSON object' }, { status: 400 })
         const requested = typeof body.session === 'string' ? body.session : ''
         const sessionId = requested.length > 0 ? requested : (service.sessionIds.at(-1) ?? '')
         if (sessionId.length === 0) return Response.json({ ok: false, error: 'no session' }, { status: 409 })
+        if (!service.sessionIds.includes(sessionId) && agentRegistryOf(ctx)?.get(sessionId) === undefined) {
+          return Response.json({ ok: false, error: 'unknown session' }, { status: 404 })
+        }
         // Rules have no node, so they are handled before the nodeId requirement below.
         if (body.action === 'rule') {
           const edit = (typeof body.rule === 'object' && body.rule !== null ? body.rule : {}) as Record<string, unknown>
@@ -217,12 +218,8 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
           })
         }
       if (request.method !== 'POST') return Response.json({ ok: false, error: 'method not allowed' }, { status: 405 })
-      let body: Record<string, unknown>
-      try {
-        body = await request.json() as Record<string, unknown>
-      } catch {
-        return Response.json({ ok: false, error: 'invalid json' }, { status: 400 })
-      }
+      const body = await readJsonObject(request)
+      if (body === undefined) return Response.json({ ok: false, error: 'body must be a JSON object' }, { status: 400 })
       try {
         const updated = service.updateSettings(body, scopedSession)
         return Response.json({ ok: true, ...updated }, { headers: { 'cache-control': 'no-store' } })
@@ -241,12 +238,8 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
       requestBody: 'buffered',
       fetch: async (request: Request): Promise<Response> => {
         if (request.method !== 'POST') return Response.json({ ok: false, error: 'method not allowed' }, { status: 405 })
-        let body: Record<string, unknown>
-        try {
-          body = await request.json() as Record<string, unknown>
-        } catch {
-          return Response.json({ ok: false, error: 'invalid json' }, { status: 400 })
-        }
+        const body = await readJsonObject(request)
+        if (body === undefined) return Response.json({ ok: false, error: 'body must be a JSON object' }, { status: 400 })
         const applied = service.applyPreset(body.preset, scopedSessionOf(request))
         if (applied === undefined) {
           return Response.json({ ok: false, error: 'unknown preset or no settings store' }, { status: 400 })
@@ -259,6 +252,29 @@ export function installHttpRoute(ctx: ContextLike, service: TokenTreeService): v
 
   if (ctx.inject !== undefined) ctx.inject(['connection'], register)
   else register(ctx)
+}
+
+/**
+ * Read one JSON object body with a hard size and shape check.
+ *
+ * `request.json()` accepts `null`, arrays and any content type, and a null body then throws inside
+ * the handler. These routes only ever accept a JSON object from this bundle's own client.
+ * @param request - incoming request.
+ * @returns The parsed object, or undefined for a non-JSON, oversized, or non-object body.
+ */
+async function readJsonObject(request: Request): Promise<Record<string, unknown> | undefined> {
+  const type = request.headers.get('content-type') ?? ''
+  if (type !== '' && !type.toLowerCase().includes('application/json')) return undefined
+  const text = await request.text()
+  if (text.length === 0 || text.length > 1_000_000) return undefined
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    return undefined
+  }
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined
+  return parsed as Record<string, unknown>
 }
 
 /**

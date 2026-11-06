@@ -11,7 +11,7 @@
  * Usage:
  *   node scripts/stage.mjs           # build if needed, then refresh plugin/
  */
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
@@ -62,6 +62,31 @@ for (const entry of ['dist', 'lib', 'cordis']) {
 // Chinese one, the package ships the English one with a link back to it.
 if (existsSync(join(root, 'README.en.md'))) copyFileSync(join(root, 'README.en.md'), join(target, 'README.md'))
 if (existsSync(join(root, 'README.md'))) copyFileSync(join(root, 'README.md'), join(target, 'README.zh-CN.md'))
+// Keep the handoff out: it carries local session ids and absolute paths. Everything else that
+// package.json promises (LICENSE, CHANGELOG, docs) must actually be in the staged tarball.
+if (existsSync(join(root, 'README.en.md'))) copyFileSync(join(root, 'README.en.md'), join(target, 'README.en.md'))
+for (const entry of ['LICENSE', 'CHANGELOG.md']) {
+  if (existsSync(join(root, entry))) copyFileSync(join(root, entry), join(target, entry))
+}
+const docs = join(root, 'docs')
+if (existsSync(docs)) {
+  mkdirSync(join(target, 'docs'), { recursive: true })
+  for (const entry of readdirSync(docs, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith('.md') && entry.name !== 'HANDOFF.md') {
+      copyFileSync(join(docs, entry.name), join(target, 'docs', entry.name))
+    }
+  }
+  const experiments = join(docs, 'experiments')
+  if (existsSync(experiments)) {
+    mkdirSync(join(target, 'docs', 'experiments'), { recursive: true })
+    for (const entry of readdirSync(experiments, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith('.json')) {
+        copyFileSync(join(experiments, entry.name), join(target, 'docs', 'experiments', entry.name))
+      }
+    }
+  }
+  if (existsSync(join(docs, 'ui-mockup.html'))) copyFileSync(join(docs, 'ui-mockup.html'), join(target, 'docs', 'ui-mockup.html'))
+}
 
 console.log(`dsh-bonsai: staged ${target}`)
 console.log('Prefer the copy install (no linked root; the profile cannot scan this repository):')

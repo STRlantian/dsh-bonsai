@@ -87,6 +87,36 @@ test('the answer is rewritten without the placement and summary markers', () => 
   assert.deepEqual(replacements[0].intent?.sourceEventSeqs, [3], 'the original event is named')
 })
 
+test('marker strip is wrapped in a synthetic step and preserves non-text blocks', () => {
+  const { appended, emit, stopping } = mount({ attachChoices: 6, attachSummary: true })
+  emit({ type: 'turn/start', seq: 1, data: { turn: 1 } })
+  emit({ type: 'user/message', seq: 2, data: { turn: 1, role: 'user', id: 'q1', source: { kind: 'user' }, content: [{ type: 'text', text: '问题' }] } })
+  emit({
+    type: 'assistant/message',
+    seq: 3,
+    data: {
+      turn: 1,
+      step: 1,
+      message: {
+        role: 'assistant',
+        source: { kind: 'model' },
+        content: [
+          { type: 'image', data: 'keep-me' },
+          { type: 'text', text: '回答。[attach:n2]' },
+        ],
+      },
+    },
+  })
+  stopping(1)
+  const start = appended.findIndex(entry => entry.type === 'step/start')
+  const end = appended.findIndex(entry => entry.type === 'step/end')
+  const replacement = appended.findIndex(entry => typeof entry.intent?.surfaceOp === 'object')
+  assert.ok(start >= 0 && end >= 0 && replacement > start && replacement < end, 'replacement sits in the synthetic step')
+  const content = (appended[replacement].data.message as { content: { type: string }[] }).content
+  assert.equal(content[0].type, 'image', 'the non-text block survives')
+  assert.equal((content[1] as { text: string }).text, '回答。')
+})
+
 test('an answer without markers is left untouched', () => {
   const { appended, emit, stopping } = mount({ attachChoices: 6, attachSummary: true })
   turn(emit, 1, '缓存按热度淘汰。')

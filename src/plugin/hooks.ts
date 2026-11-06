@@ -27,6 +27,7 @@ import { homedir } from 'node:os'
 
 import { blockTokensOf, foldWorthIt, keptTokensOf, planFold, planTurnFold } from './fold.ts'
 import { SURFACE_TYPES } from './fold.ts'
+import { readTrailingMarkers } from './markers.ts'
 import type { TokenTreeService } from './service.ts'
 
 /** Longest query text taken from a user message. */
@@ -151,32 +152,43 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
 
   // Hide tools the user listed. Done on the agent's own scope, which is the weakest
   // mechanism the host offers for this (it keeps schema, lookup and execution aligned).
+  /** Last deny list successfully applied to one agent, so a per-turn reapply is cheap. */
+  const appliedDeny = new Map<string, string>()
+  const applyToolDeny = (agent: AgentLike): void => {
+    const deny = service.toolDeny(agent.session?.id)
+    const key = deny.join('\u0000')
+    if (appliedDeny.get(agent.id) === key) return
+    const scoped = agent.ctx
+    const registry = scoped?.tools
+    const restrict = registry?.restrict
+    const shape = `ctx=${typeof scoped} tools=${typeof registry} ctxKeys=${JSON.stringify(Object.keys(scoped ?? {}).slice(0, 14))} toolKeys=${JSON.stringify(Object.keys(registry ?? {}))}`
+    if (typeof restrict !== 'function') {
+      ctx.logger.warn(
+        `token-tree: no tools.restrict on the agent context (ctx=${typeof scoped}, tools=${typeof registry}, keys=${JSON.stringify(Object.keys(registry ?? {}))}, ctxKeys=${JSON.stringify(Object.keys(scoped ?? {}))})`,
+      )
+      service.noteToolRestriction(String(agent.id ?? 'agent'), deny, false)
+      appliedDeny.set(agent.id, key)
+      ctx.logger.warn('token-tree: toolDeny is configured but this host exposes no tools.restrict()')
+      return
+    }
+    try {
+      restrict.call(agent.ctx?.tools, { deny })
+      appliedDeny.set(agent.id, key)
+      service.noteToolRestriction(String(agent.id ?? 'agent'), deny, true, shape)
+      ctx.logger.info(deny.length === 0
+        ? `token-tree: showing all tools to agent ${agent.id}`
+        : `token-tree: hid ${deny.length} tool(s) from agent ${agent.id}: ${deny.join(', ')}`)
+    } catch (error) {
+      service.noteToolRestriction(String(agent.id ?? 'agent'), deny, false, shape, describe(error))
+      appliedDeny.set(agent.id, key)
+      ctx.logger.warn(`token-tree: could not hide tools (${describe(error)})`)
+    }
+  }
   try {
     ctx.on('agent/created', (payload) => {
       const agent = payload?.agent
       if (agent === undefined) return
-      const deny = service.toolDeny()
-      if (deny.length === 0) return
-      const scoped = agent.ctx
-      const registry = scoped?.tools
-      const restrict = registry?.restrict
-      const shape = `ctx=${typeof scoped} tools=${typeof registry} ctxKeys=${JSON.stringify(Object.keys(scoped ?? {}).slice(0, 14))} toolKeys=${JSON.stringify(Object.keys(registry ?? {}))}`
-      if (typeof restrict !== 'function') {
-        ctx.logger.warn(
-          `token-tree: no tools.restrict on the agent context (ctx=${typeof scoped}, tools=${typeof registry}, keys=${JSON.stringify(Object.keys(registry ?? {}))}, ctxKeys=${JSON.stringify(Object.keys(scoped ?? {}))})`,
-        )
-        service.noteToolRestriction(String(agent.id ?? 'agent'), deny, false)
-        ctx.logger.warn('token-tree: toolDeny is configured but this host exposes no tools.restrict()')
-        return
-      }
-      try {
-        restrict.call(agent.ctx?.tools, { deny })
-        service.noteToolRestriction(String(agent.id ?? 'agent'), deny, true, shape)
-        ctx.logger.info(`token-tree: hid ${deny.length} tool(s) from agent ${agent.id}: ${deny.join(', ')}`)
-      } catch (error) {
-        service.noteToolRestriction(String(agent.id ?? 'agent'), deny, false, shape, describe(error))
-        ctx.logger.warn(`token-tree: could not hide tools (${describe(error)})`)
-      }
+      applyToolDeny(agent)
     })
   } catch (error) {
     ctx.logger.debug(`token-tree: agent/created not available (${describe(error)})`)
@@ -203,6 +215,15 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
   // both ahead of the next request and inside the turn that owns it.
   const foldedTurns = new Map<string, number>()
   ctx.on('agent/turn-stopping', (payload) => {
+    // A tool switch flipped during the conversation takes effect at the next turn boundary, when
+    // no tool call is in flight. The created hook covers the first request.
+    if (payload.agent !== undefined) {
+      try {
+        applyToolDeny(payload.agent)
+      } catch (error) {
+        ctx.logger.warn(`token-tree: could not apply toolDeny for ${payload.agent.id}: ${describe(error)}`)
+      }
+    }
     // Supervision keeps seeing the pre-fold tree, exactly as it did when folding ran after
     // turn/end. A fold only changes what the next request reads, not what just happened.
     if (service.effective(payload.agent?.session?.id).autoReflect && tracked(payload.agent, ctx, config)) {
@@ -216,13 +237,22 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
       }
     }
     const session = payload.agent?.session
-    if (session !== undefined && foldedTurns.get(session.id) !== payload.turn) {
-      foldedTurns.set(session.id, payload.turn)
+    if (session !== undefined) {
+      // Marker stripping runs on every stopping pass of the turn: a supervisor continuation
+      // produces a second pass, and its final answer still has markers to remove. Folding is
+      // idempotent per turn, so it keeps its own guard.
       try {
         stripMarkers(session, service, ctx, payload.turn)
-        maybeFold(session, service, ctx, payload.turn)
       } catch (error) {
-        ctx.logger.warn(`token-tree: fold failed for session ${session.id}: ${describe(error)}`)
+        ctx.logger.warn(`token-tree: marker strip failed for session ${session.id}: ${describe(error)}`)
+      }
+      if (foldedTurns.get(session.id) !== payload.turn) {
+        foldedTurns.set(session.id, payload.turn)
+        try {
+          maybeFold(session, service, ctx)
+        } catch (error) {
+          ctx.logger.warn(`token-tree: fold failed for session ${session.id}: ${describe(error)}`)
+        }
       }
     }
   })
@@ -245,18 +275,15 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
  */
 
 
-/** Marker patterns the prompt asks for; they are ours, not the answer's body. */
-const ATTACH_MARKER = /\[attach:(n\d+|root|here)\]/g
-const SUMMARY_MARKER = /\[summary:[^\]]{0,120}\]/g
-
 /**
- * Remove the placement and summary markers from the answers of the turn that just ran.
+ * Remove trailing placement and summary markers from the answers of the turn that just ran.
  *
- * The prompt asks the model to end its answer with these markers so the plugin can place the next
- * question and label the answer. They are instructions to the plugin, not text for the reader, and
- * leaving them in the transcript both looks wrong and is sent back to the model next turn. The
- * replacement is appended at turn-stopping, so it sits inside the open turn, which is what the log
- * reader requires of a surface replacement.
+ * A `tool/result` or `user/message` surface replacement may be appended while the turn is open;
+ * an `assistant/message` replacement additionally needs an open step. The host has already closed
+ * the last real step when `agent/turn-stopping` runs, so the rewrite is wrapped in one short
+ * synthetic step. Only text blocks are touched, non-text blocks are preserved, and markers are
+ * recognized only at the end of the last text block. Messages that carry tool calls are left alone:
+ * their tool lifecycle belongs to the real step and must not be replayed into a synthetic one.
  * @param session - session whose turn is stopping.
  * @param service - tree service, for the turn bookkeeping.
  * @param ctx - plugin context, for logging.
@@ -269,29 +296,79 @@ function stripMarkers(session: SessionLike, service: TokenTreeService, ctx: Cont
   const events = surfaceSeqs.length > 0 && resolve !== undefined
     ? surfaceSeqs.map(seq => ({ seq, event: resolve(seq) }))
     : (session.snapshotEvents?.() ?? []).map((event, index) => ({ seq: event.seq ?? index + 1, event }))
+  // seqTurns is local; payload.turn is the host's counter. Use the local current turn to select
+  // the answers, but keep the host turn for the step/turn fields of the replacement.
+  const localTurn = service.sessionTurn(session.id)
+  const targets: { seq: number; data: Record<string, unknown>; message: Record<string, unknown>; content: unknown[] }[] = []
   for (const entry of events) {
     if (entry.event?.type !== 'assistant/message') continue
-    if (service.turnOfSeq(session.id, entry.seq) !== currentTurn) continue
+    if (service.turnOfSeq(session.id, entry.seq) !== localTurn) continue
     const data = entry.event.data as Record<string, unknown> | undefined
     if (data === undefined) continue
-    const message = data.message as { content?: unknown[] } | undefined
-    const body = textOfContent(message?.content)
-    if (body.length === 0) continue
-    const cleaned = body.replace(ATTACH_MARKER, '').replace(SUMMARY_MARKER, '').replace(/\n{3,}/g, '\n\n').trim()
-    if (cleaned === body) continue
-    try {
+    const message = data.message as Record<string, unknown> | undefined
+    if (message === undefined) continue
+    const content = message.content
+    if (!Array.isArray(content)) continue
+    if (content.some(block => typeof block === 'object' && block !== null && (block as { type?: unknown }).type === 'tool-call')) continue
+    let lastText = -1
+    for (let index = 0; index < content.length; index++) {
+      const block = content[index]
+      if (typeof block === 'object' && block !== null && (block as { type?: unknown }).type === 'text') lastText = index
+    }
+    if (lastText < 0) continue
+    if (lastText !== content.length - 1) continue
+    const block = content[lastText] as { text?: unknown }
+    if (typeof block.text !== 'string') continue
+    const parsed = readTrailingMarkers(block.text)
+    if (parsed.text === block.text) continue
+    targets.push({
+      seq: entry.seq,
+      data,
+      message,
+      content: content.map((item, index) => index === lastText ? { ...(item as Record<string, unknown>), text: parsed.text } : item),
+    })
+  }
+  if (targets.length === 0) return
+  const step = nextStepOf(session, currentTurn)
+  let opened = false
+  try {
+    session.append('step/start', { turn: currentTurn, step })
+    opened = true
+    for (const target of targets) {
       session.append('assistant/message', {
-        ...data,
-        message: { ...(message ?? {}), content: [{ type: 'text', text: cleaned }] },
+        ...target.data,
+        turn: currentTurn,
+        step,
+        message: { ...target.message, content: target.content },
       }, {
-        surfaceOp: { op: 'replace', startSeq: entry.seq, endSeq: entry.seq },
-        sourceEventSeqs: [entry.seq],
+        surfaceOp: { op: 'replace', startSeq: target.seq, endSeq: target.seq },
+        sourceEventSeqs: [target.seq],
       })
-      ctx.logger.info(`token-tree: stripped placement markers from a turn-${currentTurn} answer`)
-    } catch (error) {
-      ctx.logger.warn(`token-tree: could not strip markers from seq ${entry.seq}: ${String(error)}`)
+    }
+    ctx.logger.info(`token-tree: stripped placement markers from ${targets.length} turn-${currentTurn} answer(s)`)
+  } catch (error) {
+    ctx.logger.warn(`token-tree: could not strip markers in turn ${currentTurn}: ${describe(error)}`)
+  } finally {
+    if (opened) {
+      try {
+        session.append('step/end', { turn: currentTurn, step })
+      } catch (error) {
+        ctx.logger.warn(`token-tree: could not close the marker-strip step in turn ${currentTurn}: ${describe(error)}`)
+      }
     }
   }
+}
+
+/** The host's next step number for one open turn, derived from the durable log. */
+function nextStepOf(session: SessionLike, turn: number): number {
+  let max = 0
+  for (const event of session.snapshotEvents?.() ?? []) {
+    const data = event.data as { turn?: unknown; step?: unknown } | undefined
+    if (data?.turn !== turn) continue
+    if (event.type !== 'step/start' && event.type !== 'step/end') continue
+    if (typeof data.step === 'number' && data.step > max) max = data.step
+  }
+  return max + 1
 }
 
 /**
@@ -305,9 +382,8 @@ function stripMarkers(session: SessionLike, service: TokenTreeService, ctx: Cont
  * @param session - session whose turn is stopping.
  * @param service - tree service, for the measured size and the diagnostics.
  * @param ctx - plugin context, for logging.
- * @param currentTurn - turn that is still open; its results stay visible until the next turn.
  */
-function maybeFold(session: SessionLike, service: TokenTreeService, ctx: ContextLike, currentTurn?: number): void {
+function maybeFold(session: SessionLike, service: TokenTreeService, ctx: ContextLike): void {
   const settings = service.effective(session.id)
   // `always` folds every finished turn outside the keep window, whatever the size: the experiment
   // "fold everything, force the model to consult the tree" needs no threshold at all.
@@ -316,7 +392,9 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   if (typeof session.append !== 'function') return
   // The whole session, not the current branch: the next request carries all of it.
   const tokens = service.historyTokens(session.id)
-  const turn = currentTurn ?? service.sessionTurn(session.id)
+  // The planner, turnTokens and foldGap all use this service's local turn numbers. Mixing in the
+  // host's payload turn makes the cadence gap negative whenever the two counters diverge.
+  const turn = service.sessionTurn(session.id)
   if (!always && settings.foldCadence > 0 && service.foldGap(session.id) < settings.foldCadence) {
     service.noteFold(session.id, 0, tokens, settings.foldAboveTokens, { planned: 0, visible: 0, cadence: settings.foldCadence, gap: service.foldGap(session.id) })
     return
@@ -390,7 +468,12 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   if (!always && tokens < settings.foldAboveTokens) return
   // Keep the still-open turn's own results visible for the same reason as the turn fold above.
   const plan = planFold(events, visible, settings.foldKeepTurns)
-    .filter(replacement => (replacement.data as { turn?: unknown }).turn !== turn)
+    .filter(replacement => {
+      const dataTurn = (replacement.data as { turn?: unknown }).turn
+      const owner = service.turnOfSeq(session.id, replacement.seq)
+      const effectiveTurn = typeof owner === 'number' ? owner : dataTurn
+      return effectiveTurn !== turn
+    })
   if (plan.length === 0) {
     service.noteFold(session.id, 0, tokens, settings.foldAboveTokens, { planned: 0, visible: visible.length })
     return

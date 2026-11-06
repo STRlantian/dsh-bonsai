@@ -25,6 +25,8 @@
     "docs/experiments/*.json",
     "docs/ui-mockup.html",
     "README.md",
+    "README.en.md",
+    "README.zh-CN.md",
     "CHANGELOG.md",
     "LICENSE"
   ],

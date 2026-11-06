@@ -22,7 +22,7 @@ which one it is.
 
 | Capability | Status | Measured |
 |---|---|---|
-| **Hide tools** | Optional (nothing hidden by default) | 37 → 28 tools: **10,453 → 7,076 tokens/turn (−32%)** |
+| **Hide tools** | Optional (defaults to hiding `tree_mark` and `tree_focus`; `[]` shows all) | 37 → 28 tools: **10,453 → 7,076 tokens/turn (−32%)** |
 | **Fold history** | On by default; the block must reach 40,000 tokens and 5x the keep window, at most every 3 turns | Live A/B: prompt/step **−9.2%**, but new input **+202%** (cache invalidated); short sessions cost **more** |
 | Effect of folding on the cache | — | Every fold rewrites the prefix, so the cache misses: this is its real cost (experiment 23) |
 | Graphical tree editing / recycle bin | Done | Fork, re-parent, hide, restore, jump, compare branches; **cancelled turns leave the tree on their own** |
@@ -116,13 +116,14 @@ text.
 ```text
 Default: fold when the block reaches 40,000 tokens and 5x the keep window, at most every 3 turns
 Keep:    fold past 60,000, keep 4 turns
-Save:    fold past 20,000, keep 2 turns, and hide 9 heavy rarely-used tools
+Save:    fold past 10,000, keep 1 turn, and hide 9 heavy rarely-used tools
 ```
 
-Five presets sit at the top of the settings page, and every value is adjustable:
+Six presets sit at the top of the settings page, and every value is adjustable:
 
 | Preset | For | Block floor | Turns kept | Fold scope | Tools hidden |
 |---|---|---|---|---|---|
+| **Tree only** | just the tree; no injection, hint, candidates, folding, reflection | 0 (off) | 0 | off | none |
 | **Keep** | closest to native behaviour | 60,000 | 4 | whole turns | none |
 | **Default** | when unsure | 40,000 | 3 | whole turns | none |
 | **Learning** | concept questions, many follow-ups | 20,000 | 2 | whole turns (6 candidates every turn, no summary) | none |
@@ -215,7 +216,7 @@ changed); precedence is **settings file > profile config**.
 | `hintAboveTokens` | `12000` | Send the hint only once the conversation reaches this size |
 | `autoReflect` | `true` | At turn end, grade the failure, write a reflection, retry a better sibling branch |
 | `admitRelevance` | `0.3` | Retrieval admission threshold; relaxes once when it comes back empty |
-| `toolDeny` | `[tree_mark, tree_focus]` | Tool names to hide (the picker fills it); neither was called in 238 session logs |
+| `toolDeny` | `[tree_mark, tree_focus]` | Tool names to hide (the picker fills it); neither was called in 201 session logs |
 | `foldAboveTokens` | `40000` | Block threshold; `0` leaves only the relative rule |
 | `foldKeepTurns` | `3` | Turns kept verbatim |
 | `foldScope` | `turns` | Fold scope |
@@ -283,7 +284,7 @@ p=10 and p=50, so the "block = 5x window" default can be re-derived under your o
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 219 cases (193 backend + 26 browser)
+pnpm test           # 249 cases (223 backend + 26 browser)
 pnpm run check      # typecheck + tests
 ```
 
@@ -320,8 +321,8 @@ It validates, sets `x.y.z`, publishes `./plugin` with `--tag latest`, advances t
 | `src/core/` | Pure algorithms: graph, edge weights, path cost, weighted retrieval, grading and backtracking |
 | `src/plugin/` | The DSH wiring: `Config`, the session service, tools, event subscriptions, HTTP routes, fold planning |
 | `client/client.js` | Browser half: dock, editor, graph view, recycle bin, rule bar, settings panel, preset picker |
-| `tests/` | 219 cases, including client tests that mount real React under jsdom |
-| `docs/experiment-context-cache.md` | Every measurement (1–15) |
+| `tests/` | 249 cases, including client tests that mount real React under jsdom |
+| `docs/experiment-context-cache.md` | Every measurement (50 sections) |
 
 ## License
 

@@ -120,8 +120,23 @@ test('manual edits survive a full replay in a new service instance', () => {
   }
 })
 
-test('a stale edit whose node no longer exists is skipped', () => {
+test('a manual rule survives a store reload and a tree replay', () => {
   const { store, dir } = tempStore()
+  try {
+    store.record({ session: 'session-p', action: 'rule', ruleOp: 'add', ruleText: '回答控制在 100 字以内', at: 1 })
+    const reopened = new EditStore({ path: join(dir, 'edits.jsonl'), onError: () => {} })
+    assert.equal(reopened.opsFor('session-p').length, 1, 'the rule line is loaded')
+    assert.equal(reopened.opsFor('session-p')[0].ruleText, '回答控制在 100 字以内')
+    const service = new TokenTreeService({ config: defaults(), logger, store: reopened })
+    service.backfillFromSession(sessionOf(history()))
+    const rules = service.stateOf('session-p').constraints
+    assert.ok(rules.some(rule => rule.text === '回答控制在 100 字以内'), 'the rule was replayed')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('a stale edit whose node no longer exists is skipped', () => {  const { store, dir } = tempStore()
   try {
     const events = history()
     const session = sessionOf(events)

@@ -171,6 +171,10 @@ export interface SessionEventLike {
   readonly time: number
   /** Event payload; narrowed by `type` at the call site. */
   readonly data: Record<string, unknown>
+  /** Surface operation recorded by the host; `append` or a positional replacement. */
+  readonly surfaceOp?: SurfaceOpLike
+  /** Earlier events this event derives from. */
+  readonly sourceEventSeqs?: readonly number[]
 }
 
 /** `agent/pre-step` payload. */

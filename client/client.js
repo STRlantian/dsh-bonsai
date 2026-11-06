@@ -1203,6 +1203,13 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var onClose = props.onClose
     var onChanged = props.onChanged
     var conversation = props.conversationMode === true
+    // The scope selector is module-level because the request helpers are module-level too. Reset it
+    // when the editor switches conversations or unmounts, so "本对话" can never write to the
+    // conversation that was open last time.
+    React.useEffect(function () {
+      settingsScopeId = null
+      return function () { settingsScopeId = null }
+    }, [sessionId])
     var viewState = React.useState({ loading: true, data: null, error: null })
     var view = viewState[0]
     var setView = viewState[1]
@@ -1315,9 +1322,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     // Tools the last assembly carried, and the ones the user hides. Defined before the
     // settings panel is built, because that panel reads them.
     var availableTools = (settings !== null && Array.isArray(settings.availableTools)) ? settings.availableTools : []
-    var deniedTools = (settings !== null && settings.overrides && Array.isArray(settings.overrides.toolDeny))
-      ? settings.overrides.toolDeny
-      : []
+    var deniedTools = (settings !== null && settings.effective && Array.isArray(settings.effective.toolDeny))
+      ? settings.effective.toolDeny
+      : (settings !== null && settings.overrides && Array.isArray(settings.overrides.toolDeny))
+        ? settings.overrides.toolDeny
+        : []
 
     function load() {
       var params = []
@@ -1338,7 +1347,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           return { loading: false, data: data, error: null }
         })
       })
-        .catch(function (error) { setView({ loading: false, data: null, error: '读取失败：' + error.message }) })
+        .catch(function (error) {
+          setView(function (previous) {
+            return { loading: false, data: previous.data, error: '读取失败：' + error.message }
+          })
+        })
     }
 
     React.useEffect(function () { load() }, [sessionId, mode])
@@ -1564,6 +1577,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               event.target.value = String(options.value)
               return
             }
+            if (Math.round(next) === Number(options.value)) return
             saveSetting(options.key, Math.round(next))
           },
         }),
@@ -1718,11 +1732,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           key: 'tokenizerVersion',
           advanced: true,
           label: t('tokenizer 版本'),
-          hint: t('词表决定 token 计数；换成最新一代更准，没有词表时用账单反推'),
+          hint: t('词表决定 token 计数；这是全局设置，本对话不能单独覆盖'),
           control: h('select', {
             className: 'twt-select',
             defaultValue: currentTokenizerChoice(effective, settings),
-            disabled: busy,
+            disabled: busy || settingsScopeId !== null,
             style: { width: '190px' },
             onChange: function (event) {
               var next = String(event.target.value || 'auto')
@@ -1999,7 +2013,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               'data-kind': 'primary',
               disabled: busy,
               onClick: function () {
-                saveSetting('toolDeny', toolDraft.length === 0 ? null : toolDraft)
+                saveSetting('toolDeny', toolDraft)
                 setToolPickerOpen(false)
               },
             }, t('应用')))))
@@ -2832,7 +2846,11 @@ function visibleRows(rows, hideTools, hideAnswers) {
           setView({ loading: false, data: data, error: null })
           if (data.anchoredId !== undefined && data.anchoredId !== null) setAnchored(data.anchoredId)
         })
-        .catch(function (error) { setView({ loading: false, data: null, error: '读取失败：' + error.message }) })
+        .catch(function (error) {
+          setView(function (previous) {
+            return { loading: false, data: previous.data, error: '读取失败：' + error.message }
+          })
+        })
     }
 
     // One fetch on mount so the collapsed line can show counts; while expanded it

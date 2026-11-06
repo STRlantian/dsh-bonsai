@@ -223,8 +223,26 @@ test('the edit route marks a node', async () => {
   assert.equal(service.treeOf('session-a').node(question.id).metadata.pinned, true)
 })
 
-test('the settings route reads, writes and clears a switch', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'tt-settings-route-'))
+test('a null or non-object body is a 400, not a handler crash', async () => {
+  const { routes } = mountHost()
+  for (const path of [FOCUS_ROUTE, EDIT_ROUTE, SETTINGS_ROUTE]) {
+    const response = await routes.get(path)!.fetch(new Request(`http://host${path}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'null',
+    }))
+    assert.equal(response.status, 400, path)
+  }
+})
+
+test('an unknown session is not allocated by a read', async () => {
+  const { service, routes } = mountHost()
+  const read = await routes.get(TREE_ROUTE)!.fetch(new Request('http://host/api/token-tree/tree?session=ghost'))
+  assert.equal(read.status, 200)
+  assert.deepEqual(service.sessionIds, [], 'a read does not create state for an unknown id')
+})
+
+test('the settings route reads, writes and clears a switch', async () => {  const dir = mkdtempSync(join(tmpdir(), 'tt-settings-route-'))
   const path = join(dir, 'settings.json')
   try {
     const settings = new SettingsStore({ path, onError: () => {} })

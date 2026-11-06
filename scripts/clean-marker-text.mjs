@@ -10,7 +10,7 @@
  * Dry run by default; `--write` rewrites; `--session <id>` limits the run; `--skip <id>` excludes one
  * (the session the running host is appending to must not be rewritten under it).
  *
- * Usage: node scripts/clean-marker-text.mjs [--session <id>] [--write]
+ * Usage: node scripts/clean-marker-text.mjs --session <id> [--write] [--skip <id>] [--all]
  */
 import { copyFileSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -24,13 +24,60 @@ const argOf = (name, fallback) => {
 const only = argOf('session', undefined)
 const skip = argOf('skip', undefined)
 const write = args.includes('--write')
+const all = args.includes('--all')
+if (only === undefined && !all) {
+  console.log('refusing to scan every session by default; pass --session <id> (or --all explicitly)')
+  process.exit(1)
+}
 const root = join(process.env.USERPROFILE ?? process.env.HOME ?? '', '.dsh', 'sessions')
-const ATTACH = /\[attach:(n\d+|root|here)\]/g
-const SUMMARY = /\[summary:[^\]]{0,120}\]/g
+const ATTACH_LINE = /^[ \t]*\[attach:(n\d+|root|here)\]\s*$/
+const SUMMARY_LINE = /^[ \t]*\[summary:([^\]\n]{0,120})\]\s*$/
 
-/** Strip both markers and the blank lines they leave behind. */
+/** Whether a line is inside a fenced code block above it. */
+function insideFence(lines, index) {
+  let fenced = false
+  for (let cursor = 0; cursor < index; cursor++) {
+    if (/^\s*```/.test(lines[cursor])) fenced = !fenced
+  }
+  return fenced
+}
+
+/** Remove only markers at the very end of one text block, outside code fences. */
 function clean(text) {
-  return text.replace(ATTACH, '').replace(SUMMARY, '').replace(/\n{3,}/g, '\n\n').trim()
+  if (text.length === 0) return text
+  const lines = text.split('\n')
+  let end = lines.length
+  while (end > 0 && lines[end - 1].trim() === '') end--
+  let removed = false
+  while (end > 0) {
+    if (insideFence(lines, end - 1)) break
+    const line = lines[end - 1]
+    if (ATTACH_LINE.test(line) || SUMMARY_LINE.test(line)) {
+      removed = true
+      end--
+      continue
+    }
+    const suffixAttach = /^(.*?)\s*\[attach:(n\d+|root|here)\]\s*$/.exec(line)
+    if (suffixAttach !== null) {
+      removed = true
+      const prefix = suffixAttach[1].replace(/\s+$/, '')
+      if (prefix.trim() === '') end--
+      else lines[end - 1] = prefix
+      continue
+    }
+    const suffixSummary = /^(.*?)\s*\[summary:([^\]\n]{0,120})\]\s*$/.exec(line)
+    if (suffixSummary !== null) {
+      removed = true
+      const prefix = suffixSummary[1].replace(/\s+$/, '')
+      if (prefix.trim() === '') end--
+      else lines[end - 1] = prefix
+      continue
+    }
+    break
+  }
+  if (!removed) return text
+  while (end > 0 && lines[end - 1].trim() === '') end--
+  return lines.slice(0, end).join('\n')
 }
 
 /** Rewrite the answer text inside one parsed line, or return undefined when nothing changes. */

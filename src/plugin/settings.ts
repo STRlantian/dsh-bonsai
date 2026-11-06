@@ -248,6 +248,11 @@ export class SettingsStore {
     return { ...this.current, ...(this.sessions?.[sessionId] ?? {}) }
   }
 
+  /** The raw per-session overrides, without the global layer. */
+  overridesFor(sessionId: string): SettingsOverrides {
+    return { ...(this.sessions?.[sessionId] ?? {}) }
+  }
+
   /**
    * Patch one session's overrides without touching the global ones.
    *

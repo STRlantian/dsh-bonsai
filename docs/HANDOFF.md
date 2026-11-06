@@ -2,7 +2,7 @@
 
 给下一个对话的自己或别人：这份文件是当前状态的唯一入口。看完就不用去翻 300 多轮的历史。
 
-最后更新：2026-11-05 · commit `b476f60` · 未推送 10 个提交
+最后更新：2026-11-06 · commit `539ef75` 之后 · 未推送 12 个提交
 
 ## 这是什么
 
@@ -20,14 +20,14 @@ DSH 插件 **盆栽 / dsh-bonsai**：对话树的编辑与压缩。给一段对�
 | 对话树 / 图视图 / 分支锚定 | 可用 | `client/client.js`、`src/plugin/blocks.ts` |
 | 折叠（按待折块触发） | 可用 | `src/plugin/fold.ts`、`hooks.ts` |
 | 折叠时机（轮次关闭前） | 已修 | `agent/turn-stopping` 而不是 `turn/end` |
-| attach / summary 标记 | 已修，解析后从正文剥离 | `hooks.ts: stripMarkers` |
+| attach / summary 标记 | 已修：只删结尾，合成 step 写入，保留非文本 block | `hooks.ts: stripMarkers`、`markers.ts` |
 | 设置页（首屏 2 行 + 高级） | 重写过 | `client/client.js` |
-| 预设（只建树/保留/默认/学习/工程/极省） | 可用 | `src/plugin/presets.ts` |
-| 全局 / 本对话作用域 | 可用 | `settings.ts`、`service.effective(sessionId)` |
+| 预设（只建树/保留/默认/学习/工程/极省） | 可用；切换时整包清除旧键 | `src/plugin/presets.ts` |
+| 全局 / 本对话作用域 | 大部分可用；tokenizer 是全局设置 | `settings.ts`、`service.effective(sessionId)` |
 | 诊断命令 | 可用 | `/prompt` `/fold` `/usage` `/retrieve` `/tree` |
 
 ```text
-pnpm run test   → 231 passed
+pnpm run test   → 249 passed（类型检查单独跑）
 pnpm run typecheck
 pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
 ```
@@ -39,29 +39,39 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
   `docs/experiment-context-cache.md` 实验 38/39。
 - **折叠必须在 `agent/turn-stopping` 里追加**（此时轮次还开着）。宿主读取日志时会校验
   "surface 替换必须在打开的轮次内"，在 `turn/end` 之后追加会让日志**下次读取时**被判损坏。
+- **标记剥离也必须包在一个打开的 step 里**：`assistant/message` 的 surface 替换要求当前
+  step 打开；turn-stopping 时宿主已经写了 `step/end`，所以剥离会临时 append
+  `step/start → replacement → step/end`。只删结尾标记，保留 tool-call/图片/reasoning 等
+  非文本 block，代码围栏里的示例不动。
 - **轮次号由插件自己数**：宿主 0.2.1-rc.5 不再给 surface 事件标 turn，插件在 user 消息处自增
-  （`service.applyEvent`），`seqTurns` 记录每个事件属于哪一轮。
+  （`service.applyEvent`），**先自增再写 `seqTurns`**；`seqTurns` 记录每个事件属于哪一轮。
+- **surface replacement 不入树**：插件自己 append 的折叠/标记替换是 view 操作，`applyEvent`
+  直接跳过；否则重放会把同一个答案/工具结果再加一个节点，token 和检索都会被放大。
 - **插件追加事件的 reentrancy**：在 `session/event` 回调里同步 append 会被宿主拒绝，必须
   在 turn-stopping 或 setTimeout 里做。
 
 ## 已知问题（按优先级）
 
-1. **当前会话 3d7b782b 里还有 16 条正文标记**（`[attach:…]` / `[summary: …]`）。它正在被宿主写，
-   不能边写边改。退出桌面端后执行：
-   `node scripts/clean-marker-text.mjs --session 3d7b782b --write`
-   脚本按帧改写并备份，改完用宿主 `session/page` 验证能加载。
-2. **3 个损坏会话**（与折叠无关）：
-   - `afebc0a3`：`tool/result is outside an open turn` —— 异步任务在 turn/end 后结算的结果。
-     修复需要在偏离点插一个合成 `turn/start`；我试过整体重排/删帧都破坏了 per-frame 提交标记，
-     没敢再动。**修复方式必须逐帧、且每次改完用宿主验证加载。**
-   - `69ea4cc5`、`e8734fe5`：`session event at seq 40 lacks an identified message`，原因未查。
-3. 40 个会话的历史标记已清理（备份为同目录 `.bak-<时间>`）；41 个实验会话已移到
+1. **当前会话 3d7b782b 的正文标记**：dry run 命中 19 个 frame / 39 处正则，但只有 **2 条**
+   回答真的以标记结尾；其余是 fenced code block 和正文引用。`clean-marker-text.mjs` 已改成
+   只删结尾标记、跳过 code fence；仍然**不要**在 app 运行时清理活跃会话。
+   退出桌面端后先 `--session 3d7b782b`（dry run）确认只剩 2 个 frame，再 `--write`；
+   改完用宿主加载验证。不要无参数 `--write` 全量扫。
+2. **3 个损坏会话**：
+   - `afebc0a3`：`tool/result is outside an open turn`。不是异步任务原始结果：解码后 seq 47/58
+     是带 `surfaceOp: replace` 的 `tool/result`，在 `turn/end` 之后，和折叠 bug 同类。
+     修复需逐帧，在偏离点插合成 `turn/start`；每次改完用宿主验证加载。
+   - `69ea4cc5`、`e8734fe5`：`session event at seq 40 lacks an identified message`。
+     原因是 seq 40 的 `user/message` 带 `source.kind='token-tree'` 但没有 `id`；`360db97`
+     已给 fold 生成的 user message 补 `id`。旧日志仍坏，需要单独修或放弃。
+3. 历史标记清理情况：只有 **20** 个 `.bak-*`，dry run 仍有 **5** 个会话命中；之前“40 个已清理”
+   的说法不准确。41 个实验会话已移到
    `~/.dsh/sessions-test-backup-2026-11-05T15-55-50-643Z/`（含 manifest.json，搬回来即恢复）。
-4. `~/.dsh/token-tree/settings.json` 现在只有 `{}`：之前的 18 条测试会话覆盖已清掉。
+4. `~/.dsh/token-tree/settings.json` 现在只有 `{}`：18 条会话覆盖和 11 个全局键都已清掉。
 
 ## 实验与数据
 
-- `docs/experiment-context-cache.md`：全部实测记录（50+ 节，含失败实验）。
+- `docs/experiment-context-cache.md`：全部实测记录（50 节，含失败实验）。
   **文档里的数字都有前提和样本量，引用时一起引。**
 - `docs/experiments/*.json`：标注集（18 条学习 / 8 条同义改写 / 15 条必须跳转）与探针结果。
 - 关键负结果：检索没有召回增益（父回答进结果 23%、rank1 11%）；BM25 / jieba / BGE 都没有显著提升；
@@ -77,7 +87,9 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
 
 ## 下一步建议
 
-1. 清掉 3d7b782b 的标记（需要应用关闭）；
-2. 修 `afebc0a3` 那类"回合外 tool/result"，或至少在宿主侧确认是否还有新的产生路径；
-3. `69ea4cc5` / `e8734fe5` 的 `lacks an identified message` 排查；
-4. 决定是否推送这 10 个提交（README 审计、诊断命令、设置页重写、预设合并、作用域修复、标记剥离…）。
+1. 退出桌面端后清 3d7b782b 的 **2** 个真实标记 frame（先 dry run 确认 19 → 2）；
+2. 修 `afebc0a3` 那类“回合外 tool/result”（逐帧插合成 turn，改完用宿主加载验证）；
+3. `69ea4cc5` / `e8734fe5` 旧日志已无法靠当前代码恢复（`360db97` 只防再产生）；
+4. 复核本轮新加的回归测试：marker 结尾/围栏、fold turn 归属、surface replacement 去重、
+   replay edits、node cap、settings scope、preset 整包、rule 持久化；
+5. 决定是否推送这 12 个提交（README 审计、诊断命令、设置页重写、预设合并、作用域修复、标记剥离…）。

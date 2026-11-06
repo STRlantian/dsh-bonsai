@@ -44,6 +44,9 @@ export interface Classification {
   cancels: boolean
 }
 
+/** Longest rule text kept, so one manual rule cannot grow every prompt without bound. */
+const MAX_RULE_CHARS = 500
+
 /** Phrases that lift an earlier constraint. */
 const CANCEL = [
   '不再受', '不再限制', '取消', '解除', '忽略之前', '忽略以上', '不用再', '不需要再', '不必再',
@@ -176,10 +179,10 @@ export interface RuleEdit {
  * @param edit - the mutation.
  * @returns The updated list; unchanged when the edit targets a missing rule.
  */
-export function applyRuleEdit(list: readonly Constraint[], edit: RuleEdit): Constraint[] {
+export function applyRuleEdit(list: readonly Constraint[], edit: RuleEdit, keep = 8): Constraint[] {
   const next = [...list]
   if (edit.op === 'add') {
-    const text = (edit.text ?? '').trim()
+    const text = (edit.text ?? '').trim().slice(0, MAX_RULE_CHARS)
     if (text === '') return next
     next.push({
       id: `rule-${edit.at.toString(36)}-${next.length}`,
@@ -189,7 +192,7 @@ export function applyRuleEdit(list: readonly Constraint[], edit: RuleEdit): Cons
       source: 'manual',
       reason: 'manual',
     })
-    return next
+    return next.slice(-keep)
   }
   const index = next.findIndex(entry => entry.id === edit.id)
   if (index < 0) return next
@@ -199,7 +202,7 @@ export function applyRuleEdit(list: readonly Constraint[], edit: RuleEdit): Cons
   }
   const current = next[index]
   if (edit.op === 'update') {
-    const text = (edit.text ?? '').trim()
+    const text = (edit.text ?? '').trim().slice(0, MAX_RULE_CHARS)
     if (text === '') return next
     next[index] = { ...current, text, source: 'manual' }
     return next

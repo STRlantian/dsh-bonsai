@@ -39,6 +39,26 @@ export const AGGRESSIVE_HIDDEN_TOOLS = [
   'get_goal',
 ] as const
 
+/** Every key a preset owns. Applying a preset clears the others in this set first. */
+export const PRESET_KEYS = [
+  'autoInject',
+  'retrievalHint',
+  'autoReflect',
+  'attachChoices',
+  'attachSummary',
+  'attachGate',
+  'fileRegion',
+  'mandatoryContext',
+  'foldAboveTokens',
+  'foldKeepTurns',
+  'foldCadence',
+  'foldBlockRatio',
+  'foldTrigger',
+  'foldScope',
+  'foldPolicy',
+  'toolDeny',
+] as const
+
 /** All presets, in the order the panel shows them. */
 export const PRESETS: readonly Preset[] = [
   {

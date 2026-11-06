@@ -143,9 +143,24 @@ export class EditStore {
       }
       if (typeof parsed !== 'object' || parsed === null) continue
       const candidate = parsed as Partial<EditOp>
-      if (typeof candidate.session !== 'string' || typeof candidate.nodeId !== 'string') continue
+      if (typeof candidate.session !== 'string') continue
       if (candidate.action !== 'reparent' && candidate.action !== 'remove' && candidate.action !== 'mark' && candidate.action !== 'rule') continue
       const list = this.bySession.get(candidate.session) ?? []
+      if (candidate.action === 'rule') {
+        if (candidate.ruleOp !== 'add' && candidate.ruleOp !== 'update' && candidate.ruleOp !== 'remove' && candidate.ruleOp !== 'toggle') continue
+        list.push({
+          session: candidate.session,
+          action: 'rule',
+          ruleOp: candidate.ruleOp,
+          ...(typeof candidate.ruleId === 'string' ? { ruleId: candidate.ruleId } : {}),
+          ...(typeof candidate.ruleText === 'string' ? { ruleText: candidate.ruleText } : {}),
+          ...(typeof candidate.ruleActive === 'boolean' ? { ruleActive: candidate.ruleActive } : {}),
+          at: typeof candidate.at === 'number' ? candidate.at : 0,
+        })
+        this.bySession.set(candidate.session, list)
+        continue
+      }
+      if (typeof candidate.nodeId !== 'string') continue
       list.push({
         session: candidate.session,
         action: candidate.action,

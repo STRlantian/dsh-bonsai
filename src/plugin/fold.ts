@@ -176,6 +176,7 @@ export function planTurnFold(
   // all belong to the same turn.
   const visibleSet = new Set(visible)
   const turnOfSeq = new Map<number, number>()
+  const protectedTurns = new Set<number>()
   let current = 0
   for (const event of events) {
     if (event.type === "turn/start") {
@@ -185,12 +186,18 @@ export function planTurnFold(
     if (!visibleSet.has(event.seq)) continue
     if (!SURFACE_TYPES.has(event.type)) continue
     const data = event.data ?? {}
-    // A placeholder from an earlier fold is not a conversation turn.
-    if ((data.source as { kind?: string } | undefined)?.kind === "token-tree") continue
+    const sourceKind = (data.source as { kind?: string } | undefined)?.kind
+    // A placeholder from an earlier fold, or a compaction checkpoint, is not conversation content.
+    if (sourceKind === "token-tree" || sourceKind === "compact-checkpoint") continue
     // The resolver is the plugin's own bookkeeping and is preferred: a host may stamp the same turn
     // number on every surface event even though the conversation has moved on.
     const turn = turnOf?.(event.seq) ?? (typeof data.turn === "number" ? data.turn : current)
-    if (turn > 0) turnOfSeq.set(event.seq, turn)
+    if (turn > 0) {
+      turnOfSeq.set(event.seq, turn)
+      // Never fold a turn that carries a system message: later system nodes are not protected by
+      // the host's surface-node-0 rule, but folding one would remove instructions from the prompt.
+      if (event.type === "system/message") protectedTurns.add(turn)
+    }
   }
   const byTurn = new Map<number, number[]>()
   for (const [seq, turn] of turnOfSeq) {
@@ -204,19 +211,30 @@ export function planTurnFold(
   // The first surface node belongs to the prompt head and may only be rewritten by a
   // system/message over exactly that node, so the opening turn is left alone.
   const earliest = turns[0]
-  const chosen = turns.filter(turn => turn !== earliest && !kept.has(turn))
+  const chosen = turns.filter(turn => turn !== earliest && !kept.has(turn) && !protectedTurns.has(turn))
   if (chosen.length === 0) return []
   const folds: TurnFold[] = []
+  const surfaceIndex = new Map(visible.map((seq, index) => [seq, index]))
   for (const turn of chosen) {
-    const seqs = [...(byTurn.get(turn) as number[])].sort((left, right) => left - right)
+    const seqs = [...(byTurn.get(turn) as number[])].sort((left, right) =>
+      (surfaceIndex.get(left) ?? left) - (surfaceIndex.get(right) ?? right))
     const first = seqs[0]
     const last = seqs[seqs.length - 1]
-    // Every visible seq in the interval must belong to this turn, or the range would shadow a
-    // neighbour.
+    // The host validates a replacement by surface position, not numeric seq. Check every visible
+    // node in the surface span; after an earlier tool-scope fold inserted a high-seq replacement,
+    // numeric order and surface order can disagree.
+    const firstIndex = surfaceIndex.get(first)
+    const lastIndex = surfaceIndex.get(last)
     let foreign = false
-    for (let seq = first; seq <= last; seq++) {
-      if (!visibleSet.has(seq)) continue
-      if (turnOfSeq.get(seq) !== turn) { foreign = true; break }
+    if (firstIndex !== undefined && lastIndex !== undefined) {
+      for (let index = firstIndex; index <= lastIndex; index++) {
+        if (turnOfSeq.get(visible[index]) !== turn) { foreign = true; break }
+      }
+    } else {
+      for (let seq = first; seq <= last; seq++) {
+        if (!visibleSet.has(seq)) continue
+        if (turnOfSeq.get(seq) !== turn) { foreign = true; break }
+      }
     }
     if (foreign) continue
     folds.push({

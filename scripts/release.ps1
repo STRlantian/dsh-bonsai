@@ -82,6 +82,9 @@ try {
   }
 
   Set-Version $stable
+  Write-Host "running typecheck and tests before publishing ..." -ForegroundColor Cyan
+  & pnpm run check
+  if ($LASTEXITCODE -ne 0) { throw "typecheck/tests failed with exit code $LASTEXITCODE" }
   Write-Host "publishing $stable ..." -ForegroundColor Cyan
 
   # Publish the staged package, not the repository root: plugin/ carries the built files and the
@@ -109,11 +112,16 @@ try {
     Write-Host "next test version: $nextTest" -ForegroundColor Cyan
     Set-Version $nextTest
     & git add -A
+    if ($LASTEXITCODE -ne 0) { throw "git add failed" }
     & git -c user.name='STRlantian' -c user.email='m1606977882@outlook.com' commit -q -m "release v$stable"
+    if ($LASTEXITCODE -ne 0) { throw "git commit failed" }
     & git tag "v$stable"
+    if ($LASTEXITCODE -ne 0) { throw "git tag failed" }
     if (-not $SkipPush) {
       & git push origin main
+      if ($LASTEXITCODE -ne 0) { throw "git push main failed" }
       & git push origin "v$stable"
+      if ($LASTEXITCODE -ne 0) { throw "git push tag failed" }
     }
     Write-Host ''
     Write-Host "published  : dsh-bonsai@$stable (latest)" -ForegroundColor Green

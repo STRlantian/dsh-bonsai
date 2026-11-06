@@ -118,6 +118,7 @@ export function renderTree(tree: MemoryTree, options: RenderTreeOptions = {}): s
     }
     emit(describeNode(id, indent))
     const children = tree.node(id).children
+      .filter(child => !tree.hidden(child))
       .filter(child => showTools || tree.node(child).kind !== 'tool_result')
     const next = children.filter(child => spine.has(child))
     const sides = children.filter(child => !spine.has(child))
@@ -143,6 +144,7 @@ export function renderTree(tree: MemoryTree, options: RenderTreeOptions = {}): s
   lines.push('')
   lines.push(`focus → root: cost ${spineCost.cost.toFixed(2)} over ${spineCost.path.length - 1} hop(s)`)
   const branches = tree.node(tree.rootId).children
+    .filter(child => !tree.hidden(child))
     .map(child => ({ child, size: tree.subtree(child).length }))
     .sort((left, right) => right.size - left.size)
     .slice(0, 4)
