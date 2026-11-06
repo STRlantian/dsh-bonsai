@@ -154,6 +154,9 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
   // mechanism the host offers for this (it keeps schema, lookup and execution aligned).
   /** Last deny list successfully applied to one agent, so a per-turn reapply is cheap. */
   const appliedDeny = new Map<string, string>()
+  /** The host disposer for that agent's current restriction; restrictions intersect, so the old
+   * one must be lifted before a new one (otherwise an empty deny cannot bring tools back). */
+  const denyDisposers = new Map<string, () => void>()
   const applyToolDeny = (agent: AgentLike): void => {
     const deny = service.toolDeny(agent.session?.id)
     const key = deny.join('\u0000')
@@ -172,7 +175,10 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
       return
     }
     try {
-      restrict.call(agent.ctx?.tools, { deny })
+      denyDisposers.get(agent.id)?.()
+      denyDisposers.delete(agent.id)
+      const dispose = restrict.call(agent.ctx?.tools, { deny }) as unknown
+      if (typeof dispose === 'function') denyDisposers.set(agent.id, dispose as () => void)
       appliedDeny.set(agent.id, key)
       service.noteToolRestriction(String(agent.id ?? 'agent'), deny, true, shape)
       ctx.logger.info(deny.length === 0
