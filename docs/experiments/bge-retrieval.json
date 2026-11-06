@@ -1,0 +1,97 @@
+{
+  "generatedAt": "2026-11-06T13:12:49.849Z",
+  "model": "Xenova/bge-small-zh-v1.5",
+  "sets": {
+    "learning": 17,
+    "paraphrase": 8,
+    "jump": 15
+  },
+  "hash": {
+    "learning": {
+      "n": 17,
+      "rank1": 0,
+      "top3": 1,
+      "mrr": 0.08804444179831176
+    },
+    "paraphrase": {
+      "n": 8,
+      "rank1": 1,
+      "top3": 1,
+      "mrr": 0.2321969696969697
+    },
+    "jump": {
+      "n": 15,
+      "rank1": 0,
+      "top3": 0,
+      "mrr": 0.12368347338935574
+    },
+    "all": {
+      "n": 40,
+      "rank1": 1,
+      "top3": 2,
+      "mrr": 0.13023958422468485
+    }
+  },
+  "bge": {
+    "learning": {
+      "n": 17,
+      "rank1": 0,
+      "top3": 0,
+      "mrr": 0.06964642768395303
+    },
+    "paraphrase": {
+      "n": 8,
+      "rank1": 0,
+      "top3": 1,
+      "mrr": 0.1465472027972028
+    },
+    "jump": {
+      "n": 15,
+      "rank1": 0,
+      "top3": 0,
+      "mrr": 0.10587850356825687
+    },
+    "all": {
+      "n": 40,
+      "rank1": 0,
+      "top3": 1,
+      "mrr": 0.09861361116321692
+    }
+  },
+  "bgeEdges": {
+    "learning": {
+      "n": 17,
+      "rank1": 0,
+      "top3": 0,
+      "mrr": 0.07227280339217017
+    },
+    "paraphrase": {
+      "n": 8,
+      "rank1": 0,
+      "top3": 1,
+      "mrr": 0.13746753246753246
+    },
+    "jump": {
+      "n": 15,
+      "rank1": 0,
+      "top3": 0,
+      "mrr": 0.09842866983359341
+    },
+    "all": {
+      "n": 40,
+      "rank1": 0,
+      "top3": 1,
+      "mrr": 0.09512019912277637
+    }
+  },
+  "edgeSummary": {
+    "edges": 37,
+    "meanJumpHash": 0.6736588951804294,
+    "meanJumpBge": 0.3994887222500485,
+    "meanCostHash": 0.8518283131398751,
+    "meanCostBge": 0.6330635456148997,
+    "jumpDown": 37,
+    "jumpUp": 0,
+    "jumpSame": 0
+  }
+}
