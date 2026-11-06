@@ -535,7 +535,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-tool-name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:ui-monospace,Consolas,monospace}',
     '.twt-tool-size{font-size:10px;opacity:.6}',
     '.twt-modal-foot{display:flex;align-items:center;gap:8px}',
-    '.twt-presets{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;padding:8px 10px;border:1px solid var(--twt-border);border-radius:10px;background:var(--twt-hover)}',
+    '.twt-presets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:8px 10px;border:1px solid var(--twt-border);border-radius:10px;background:var(--twt-hover)}',
+    '@media (max-width:620px){.twt-presets{grid-template-columns:1fr}}',
     '.twt-presets>.twt-cardhead,.twt-presets>.twt-hint{grid-column:1/-1}',
     '.twt-preset{display:flex;flex-direction:column;gap:4px;min-width:0}',
     '.twt-preset .twt-action{width:100%;justify-content:center}',
@@ -592,11 +593,14 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     'padding:6px 8px 8px;overflow:auto;display:flex;flex-direction:column;gap:6px}',
     '.twt-dockactions-vertical{flex-direction:column;align-items:stretch}',
     '.twt-dockactions-vertical .twt-action{width:100%;text-align:center}',
-    // Settings tab: one row per switch, control on the right.
-    '.twt-settings{flex:1;min-height:0;overflow:auto;padding:10px 14px;display:flex;flex-direction:column;gap:10px}',
-    '.twt-srow{display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:8px;',
+    // Settings tab: compact cards in two columns, not one full-width row per switch.
+    '.twt-settings{flex:1;min-height:0;overflow:auto;padding:8px 10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:6px 8px;align-content:start}',
+    '.twt-settings>.twt-tabs,.twt-settings>.twt-scopehint,.twt-settings>.twt-presets,.twt-settings>.twt-advanced,.twt-settings>.twt-flash,.twt-settings>.twt-note{grid-column:1/-1}',
+    '.twt-srow{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:4px 8px;padding:6px 8px;border-radius:8px;',
     'border:1px solid var(--twt-border);background:rgba(255,255,255,.02);transition:background .12s ease}',
+    '.twt-srow-wide{grid-column:1/-1}',
     '.twt-srow:hover{background:rgba(255,255,255,.05)}',
+    '@media (max-width:720px){.twt-srow{grid-template-columns:minmax(0,1fr)}.twt-scontrol{justify-content:flex-start;margin-top:2px}}',
     // A segmented switch reads as one control, not as two stray buttons.
     '.twt-tabs{display:flex;gap:4px;padding:3px;border:1px solid var(--twt-border);border-radius:10px;background:rgba(255,255,255,.03)}',
     '.twt-tab{flex:1;padding:7px 10px;border:0;border-radius:8px;background:transparent;color:inherit;',
@@ -607,14 +611,21 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-card{border:1px solid var(--twt-border);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px}',
     '.twt-cardhead{display:flex;align-items:center;gap:8px}',
     '.twt-scopehint{margin:2px 0 0}',
-    '.twt-advanced{border:1px solid var(--twt-border);border-radius:10px;padding:8px 12px;display:flex;flex-direction:column;gap:8px}',
+    '.twt-advanced{border:1px solid var(--twt-border);border-radius:10px;padding:8px 12px}',
     '.twt-advanced summary{cursor:pointer;font-size:12px;font-weight:700;opacity:.72;letter-spacing:.02em;list-style:none}',
     '.twt-advanced summary::before{content:"▸ ";opacity:.7}',
     '.twt-advanced[open] summary::before{content:"▾ "}',
     '.twt-advanced summary::-webkit-details-marker{display:none}',
-    '.twt-slabel{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}',
-    '.twt-slabel .twt-hint{font-size:11px;opacity:.7}',
-    '.twt-scontrol{display:flex;align-items:center;gap:8px;flex:none}',
+    '.twt-slabel{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1}',
+    '.twt-slabel b{font-size:12px;line-height:1.3}',
+    '.twt-slabel .twt-hint{font-size:10px;line-height:1.35;opacity:.65;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}',
+    '.twt-ebadge{font-size:9px;line-height:13px;padding:0 4px;align-self:flex-start}',
+    '.twt-scontrol{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:4px;flex:none;align-self:center}',
+    '.twt-scontrol .twt-action{font-size:11px;padding:2px 8px}',
+    '.twt-scontrol .twt-select{font-size:11px;padding:3px 6px}',
+    '.twt-scontrol input[type="number"]{font-size:11px;padding:3px 5px;border-radius:6px;border:1px solid var(--twt-border);background:var(--twt-surface);color:var(--twt-text);color-scheme:light dark}',
+    '.twt-advanced{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:6px 8px}',
+    '.twt-advanced>summary{grid-column:1/-1}',
     // Embedded, not floating: the dock stays a normal flex item of the composer row, so
     // the transcript keeps its own space. Expanding only adds breathing room on both
     // sides, which pushes the tok/s, cache-hit and context widgets away from the graph
@@ -1431,10 +1442,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
 
     function settingRow(options) {
       var overridden = settings !== null && settings.overrides[options.key] !== undefined
-      var row = h('div', { className: 'twt-srow', key: options.key },
+      var row = h('div', { className: options.wide === true ? 'twt-srow twt-srow-wide' : 'twt-srow', key: options.key },
         h('div', { className: 'twt-slabel' },
           h('b', null, options.label),
-          h('span', { className: 'twt-hint' }, options.hint),
+          h('span', { className: 'twt-hint', title: options.hint }, options.hint),
           h('span', { className: 'twt-ebadge', style: { color: overridden ? '#e0a458' : undefined } },
             overridden ? t('已覆盖') : t('跟随配置'))),
         h('div', { className: 'twt-scontrol' },
@@ -1746,7 +1757,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             className: 'twt-select',
             defaultValue: currentTokenizerChoice(effective, settings),
             disabled: busy || settingsScopeId !== null,
-            style: { width: '190px' },
+            style: { width: '150px' },
             onChange: function (event) {
               var next = String(event.target.value || 'auto')
               saveSetting('tokenizerVersion', next === 'auto' ? null : next)
@@ -1762,7 +1773,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             className: 'twt-select',
             defaultValue: effective.locale === 'zh' || effective.locale === 'en' ? effective.locale : 'auto',
             disabled: busy,
-            style: { width: '150px' },
+            style: { width: '110px' },
             onChange: function (event) {
               var next = String(event.target.value || 'auto')
               setLocalePreference(next)
