@@ -116,9 +116,9 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 
 | 设置 | 默认 | 作用 |
 |---|---|---|
-| `autoFold` | `true` | 价格都填了时，自动阈值优先；关闭后回到手填阈值 |
-| `cacheHitPrice` | `0` | 缓存命中相对价格；和未命中都 >0 时启用自动阈值 |
-| `cacheMissPrice` | `0` | 缓存未命中相对价格；需大于命中价 |
+| `autoFold` | `true` | 默认用缓存价格自动算阈值；关闭后回到手填阈值 |
+| `cacheHitPrice` | `0.02` | 缓存命中相对价格；默认按 DeepSeek 的 0.02/1，和未命中都 >0 时启用自动阈值 |
+| `cacheMissPrice` | `1` | 缓存未命中相对价格；需大于命中价 |
 | `foldAboveTokens` | `30000` | 手动待折块下限；填了缓存价格后自动阈值优先，此项只作兜底 |
 | `foldBlockRatio` | `8` | 待折块还要 ≥ 这个倍数 × 保留窗口；`0` 关闭相对规则；自动阈值模式下自动换算 |
 | `foldCadence` | `10` | 两次折叠至少间隔这么多轮（折叠会重写前缀缓存） |
@@ -131,7 +131,7 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 - `自动选阈值`：填命中/未命中价格，按实际平均每轮 token 算；
 - `手动填阈值`：直接填待折块 token。
 
-填了 `cacheHitPrice` 和 `cacheMissPrice`（未命中 > 命中）后，插件用**实际平均每轮 token**自动算：
+`cacheHitPrice` 和 `cacheMissPrice` 默认是 DeepSeek 的 `0.02` / `1`（未命中 > 命中），插件用**实际平均每轮 token**自动算：
 
 ```text
 T* = avgTurnTokens × √(2 × keepTurns × (miss/hit − 1))
@@ -145,18 +145,26 @@ T* = avgTurnTokens × √(2 × keepTurns × (miss/hit − 1))
 
 ## 把落点判断交给模型
 
-模型每轮会收到最多 10 条候选（只有**问题**，没有回答正文），并可以在回答最后点名：
+模型每轮会收到最多 10 条候选（只有**问题**，没有回答正文），并在回答前调用工具：
 
 ```text
-[attach:nX]    依赖候选里的某一条（含代词指代）
-[attach:root]  这是新话题，挂到根
-[attach:here]  要求/元指令（"我来问，你来看对不对"），留在当前线上
+tree_attach(target="nX", summary="方面 1, 方面 2")
+```
+
+`target` 取值：
+
+```text
+"nX"    依赖候选里的某一条（含代词指代）
+"root"  这是新话题，挂到根
+"here"  要求/元指令（"我来问，你来看对不对"），留在当前线上
+"auto"  保持自动落点（只想交摘要时用）
 ```
 
 提示里还有一句：**问题问的是某条回答里提到的子概念时，挂那条回答**。这一句让"讲了 A，其中提到 B
 和 C，再分别问 B、C"都挂回 A —— 实测 3/5 → 5/5（同一 5 次追问）；没有它时两问会串成 B→C 的链。
 
-插件只接受**本轮真的发过**的 id：模型编的节点号一律忽略，标记从正文剥掉，不进树也不进下一轮。
+插件只接受**本轮真的发过**的 id：模型编的节点号一律忽略。落点和摘要走工具参数，不再写进回答正文，
+所以不会留下 `[attach:...]` / `[summary:...]` 尾巴。
 
 ## 长内容怎么给
 
@@ -192,9 +200,9 @@ T* = avgTurnTokens × √(2 × keepTurns × (miss/hit − 1))
 | `foldKeepTurns` | `2` | 保留最近轮数（公式里的"窗口"） |
 | `foldScope` | `turns` | 折叠范围 |
 | `attachChoices` | `10` | 每轮给模型看的候选问题数量（只给问题，不给正文）；`0` 关闭 |
-| `attachPrompt` | `any` | `any`：依赖写 `[attach:nX]`、新话题写 `[attach:root]`、元指令写 `[attach:here]`；`follow`：只问指代 |
+| `attachPrompt` | `any` | `any`：依赖用 `target="nX"`、新话题 `"root"`、元指令 `"here"`；`follow`：只问指代；都通过 `tree_attach` 工具提交 |
 | `attachGate` | `always` | `uncertain`：只在本地没把握时才发候选块；实测两极分化——写代码会话 0/259 次触发，学习/编码会话 18/18 与 256/256 全部触发 |
-| `attachSummary` | `true` | 每轮要求模型在回答末尾写“方面摘要”；没写时用前 200 字启发式兜底 |
+| `attachSummary` | `true` | 每轮要求模型在 `tree_attach` 里带“方面摘要”；没写时用前 200 字启发式兜底 |
 | `mandatoryContext` | `true` | 把一个回合的"父回答 + 它的提问"强制放进检索结果；这是接线保证（≈99%），不是打分检索的增益 |
 | `fileRegion` | `auto` | 检索返回本会话读过文件的当前内容（auto/digest/content/off） |
 | `tokenizerVersion` | `auto` | `auto` / `3` / `4` / `off`（估算 + 账单校准） |
@@ -223,11 +231,12 @@ config:
   │
   ├─ 注入（每轮第一步）：检索提示（体积达标才出现）+ 候选问题块（≤10 条，只给问题）
   │
-  ├─ 模型回答；可以在最后写：
-  │     [attach:nX]   依赖候选里的某一条
-  │     [attach:root] 这是新话题，挂到根
+  ├─ 模型回答前调用 tree_attach：
+  │     target="nX"   依赖候选里的某一条
+  │     target="root" 这是新话题，挂到根
+  │     target="auto" 保持自动落点
   │
-  └─ 插件：有标记就改挂（只接受本轮发过的 id），没有就用本地默认
+  └─ 插件：工具给了落点就改挂（只接受本轮发过的 id），没给就用本地默认
 ```
 
 **模型每轮实际看到什么**

@@ -32,7 +32,7 @@ test('any mode offers the new-topic call, follow mode does not', () => {
   const run = conversation()
   run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小决定。')
   const block = run.service.attachChoices('root-marker', '它的误判率怎么算')
-  assert.ok(block.includes('[attach:root]'), 'any mode names the sentinel: ' + block)
+  assert.ok(block.includes('tree_attach') && block.includes('"root"'), 'any mode names the sentinel: ' + block)
   run.service.updateSettings({ attachPrompt: 'follow' })
   run.service.attachChoices('root-marker', '它的误判率怎么算')
   assert.equal(run.service.stateOf('root-marker').offeredRoot, false, 'follow mode offers no root call')

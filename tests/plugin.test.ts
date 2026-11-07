@@ -206,6 +206,7 @@ test('mounting registers every tool and publishes the service', () => {
   const { harness } = mount()
   assert.deepEqual([...harness.tools.keys()].sort(), [
     'retrieve_context',
+    'tree_attach',
     'tree_backtrack',
     'tree_focus',
     'tree_mark',
@@ -515,7 +516,7 @@ test('with injection off the hook appends the summary request and a post-fold hi
     async () => ({ kind: 'enter', messages: [userMessage] }),
   ) as { messages: UserMessageLike[] }
   assert.equal(early.messages.length, 2, 'the summary request is appended')
-  assert.ok(JSON.stringify(early.messages[1]).includes('[summary:'), 'summary every turn')
+  assert.ok(JSON.stringify(early.messages[1]).includes('tree_attach'), 'summary every turn')
   assert.ok(!JSON.stringify(early.messages[1]).includes('retrieve_context'), 'no retrieval hint before a fold')
 
   for (let index = 0; index < 6; index += 1) {
@@ -529,7 +530,7 @@ test('with injection off the hook appends the summary request and a post-fold hi
     async () => ({ kind: 'enter', messages: [userMessage] }),
   ) as { messages: UserMessageLike[] }
   assert.equal(shortConversation.messages.length, 2, 'the choices block rides along')
-  assert.ok(JSON.stringify(shortConversation.messages[1]).includes('[attach:'), 'and asks for a marker')
+  assert.ok(JSON.stringify(shortConversation.messages[1]).includes('tree_attach'), 'and asks for a placement')
   assert.ok(!JSON.stringify(shortConversation.messages[1]).includes('retrieve_context'), 'still no hint before a fold')
 
   const withoutChoices = mount({ ...defaults(), autoInject: false, retrievalHint: true, attachChoices: 0 })
@@ -544,8 +545,8 @@ test('with injection off the hook appends the summary request and a post-fold hi
     async () => ({ kind: 'enter', messages: [userMessage] }),
   ) as { messages: UserMessageLike[] }
   assert.equal(bare.messages.length, 2, 'summary only; attachChoices: 0 suppresses the candidate block')
-  assert.ok(!JSON.stringify(bare.messages[1]).includes('[attach:'), 'no attach candidates')
-  assert.ok(JSON.stringify(bare.messages[1]).includes('[summary:'), 'summary stays')
+  assert.ok(!JSON.stringify(bare.messages[1]).includes('本轮的落点由你判'), 'no attach candidates')
+  assert.ok(JSON.stringify(bare.messages[1]).includes('tree_attach'), 'summary stays')
 
   // A completed fold is the hint gate.
   service.noteFoldTurn('session-1', 2)

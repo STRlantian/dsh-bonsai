@@ -17,7 +17,7 @@ const logger = { info: () => {}, warn: () => {}, debug: () => {}, error: () => {
 function mount(configOverrides: Record<string, unknown>) {
   const handlers = new Map<string, ((...args: unknown[]) => unknown)[]>()
   const appended: { type: string; data: Record<string, unknown>; intent: Record<string, unknown> | undefined }[] = []
-  const config = Config['~standard'].validate({ logEdgeUpdates: false, autoReflect: false, ...configOverrides }).value
+  const config = Config['~standard'].validate({ logEdgeUpdates: false, autoReflect: false, autoFold: false, ...configOverrides }).value
   const ctx = {
     tools: { register: () => () => {} },
     logger,

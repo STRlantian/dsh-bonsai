@@ -1,8 +1,8 @@
 /**
  * Model-facing tools.
  *
- * Five tools cover the loop: inspect the tree, recall a weighted context buffer,
- * write a reflection, pick a better branch, and mark a branch by hand. Each one
+ * Seven tools cover the loop: inspect the tree, recall a weighted context buffer,
+ * place the current question, write a reflection, pick a better branch, and mark a branch by hand. Each one
  * is a plain `ToolDefinition` object — the exact structure `ctx.tools.register`
  * accepts and `defineTool` would compile to — so the plugin can register them
  * without importing the harness packages.
@@ -501,6 +501,52 @@ export function createTools(service: TokenTreeService): ToolDefinitionLike[] {
     },
   }
 
+  const attachTool: ToolDefinitionLike = {
+    name: 'tree_attach',
+    description: `${COMMON} `
+      + 'Use this once before your final answer to place the question you are answering and, optionally, '
+      + 'summarise that answer. `target` is a candidate node id, "root" for a new topic, "here" for a '
+      + 'requirement turn that stays on the current line, or "auto" to keep the automatic placement. '
+      + 'Only ids offered in the candidate list are accepted.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['target'],
+      properties: {
+        target: {
+          type: 'string',
+          description: 'Candidate node id, "root", "here", or "auto".',
+        },
+        summary: {
+          type: 'string',
+          description: '2-4 comma-separated phrases describing this answer, at most 40 characters.',
+        },
+      },
+    },
+    output: {
+      schema: objectSchema({
+        questionId: { type: 'string' },
+        target: { type: 'string' },
+        placed: { type: 'boolean' },
+        summary: { type: 'string' },
+      }, ['target', 'placed']),
+      render: (_args, value) => {
+        const record = value as { questionId?: string; target: string; placed: boolean; summary?: string }
+        const placement = record.placed
+          ? `moved ${record.questionId ?? 'the question'} under ${record.target}`
+          : record.target === 'auto'
+            ? 'kept the automatic placement'
+            : `kept the automatic placement (${record.target} was not usable)`
+        return textBlock(`tree_attach: ${placement}${record.summary === undefined ? '' : `; summary: ${record.summary}`}`)
+      },
+    },
+    async execute(args, exec) {
+      const agent = requireAgent(exec)
+      const record = args as Record<string, unknown>
+      return service.placePendingQuestion(agent.session.id, requireString(record, 'target'), optionalString(record, 'summary'))
+    },
+  }
+
   const focusTool: ToolDefinitionLike = {
     name: 'tree_focus',
     description: `${COMMON} `
@@ -542,5 +588,5 @@ export function createTools(service: TokenTreeService): ToolDefinitionLike[] {
     },
   }
 
-  return [retrieveTool, queryTool, reflectTool, backtrackTool, markTool, focusTool]
+  return [retrieveTool, queryTool, reflectTool, backtrackTool, markTool, focusTool, attachTool]
 }

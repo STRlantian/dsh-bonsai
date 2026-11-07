@@ -136,10 +136,10 @@ was more expensive because its extra folds invalidated cached prefixes.
 
 | Setting | Default | Effect |
 |---|---|---|
-| `autoFold` | `true` | When prices are filled, the automatic threshold wins; turn it off to use the manual floor |
-| `cacheHitPrice` | `0` | Relative cache-hit price; automatic thresholding starts when both prices are positive |
-| `cacheMissPrice` | `0` | Relative cache-miss price; must exceed the hit price |
-| `foldAboveTokens` | `30000` | Manual block floor; the automatic threshold wins when prices are filled |
+| `autoFold` | `true` | Use the automatic threshold (on by default with DeepSeek prices); off uses the manual floor |
+| `cacheHitPrice` | `0.02` | Relative cache-hit price; ships with DeepSeek's 0.02/1 and enables automatic thresholding |
+| `cacheMissPrice` | `1` | Relative cache-miss price; must exceed the hit price |
+| `foldAboveTokens` | `30000` | Manual block floor; the automatic threshold wins while cache prices are set |
 | `foldBlockRatio` | `8` | Relative floor for the block; automatic thresholding replaces it |
 | `foldCadence` | `10` | Minimum turns between two folds (a fold rewrites the prefix cache) |
 | `foldTrigger` | `block` | `block` decides by block size; `history` is the old whole-history rule |
@@ -159,9 +159,9 @@ T* = avgTurnTokens * sqrt(2 * keepTurns * (miss/hit - 1))
 ```
 
 You no longer need to fill `foldAboveTokens`; `foldBlockRatio` is replaced by the automatic threshold.
-| `attachPrompt` | `any` | `any`: dependency `[attach:nX]`, new topic `[attach:root]`, meta turn `[attach:here]`; `follow`: anaphora only |
+| `attachPrompt` | `any` | `any`: dependency `target="nX"`, new topic `"root"`, meta turn `"here"`; `follow`: anaphora only; both go through `tree_attach` |
 | `attachGate` | `always` | `uncertain`: offer candidates only when the local placement was unsure; measured 0/259 firings in a coding session, 18/18 and 256/256 in two others |
-| `attachSummary` | `true` | Ask the model for an aspect summary at the end of every answer; fall back to the 200-char heuristic if it is missing |
+| `attachSummary` | `true` | Ask the model to pass an aspect summary to `tree_attach`; fall back to the 200-char heuristic if it is missing |
 | `mandatoryContext` | `true` | Force-injects the answer a turn hangs under plus its question; this is a wiring guarantee (~99%), not a scoring gain |
 | `fileRegion` | `auto` | Retrieval returns the current text of files this session read (auto/digest/content/off) |
 
@@ -172,20 +172,21 @@ The placeholder left behind tells the model where the text went:
 ## Letting the model place the turn
 
 Every turn the model sees up to ten candidates (their **questions** only, never the answer text) and may
-name one at the end of its answer:
+place the turn before answering with the tool:
 
 ```text
-[attach:nX]    depends on one candidate (including anaphora)
-[attach:root]  a new topic, put it under the root
-[attach:here]  a requirement or meta turn ("I will ask, you judge"), stay on the current line
+tree_attach(target="nX", summary="aspect 1, aspect 2")
 ```
+
+`target` is `"nX"` for a candidate, `"root"` for a new topic, `"here"` for a requirement or meta turn
+that stays on the current line, or `"auto"` to keep the automatic placement.
 
 The hint also says: **when the question asks about a sub-concept some answer mentioned, attach to that
 answer**. That sentence makes "answered A mentioning B and C, now ask B / ask C" put both under A:
 3/5 -> 5/5 on the same five probes; without it the two follow-ups chain B->C.
 
-Only ids offered that turn are accepted: an invented node number is ignored, and the marker is
-stripped from the text, so it never reaches the tree or the next prompt.
+Only ids offered that turn are accepted: an invented node number is ignored. Placement and summary are
+tool arguments, never text markers, so they do not leak into the transcript.
 
 ## How long content is served
 
@@ -210,9 +211,10 @@ user message
   +- injected at the first step: retrieval hint (only past the size gate) + up to 10 candidate
   |  questions, never their answer text
   |
-  +- the model answers and may end with:
-  |     [attach:nX]   this depends on one of the candidates
-  |     [attach:root] this is a new topic, put it under the root
+  +- before answering, the model calls tree_attach:
+  |     target="nX"   this depends on one of the candidates
+  |     target="root" this is a new topic, put it under the root
+  |     target="auto" keep the automatic placement
   |
   +- the plugin moves the question only to an id it offered this turn; otherwise the local default
      stands
@@ -220,7 +222,8 @@ user message
 
 **What the model actually sees**: the host's conversation history (full answer text) until folding or
 compaction trims it; folding replaces everything outside the last two turns once the estimated
-block passes `foldAboveTokens` (30,000 by default) and is at least `foldBlockRatio` (8x) times the
+block passes the automatic threshold derived from 0.02/1 cache prices (30,000 is the manual fallback)
+and is at least `foldBlockRatio` (8x) times the
 keep window, at most every `foldCadence` (10) turns; the ten candidate *questions*; and the
 two-step `retrieve_context` path (index first, then full text by `nodeId`). "Only the previous
 turn" is true in long, already-folded sessions, not in short ones.

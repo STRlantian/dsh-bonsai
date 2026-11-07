@@ -30,3 +30,4 @@ node_modules/
 npm_token.txt
 .npmrc
 
+/scripts/tstest/

@@ -167,8 +167,8 @@ export interface ResolvedConfig {
   /** Whether automatic cache-price thresholding is enabled. */
   autoFold: boolean
   /**
-   * Relative cache prices. When both are positive and `cacheMissPrice > cacheHitPrice`, the fold
-   * floor is derived from the measured average turn size instead of `foldAboveTokens`.
+   * Relative cache prices. The shipped defaults are DeepSeek's 0.02 hit / 1 miss, so automatic
+   * thresholding works out of the box; set both to 0 to fall back to `foldAboveTokens`.
    */
   cacheHitPrice: number
   /** Relative cache-miss price; see {@link cacheHitPrice}. */
@@ -427,8 +427,8 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 30000,
     foldCadence: scalar(source, 'foldCadence', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 10,
     foldBlockRatio: scalar(source, 'foldBlockRatio', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 8,
-    cacheHitPrice: scalar(source, 'cacheHitPrice', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
-    cacheMissPrice: scalar(source, 'cacheMissPrice', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
+    cacheHitPrice: scalar(source, 'cacheHitPrice', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input >= 0, issues, 'a finite non-negative number') ?? 0.02,
+    cacheMissPrice: scalar(source, 'cacheMissPrice', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input >= 0, issues, 'a finite non-negative number') ?? 1,
     autoFold: scalar(source, 'autoFold', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
     foldTrigger: ((): string => {
       const value = source === undefined ? undefined : (source as Record<string, unknown>).foldTrigger

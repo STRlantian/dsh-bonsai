@@ -21,16 +21,16 @@ function store() {
   return { settings, files }
 }
 
-test('the shipped default folds at 30k tokens', () => {
+test('the shipped default uses DeepSeek cache prices', () => {
   const config = Config['~standard'].validate({ logEdgeUpdates: false }).value!
   assert.equal(config.foldAboveTokens, 30000)
   assert.equal(config.foldScope, 'turns')
   assert.equal(config.foldKeepTurns, 2)
   assert.equal(config.foldBlockRatio, 8)
   assert.equal(config.foldCadence, 10)
-  assert.equal(config.cacheHitPrice, 0, 'automatic thresholding is off until prices are filled')
-  assert.equal(config.cacheMissPrice, 0)
-  assert.equal(config.autoFold, true, 'prices drive the threshold when filled')
+  assert.equal(config.cacheHitPrice, 0.02, 'DeepSeek cache-hit price is the default')
+  assert.equal(config.cacheMissPrice, 1, 'DeepSeek cache-miss price is the default')
+  assert.equal(config.autoFold, true, 'prices drive the threshold out of the box')
 })
 
 test('cache prices are per-session overridable', () => {
@@ -40,10 +40,10 @@ test('cache prices are per-session overridable', () => {
     logger,
     settings,
   })
-  service.updateSettings({ cacheHitPrice: 1, cacheMissPrice: 50 }, 'session-a')
-  assert.equal(service.effective('session-a').cacheHitPrice, 1)
-  assert.equal(service.effective('session-a').cacheMissPrice, 50)
-  assert.equal(service.effective().cacheHitPrice, 0, 'other scopes stay manual')
+  service.updateSettings({ cacheHitPrice: 0.05, cacheMissPrice: 2 }, 'session-a')
+  assert.equal(service.effective('session-a').cacheHitPrice, 0.05)
+  assert.equal(service.effective('session-a').cacheMissPrice, 2)
+  assert.equal(service.effective().cacheHitPrice, 0.02, 'other scopes keep the shipped default')
 })
 
 test('the panel offers default, tree-only, and off', () => {
@@ -117,7 +117,7 @@ test('off hides the plugin tools; tree-only leaves them available', () => {
     settings,
   })
   service.applyPreset('off')
-  assert.deepEqual(service.effective().toolDeny, ['retrieve_context', 'tree_query', 'tree_mark', 'tree_focus', 'tree_backtrack'])
+  assert.deepEqual(service.effective().toolDeny, ['retrieve_context', 'tree_query', 'tree_mark', 'tree_focus', 'tree_attach', 'tree_backtrack'])
   service.applyPreset('treeOnly')
   assert.deepEqual(service.toolDeny(), [], 'tree-only restores the tools')
   assert.equal(service.effective().foldAboveTokens, 0, 'tree-only still records without folding')
@@ -134,7 +134,7 @@ test('a preset applies to the scope it is asked for', () => {
   const applied = service.applyPreset('off', 'session-a')
   assert.ok(applied !== undefined)
   assert.equal(applied.effective.foldAboveTokens, 0, 'session sees the preset')
-  assert.deepEqual(applied.effective.toolDeny, ['retrieve_context', 'tree_query', 'tree_mark', 'tree_focus', 'tree_backtrack'])
+  assert.deepEqual(applied.effective.toolDeny, ['retrieve_context', 'tree_query', 'tree_mark', 'tree_focus', 'tree_attach', 'tree_backtrack'])
   const written = JSON.parse(files.get('C:/tmp/settings.json') as string)
   assert.deepEqual(Object.keys(written), ['sessions'], 'only the session map was written')
   assert.equal(written.sessions['session-a'].foldAboveTokens, 0)

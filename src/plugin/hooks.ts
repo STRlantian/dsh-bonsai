@@ -27,7 +27,6 @@ import { homedir } from 'node:os'
 
 import { blockTokensOf, foldWorthIt, keptTokensOf, optimalFoldThreshold, planFold, planTurnFold } from './fold.ts'
 import { SURFACE_TYPES } from './fold.ts'
-import { readTrailingMarkers } from './markers.ts'
 import type { TokenTreeService } from './service.ts'
 
 /** Longest query text taken from a user message. */
@@ -245,14 +244,6 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     }
     const session = payload.agent?.session
     if (session !== undefined) {
-      // Marker stripping runs on every stopping pass of the turn: a supervisor continuation
-      // produces a second pass, and its final answer still has markers to remove. Folding is
-      // idempotent per turn, so it keeps its own guard.
-      try {
-        stripMarkers(session, service, ctx, payload.turn)
-      } catch (error) {
-        ctx.logger.warn(`token-tree: marker strip failed for session ${session.id}: ${describe(error)}`)
-      }
       if (foldedTurns.get(session.id) !== payload.turn) {
         foldedTurns.set(session.id, payload.turn)
         try {
@@ -281,102 +272,6 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
  * @param service - tree service holding the measurement.
  */
 
-
-/**
- * Remove trailing placement and summary markers from the answers of the turn that just ran.
- *
- * A `tool/result` or `user/message` surface replacement may be appended while the turn is open;
- * an `assistant/message` replacement additionally needs an open step. The host has already closed
- * the last real step when `agent/turn-stopping` runs, so the rewrite is wrapped in one short
- * synthetic step. Only text blocks are touched, non-text blocks are preserved, and markers are
- * recognized only at the end of the last text block. Messages that carry tool calls are left alone:
- * their tool lifecycle belongs to the real step and must not be replayed into a synthetic one.
- * @param session - session whose turn is stopping.
- * @param service - tree service, for the turn bookkeeping.
- * @param ctx - plugin context, for logging.
- * @param currentTurn - turn that is still open.
- */
-function stripMarkers(session: SessionLike, service: TokenTreeService, ctx: ContextLike, currentTurn: number): void {
-  if (typeof session.append !== 'function') return
-  const surfaceSeqs = Array.isArray(session.surface?.nodes) ? [...session.surface.nodes] : []
-  const resolve = typeof session.eventAt === 'function' ? (seq: number) => session.eventAt?.(seq) : undefined
-  const events = surfaceSeqs.length > 0 && resolve !== undefined
-    ? surfaceSeqs.map(seq => ({ seq, event: resolve(seq) }))
-    : (session.snapshotEvents?.() ?? []).map((event, index) => ({ seq: event.seq ?? index + 1, event }))
-  // seqTurns is local; payload.turn is the host's counter. Use the local current turn to select
-  // the answers, but keep the host turn for the step/turn fields of the replacement.
-  const localTurn = service.sessionTurn(session.id)
-  const targets: { seq: number; data: Record<string, unknown>; message: Record<string, unknown>; content: unknown[] }[] = []
-  for (const entry of events) {
-    if (entry.event?.type !== 'assistant/message') continue
-    if (service.turnOfSeq(session.id, entry.seq) !== localTurn) continue
-    const data = entry.event.data as Record<string, unknown> | undefined
-    if (data === undefined) continue
-    const message = data.message as Record<string, unknown> | undefined
-    if (message === undefined) continue
-    const content = message.content
-    if (!Array.isArray(content)) continue
-    if (content.some(block => typeof block === 'object' && block !== null && (block as { type?: unknown }).type === 'tool-call')) continue
-    let lastText = -1
-    for (let index = 0; index < content.length; index++) {
-      const block = content[index]
-      if (typeof block === 'object' && block !== null && (block as { type?: unknown }).type === 'text') lastText = index
-    }
-    if (lastText < 0) continue
-    if (lastText !== content.length - 1) continue
-    const block = content[lastText] as { text?: unknown }
-    if (typeof block.text !== 'string') continue
-    const parsed = readTrailingMarkers(block.text)
-    if (parsed.text === block.text) continue
-    targets.push({
-      seq: entry.seq,
-      data,
-      message,
-      content: content.map((item, index) => index === lastText ? { ...(item as Record<string, unknown>), text: parsed.text } : item),
-    })
-  }
-  if (targets.length === 0) return
-  const step = nextStepOf(session, currentTurn)
-  let opened = false
-  try {
-    session.append('step/start', { turn: currentTurn, step })
-    opened = true
-    for (const target of targets) {
-      session.append('assistant/message', {
-        ...target.data,
-        turn: currentTurn,
-        step,
-        message: { ...target.message, content: target.content },
-      }, {
-        surfaceOp: { op: 'replace', startSeq: target.seq, endSeq: target.seq },
-        sourceEventSeqs: [target.seq],
-      })
-    }
-    ctx.logger.info(`token-tree: stripped placement markers from ${targets.length} turn-${currentTurn} answer(s)`)
-  } catch (error) {
-    ctx.logger.warn(`token-tree: could not strip markers in turn ${currentTurn}: ${describe(error)}`)
-  } finally {
-    if (opened) {
-      try {
-        session.append('step/end', { turn: currentTurn, step })
-      } catch (error) {
-        ctx.logger.warn(`token-tree: could not close the marker-strip step in turn ${currentTurn}: ${describe(error)}`)
-      }
-    }
-  }
-}
-
-/** The host's next step number for one open turn, derived from the durable log. */
-function nextStepOf(session: SessionLike, turn: number): number {
-  let max = 0
-  for (const event of session.snapshotEvents?.() ?? []) {
-    const data = event.data as { turn?: unknown; step?: unknown } | undefined
-    if (data?.turn !== turn) continue
-    if (event.type !== 'step/start' && event.type !== 'step/end') continue
-    if (typeof data.step === 'number' && data.step > max) max = data.step
-  }
-  return max + 1
-}
 
 /**
  * Fold old tool results out of the model-visible surface.

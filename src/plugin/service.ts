@@ -118,6 +118,8 @@ export interface SessionState {
   skipNextAnswer: boolean
   /** Question created by the turn in flight, so a cancelled turn can drop it. */
   pendingQuestionId?: NodeId
+  /** Summary the model supplied through `tree_attach`, consumed by the next answer. */
+  pendingAnswerSummary?: string
   /** Whether this session's earlier log has already been replayed into the tree. */
   backfilled: boolean
   /** Highest event sequence already folded, so a replay cannot double-apply. */
@@ -1009,6 +1011,7 @@ export class TokenTreeService {
       case 'turn/start': {
         state.sawReduction = false
         state.pendingQuestionId = undefined
+        state.pendingAnswerSummary = undefined
         // Turn numbers come from the user-question counter below; the host's marker only says a
         // turn began, and it may stamp a stale number (or none at all).
         if (numberField(data.turn) !== undefined && this.localTurns.get(state.sessionId) === undefined) {
@@ -1455,9 +1458,11 @@ export class TokenTreeService {
       return
     }
     // The model's own summary of what the answer covers, when it wrote one; the heuristic is the
-    // fallback. This is what the candidate list shows instead of the answer text.
+    // fallback. `tree_attach` is the current channel; trailing `[summary:]` markers are still parsed
+    // for old logs and older clients.
     const bodyText = text
-    const summary = parsed.summary ?? summarize(bodyText)
+    const summary = state.pendingAnswerSummary ?? parsed.summary ?? summarize(bodyText)
+    state.pendingAnswerSummary = undefined
     // The reasoning is measured and dropped: it costs tokens in every later request, but it is
     // neither what the user asked nor what the answer says. Storing the count keeps the
     // thresholds honest without keeping the text.
@@ -1927,7 +1932,7 @@ export class TokenTreeService {
    */
   summaryInstruction(sessionId?: string): string {
     return this.effective(sessionId).attachSummary
-      ? '[token-tree] 回答最后另起一行写 [summary: 用 2–4 个短语说明本条回答讲了哪些方面，逗号分隔，≤40 字]。'
+      ? '[token-tree] 回答前调用 tree_attach：summary 用 2–4 个短语说明本条回答讲了哪些方面（逗号分隔，≤40 字）；落点拿不准就传 target="auto"。'
       : ''
   }
 
@@ -1966,19 +1971,19 @@ export class TokenTreeService {
     state.offered = picked.map(entry => entry.id)
     const rows = picked.map(entry => '- ' + entry.id + ' · ' + this.candidateLabel(tree, entry.id))
     const anyMode = this.effective(sessionId).attachPrompt === 'any'
-    // `any` owns the whole decision: a dependency is named as [attach:nX], a new topic as
-    // [attach:root]. There is no third switch: this is what the mode means.
+    // `any` owns the whole decision: a dependency is named as a node id, a new topic as `root`.
+    // `auto` keeps the automatic placement and is the right choice when the list is not useful.
     state.offeredRoot = anyMode
     const instruction = anyMode
       ? [
-        '[token-tree] 本轮的落点由你判，在回答最后单独一行写一种：',
-        '  [attach:nX]  依赖下面某一条（含代词指代）；[attach:root] 新话题；[attach:here] 要求/元指令（让我换个方式来问），留在当前这条线上。',
+        '[token-tree] 本轮的落点由你判，回答前调用 tree_attach：',
+        '  target: "nX" 依赖下面某一条（含代词指代）；"root" 新话题；"here" 要求/元指令（让我换个方式来问），留在当前这条线上；"auto" 保持自动落点。',
         '问题问的是某条回答里提到的子概念时，挂那条回答（不是刚才那条）。',
         '只给问题；需要正文时先取候选索引，再用 nodeId 取详情。',
       ]
       : [
-        '[token-tree] 若本轮是在追问下面某一条，请在回答最后单独一行写 [attach:nX]（X 取自列表）；',
-        '若只是延续上一条，或都不是，就不要写。只给问题；需要正文时先取候选索引，再用 nodeId 取详情。',
+        '[token-tree] 若本轮是在追问下面某一条，回答前调用 tree_attach，target 取列表中的 id；',
+        '只是延续上一条或都不是，就传 target="auto"。只给问题；需要正文时先取候选索引，再用 nodeId 取详情。',
       ]
     return [...instruction, ...rows].join('\n')
   }
@@ -2004,20 +2009,11 @@ export class TokenTreeService {
   }
 
   /**
-   * Read a trailing `[attach:nX]` marker, move the question, and remove the marker.
-   *
-   * Only an id offered this turn is honoured: a model that invents a node cannot re-parent anything,
-   * and the marker is always stripped so it never lands in the tree or the next prompt.
-   * @param state - session state.
-   * @param text - assistant text.
-   * @returns The text without the marker.
-   */
-  /**
    * Read trailing placement and summary markers, apply the placement, and return the clean text.
    *
-   * Only a marker on its own line at the very end is recognized; an answer that quotes the syntax
-   * keeps its example. Only an id offered this turn is honoured, so a model that invents a node
-   * cannot re-parent anything.
+   * This is the compatibility path for logs and clients from before `tree_attach`; new answers use
+   * the tool and never put markers in the transcript. Only a marker on its own line at the very end
+   * is recognized, and only an id offered this turn is honoured.
    * @param state - session state.
    * @param text - assistant text.
    * @returns Cleaned text plus the model's summary, when present.
@@ -2028,47 +2024,93 @@ export class TokenTreeService {
     const cleaned = parsed.text
     const result = { text: cleaned, ...(parsed.summary === undefined ? {} : { summary: parsed.summary }) }
     if (target === undefined) return result
+    this.placeQuestion(state, target)
+    return result
+  }
+
+  /**
+   * Apply one placement choice to the question of the turn in flight.
+   *
+   * `auto` means "keep the automatic placement" and only records a summary. Node ids are accepted
+   * only when they were offered this turn, so a model cannot invent a parent.
+   * @param state - session state.
+   * @param target - node id, `root`, `here`, or `auto`.
+   * @returns Whether the question was actually moved.
+   */
+  private placeQuestion(state: SessionState, target: string): boolean {
     const questionId = state.pendingQuestionId
+    if (target === 'auto') return false
     if (target === 'here') {
-      if (state.offeredRoot !== true || questionId === undefined) return result
+      if (state.offeredRoot !== true || questionId === undefined) return false
       const home = state.defaultParentId
-      if (home === undefined || questionId === home || !state.tree.nodes.has(home)) return result
+      if (home === undefined || questionId === home || !state.tree.nodes.has(home)) return false
       try {
         state.tree.reparent(questionId, home)
         this.remember({ session: state.sessionId, action: 'reparent', nodeId: questionId, parentId: home, at: Date.now() })
         this.logger.info(`token-tree: model treated ${questionId} as a requirement turn`)
+        return true
       } catch (error) {
         this.logger.debug('token-tree: here marker could not be applied: ' + String(error))
+        return false
       }
-      return result
     }
     if (target === 'root') {
-      if (state.offeredRoot !== true || questionId === undefined) return result
+      if (state.offeredRoot !== true || questionId === undefined) return false
       const rootId = state.tree.rootId
-      if (questionId === rootId || !state.tree.nodes.has(rootId)) return result
+      if (questionId === rootId || !state.tree.nodes.has(rootId)) return false
       try {
         state.tree.reparent(questionId, rootId)
         this.remember({ session: state.sessionId, action: 'reparent', nodeId: questionId, parentId: rootId, at: Date.now() })
         this.logger.info(`token-tree: model treated ${questionId} as a new topic`)
+        return true
       } catch (error) {
         this.logger.debug('token-tree: root marker could not be applied: ' + String(error))
+        return false
       }
-      return result
     }
     if (!state.offered.includes(target)) {
       this.logger.debug('token-tree: attach marker named a node that was not offered; ignored')
-      return result
+      return false
     }
-    if (questionId === undefined || questionId === target) return result
-    if (!state.tree.nodes.has(target) || state.tree.hidden(target)) return result
+    if (questionId === undefined || questionId === target) return false
+    if (!state.tree.nodes.has(target) || state.tree.hidden(target)) return false
     try {
       state.tree.reparent(questionId, target)
       this.remember({ session: state.sessionId, action: 'reparent', nodeId: questionId, parentId: target, at: Date.now() })
       this.logger.info(`token-tree: model moved ${questionId} under ${target}`)
+      return true
     } catch (error) {
       this.logger.debug('token-tree: attach marker could not be applied: ' + String(error))
+      return false
     }
-    return result
+  }
+
+  /**
+   * Public entry point for the `tree_attach` tool.
+   *
+   * The tool replaces the old text marker: it places the pending question immediately and stores
+   * the model-written summary for the answer that is still being produced.
+   * @param sessionId - session identity.
+   * @param target - node id, `root`, `here`, or `auto`.
+   * @param summary - optional 2-4 phrase summary of the coming answer.
+   * @returns What happened, for the tool result.
+   */
+  placePendingQuestion(sessionId: string, target: string, summary?: string): {
+    questionId?: string
+    target: string
+    placed: boolean
+    summary?: string
+  } {
+    const state = this.requireState(sessionId)
+    const cleanSummary = summary?.trim().slice(0, 120)
+    if (cleanSummary !== undefined && cleanSummary.length > 0) state.pendingAnswerSummary = cleanSummary
+    const placed = this.placeQuestion(state, target)
+    return {
+      ...(state.pendingQuestionId === undefined ? {} : { questionId: state.pendingQuestionId }),
+      target,
+      placed,
+      ...(cleanSummary === undefined || cleanSummary.length === 0 ? {} : { summary: cleanSummary }),
+    }
   }
 
   retrievalHint(sessionId: string): string | undefined {

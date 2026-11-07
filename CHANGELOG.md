@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.1.15] — 2026-11-07
+
+Placement is a tool call now, and the automatic fold threshold works out of the box.
+
+### Added
+
+- **`tree_attach`**: the model places the question and supplies its aspect summary through tool
+  arguments (`target: node id | "root" | "here" | "auto"`, `summary`). The prompt no longer asks for
+  trailing `[attach:…]` / `[summary:…]` markers; the old parser remains for existing logs.
+- **DeepSeek cache prices by default**: `cacheHitPrice = 0.02`, `cacheMissPrice = 1`, so `autoFold`
+  derives its threshold without any setup. Both accept decimals in config and settings, and the
+  settings inputs no longer round them to integers.
+
+### Fixed
+
+- **Assistant marker stripping is gone.** The host forbids `sourceEventSeqs` on `assistant/message`
+  but requires full shadowed-node coverage for a surface replacement, so the rewrite could never
+  succeed. It still opened a synthetic `step/start` / `step/end`; that empty trailing step made the
+  host fold the completed turn into its "已完成，用时…" card. Removing the rewrite removes the empty
+  step as well.
+- A clean-clone typecheck no longer needs the optional BGE types (carried forward from 0.1.14).
+
 ## [0.1.14] — 2026-11-07
 
 A clean clone type-checks without the optional BGE package.

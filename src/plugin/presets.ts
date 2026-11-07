@@ -29,6 +29,7 @@ export const PLUGIN_TOOL_NAMES = [
   'tree_query',
   'tree_mark',
   'tree_focus',
+  'tree_attach',
   'tree_backtrack',
 ] as const
 

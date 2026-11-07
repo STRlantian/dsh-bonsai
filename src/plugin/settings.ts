@@ -110,7 +110,11 @@ export function defaultSettingsPath(): string {
  * @returns The value when it has the right type, otherwise `undefined`.
  */
 function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number | string | string[] | undefined {
-  if (key === 'foldAboveTokens' || key === 'foldCadence' || key === 'foldBlockRatio' || key === 'cacheHitPrice' || key === 'cacheMissPrice') {
+  if (key === 'cacheHitPrice' || key === 'cacheMissPrice') {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return undefined
+    return value
+  }
+  if (key === 'foldAboveTokens' || key === 'foldCadence' || key === 'foldBlockRatio') {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined
     return value
   }

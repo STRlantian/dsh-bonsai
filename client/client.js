@@ -1617,8 +1617,10 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
             event.target.value = String(value)
             return
           }
-          if (Math.round(next) === Number(value)) return
-          saveSetting(key, Math.round(next))
+          var factor = step < 1 ? Math.round(1 / step) : 1
+          var rounded = Math.round(next * factor) / factor
+          if (rounded === Number(value)) return
+          saveSetting(key, rounded)
         },
       })
     }
@@ -1650,9 +1652,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       effective.autoFold !== false
         ? [
           h('span', { className: 'twt-hint' }, t('命中')),
-          thresholdInput('cacheHitPrice', effective.cacheHitPrice === undefined ? 0 : effective.cacheHitPrice, 0, 1, 64),
+          thresholdInput('cacheHitPrice', effective.cacheHitPrice === undefined ? 0.02 : effective.cacheHitPrice, 0, 0.01, 64),
           h('span', { className: 'twt-hint' }, t('未命中')),
-          thresholdInput('cacheMissPrice', effective.cacheMissPrice === undefined ? 0 : effective.cacheMissPrice, 0, 1, 64),
+          thresholdInput('cacheMissPrice', effective.cacheMissPrice === undefined ? 1 : effective.cacheMissPrice, 0, 0.1, 64),
         ]
         : [
           h('span', { className: 'twt-hint' }, t('待折块')),
