@@ -62,6 +62,7 @@ import { readTrailingMarkers } from './markers.ts'
 import { anaphoraScore } from '../core/anaphora.ts'
 import { excerptFor, reductionNote, referentLine } from '../core/excerpt.ts'
 import type { RuleEdit } from './requirements.ts'
+import type { BgeScorerLike } from './bge.ts'
 
 /**
  * Content features a node needs before it can close a topic.
@@ -368,6 +369,7 @@ export class TokenTreeService {
   private readonly states = new Map<string, SessionState>()
   private readonly store: EditStore | undefined
   private readonly settings: SettingsStore | undefined
+  private readonly bge: BgeScorerLike | undefined
   private tokenizer: Tokenize | undefined
   private readonly ratio = new TokenRatio()
   /** Fitted from provider usage: the model-agnostic fallback when no tokenizer exists. */
@@ -389,11 +391,12 @@ export class TokenTreeService {
    * @param options - resolved configuration, logger, the durable edit log, and the
    *   runtime settings overrides.
    */
-  constructor(options: { config: ResolvedConfig; logger: LoggerLike; store?: EditStore; settings?: SettingsStore }) {
+  constructor(options: { config: ResolvedConfig; logger: LoggerLike; store?: EditStore; settings?: SettingsStore; bge?: BgeScorerLike }) {
     this.config = options.config
     this.logger = options.logger
     this.store = options.store
     this.settings = options.settings
+    this.bge = options.bge
   }
 
   /**
@@ -1622,6 +1625,32 @@ export class TokenTreeService {
       at: Date.now(),
     }
     return final
+  }
+
+  /**
+   * Retrieve with the optional BGE chunk scorer.
+   *
+   * BGE is asynchronous, so the synchronous public `retrieve` remains the hash path. The
+   * tool calls this method; if BGE is disabled, not loaded, or fails, it returns the exact
+   * hash result instead of surfacing an error.
+   * @param sessionId - session identity.
+   * @param options - query and retrieval overrides.
+   * @returns The recall result, from BGE when available and from hash otherwise.
+   */
+  async retrieveAsync(sessionId: string, options: RetrieveOptions): Promise<RetrieveResult> {
+    if (this.bge === undefined) return this.retrieve(sessionId, options)
+    try {
+      const state = this.stateOf(sessionId)
+      const scores = await this.bge.score(options.query, [...state.tree.nodes.values()], this.config.bgeChunkChars)
+      if (scores === undefined || scores.size === 0) return this.retrieve(sessionId, options)
+      return this.retrieve(sessionId, {
+        ...options,
+        relevanceOf: node => scores.get(node.id) ?? 0,
+      })
+    } catch (error) {
+      this.logger.warn(`token-tree: BGE retrieval failed, falling back to hash (${String(error)})`)
+      return this.retrieve(sessionId, options)
+    }
   }
 
   /**

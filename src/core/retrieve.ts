@@ -25,7 +25,7 @@
  * @module dsh-bonsai/core/retrieve
  */
 
-import type { NodeId, NodeKind } from './types.ts'
+import type { MemoryNode, NodeId, NodeKind } from './types.ts'
 import type { MemoryTree } from './graph.ts'
 import { renderNodeText } from './graph.ts'
 import { cosine, embedText } from './embedding.ts'
@@ -38,6 +38,11 @@ export interface RetrieveOptions {
   query: string
   /** Precomputed query embedding. */
   queryEmbedding?: number[]
+  /**
+   * Optional relevance function for one node. Used by the opt-in BGE provider; when omitted
+   * the normal local-embedding cosine is used. The returned value is clamped to `[0, 1]`.
+   */
+  relevanceOf?: (node: MemoryNode) => number
   /** Path origin; defaults to the tree's current node. */
   originId?: NodeId
   /** Token budget; defaults to `params.tokenBudget`. */
@@ -240,12 +245,16 @@ export function retrieveContext(tree: MemoryTree, options: RetrieveOptions): Ret
       dropped.push({ nodeId: node.id, weight: 0, reason: 'ignored' })
       continue
     }
-    const contentSimilarity = clamp01(cosine(queryEmbedding, node.embedding))
+    const contentSimilarity = options.relevanceOf !== undefined
+      ? clamp01(options.relevanceOf(node))
+      : clamp01(cosine(queryEmbedding, node.embedding))
     // Matching may also use the node's topic line: a long tool result stays findable by
     // its summary without embedding anything per query.
-    const summarySimilarity = summaryMatch && node.summaryEmbedding !== undefined
-      ? clamp01(cosine(queryEmbedding, node.summaryEmbedding))
-      : 0
+    const summarySimilarity = options.relevanceOf !== undefined
+      ? 0
+      : summaryMatch && node.summaryEmbedding !== undefined
+        ? clamp01(cosine(queryEmbedding, node.summaryEmbedding))
+        : 0
     const relevance = Math.max(contentSimilarity, summarySimilarity)
     // Admission happens on raw relevance, before the blend: a node that is not close
     // to the query should not enter the ranking at all, and a node that is close must

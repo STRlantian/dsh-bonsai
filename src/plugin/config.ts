@@ -22,6 +22,15 @@ export interface Config {
   loop?: Partial<LoopPolicy>
   /** Embedding width used by the local hashed embedding. */
   embeddingDimension?: number
+  /**
+   * Opt-in BGE retrieval embedding. When false/unavailable, every path falls back to the
+   * local hash. The model is loaded lazily and is never required at plugin startup.
+   */
+  bge?: boolean
+  /** HuggingFace model id used when `bge` is true. */
+  bgeModel?: string
+  /** Target characters per BGE chunk; the node score is the mean of chunk cosines. */
+  bgeChunkChars?: number
   /** Inject the weighted memory block at the first step of every turn. */
   autoInject?: boolean
   /**
@@ -111,6 +120,12 @@ export interface ResolvedConfig {
   loop: LoopPolicy
   /** Embedding width. */
   embeddingDimension: number
+  /** Whether optional BGE retrieval embeddings are enabled. */
+  bge: boolean
+  /** BGE model id, used only when `bge` is true. */
+  bgeModel: string
+  /** Target characters per BGE chunk. */
+  bgeChunkChars: number
   /** Whether to inject automatically. */
   autoInject: boolean
   /** Whether to append the one-line retrieval hint when injection is off. */
@@ -353,6 +368,10 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
       const embeddingDimension = scalar(source, 'embeddingDimension', (input): input is number => typeof input === 'number' && Number.isInteger(input), issues, 'an integer') ?? 256
       if (embeddingDimension < 8) issue(issues, 'embeddingDimension', 'must be at least 8')
 
+      const bge = scalar(source, 'bge', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false
+      const bgeModel = scalar(source, 'bgeModel', (input): input is string => typeof input === 'string' && input.trim() !== '', issues, 'a non-empty string')?.trim() ?? 'Xenova/bge-small-zh-v1.5'
+      const bgeChunkChars = scalar(source, 'bgeChunkChars', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 100, issues, 'an integer >= 100') ?? 300
+
       const injectBudgetTokens = scalar(source, 'injectBudgetTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input), issues, 'an integer')
         ?? 600
       const maxNodesPerSession = scalar(source, 'maxNodesPerSession', (input): input is number => typeof input === 'number' && Number.isInteger(input), issues, 'an integer')
@@ -373,6 +392,9 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         weights,
         loop,
         embeddingDimension,
+        bge,
+        bgeModel,
+        bgeChunkChars,
         // Tool-first by default: the block costs ~400+ uncached tokens every turn,
         // and a short conversation already carries its whole history. Callers that
         // want recall pushed automatically can set `autoInject: true`.

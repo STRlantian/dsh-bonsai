@@ -227,6 +227,22 @@ changed); precedence is **settings file > profile config**.
 | `tokenizerVersion` | `auto` | `auto` / `3` / `4` / `off` (estimate + calibrate against the bill) |
 | `locale` | `auto` | Interface language: `auto` / `zh` / `en` |
 
+Retrieval still defaults to the local 256-d hashed embedding (zero-dependency, offline).
+Optional BGE:
+
+```yaml
+config:
+  bge: true
+  bgeModel: Xenova/bge-small-zh-v1.5
+  bgeChunkChars: 300
+```
+
+It is used only by the explicit `retrieve_context` tool: nodes are split into ~300-character
+chunks and relevance is chunk `meanAll`; if BGE is disabled, unavailable, fails to load, or a
+call fails, the same request falls back to hash. Attachment, auto-injection and edge costs keep
+their existing paths. Enabling it requires installing `@huggingface/transformers` and a model
+cache.
+
 API: `GET /api/token-tree/settings` returns `{ effective, overrides, path, availableTools, fold, toolRestriction, lastAssembly, … }`;
 `POST` on the same path writes `{ key: value }` (`null` clears an override);
 `POST /api/token-tree/preset` writes a whole preset at once.
@@ -288,7 +304,7 @@ p=10 and p=50, so the "block = 5x window" default can be re-derived under your o
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 249 cases (223 backend + 26 browser)
+pnpm test           # 251 cases (225 backend + 26 browser)
 pnpm run check      # typecheck + tests
 ```
 
@@ -327,7 +343,7 @@ It validates, sets `x.y.z`, publishes `./plugin` with `--tag latest`, advances t
 | `src/core/` | Pure algorithms: graph, edge weights, path cost, weighted retrieval, grading and backtracking |
 | `src/plugin/` | The DSH wiring: `Config`, the session service, tools, event subscriptions, HTTP routes, fold planning |
 | `client/client.js` | Browser half: dock, editor, graph view, recycle bin, rule bar, settings panel, preset picker |
-| `tests/` | 249 cases, including client tests that mount real React under jsdom |
+| `tests/` | 251 cases, including client tests that mount real React under jsdom |
 | `docs/experiment-context-cache.md` | Every measurement (52 sections) |
 
 ## License

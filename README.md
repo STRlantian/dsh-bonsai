@@ -183,6 +183,17 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 | `tokenizerVersion` | `auto` | `auto` / `3` / `4` / `off`（估算 + 账单校准） |
 | `locale` | `auto` | 界面语言：`auto` / `zh` / `en` |
 
+检索默认仍用本地 256 维 hash（零依赖、离线可用）。可选 BGE：
+
+```yaml
+config:
+  bge: true
+  bgeModel: Xenova/bge-small-zh-v1.5
+  bgeChunkChars: 300
+```
+
+只在显式 `retrieve_context` 工具里启用：节点按 300 字切块，用 chunk `meanAll` 算相关性；BGE 不可用、模型加载失败或调用失败时逐次回落到 hash。挂树、自动注入和边成本仍走原路径，不会被 BGE 改写。启用需要额外安装 `@huggingface/transformers` 并准备模型缓存。
+
 接口：`GET /api/token-tree/settings` 返回 `{ effective, overrides, path, availableTools, fold, toolRestriction, lastAssembly, … }`；
 `POST` 同一路径写 `{ key: value }`（`null` 表示清除覆盖）；`POST /api/token-tree/preset` 一次写入整包预设。
 
@@ -247,7 +258,7 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 249 个用例（后端 223 + 浏览器端 26）
+pnpm test           # 251 个用例（后端 225 + 浏览器端 26）
 pnpm run check      # 类型检查 + 测试
 ```
 
@@ -283,7 +294,7 @@ powershell -File scripts/release.ps1           # 发布并推进到下一个测�
 | `src/core/` | 纯算法：图、边权、路径成本、加权检索、评估与回溯 |
 | `src/plugin/` | DSH 接线：`Config`、会话服务、工具、事件订阅、HTTP 路由、折叠规划 |
 | `client/client.js` | 浏览器端：dock、编辑器、图形视图、回收站、规则栏、设置面板、预设选择器 |
-| `tests/` | 249 个用例，含 jsdom 挂载真实 React 的客户端测试 |
+| `tests/` | 251 个用例，含 jsdom 挂载真实 React 的客户端测试 |
 | `docs/experiment-context-cache.md` | 全部实测记录（52 节，含失败实验） |
 
 ## License

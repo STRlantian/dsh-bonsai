@@ -17,6 +17,7 @@ import { installHooks } from './plugin/hooks.ts'
 import { installCommand } from './plugin/command.ts'
 import { installHttpRoute } from './plugin/http.ts'
 import { TokenTreeService } from './plugin/service.ts'
+import { BgeScorer } from './plugin/bge.ts'
 import { EditStore } from './plugin/store.ts'
 import { SettingsStore } from './plugin/settings.ts'
 
@@ -65,7 +66,10 @@ export function apply(
   // Runtime switches live next to the edit log; they override the profile config so a
   // checkbox in the UI takes effect on the next turn instead of at the next restart.
   const settings = deps.settings ?? new SettingsStore({ onError: message => ctx.logger.warn(message) })
-  const service = new TokenTreeService({ config, logger: ctx.logger, store, settings })
+  // Opt-in only: BGE may be absent, offline, or too slow to load; the service falls back to
+  // the hashed embedding for every failed/disabled path.
+  const bge = config.bge ? new BgeScorer({ warn: message => ctx.logger.warn(message), info: message => ctx.logger.info(message) }, config.bgeModel) : undefined
+  const service = new TokenTreeService({ config, logger: ctx.logger, store, settings, bge })
 
   /**
    * Run one optional integration without letting it take the host down.

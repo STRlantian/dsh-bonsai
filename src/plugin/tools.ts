@@ -168,7 +168,7 @@ export function createTools(service: TokenTreeService): ToolDefinitionLike[] {
       const budgetTokens = optionalInteger(record, 'budgetTokens')
       const topK = optionalInteger(record, 'topK')
       const threshold = optionalNumber(record, 'threshold')
-      const result = service.retrieve(agent.session.id, {
+      const result = await service.retrieveAsync(agent.session.id, {
         query,
         ...(budgetTokens === undefined ? {} : { budgetTokens }),
         ...(topK === undefined ? {} : { topK }),
