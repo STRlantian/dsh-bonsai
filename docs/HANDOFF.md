@@ -2,7 +2,7 @@
 
 给下一个对话的自己或别人：这份文件是当前状态的唯一入口。看完就不用去翻 300 多轮的历史。
 
-最后更新：2026-11-07 · 当前 HEAD · 已推送 origin/main
+最后更新：2026-11-07 · 当前 HEAD · 已发布 dsh-bonsai@0.1.13 · 工作版本 0.1.14-test.0
 
 ## 这是什么
 
@@ -109,4 +109,4 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
 3. `69ea4cc5` / `e8734fe5` 旧日志已无法靠当前代码恢复（`360db97` 只防再产生）；
 4. 复核本轮新加的回归测试：marker 结尾/围栏、fold turn 归属、surface replacement 去重、
    replay edits、node cap、settings scope、preset 整包、rule 持久化；
-5. 发布 npm：当前 `.npmrc` token 返回 401，需要重新登录/换 token；git 已推送 origin/main。
+5. 已发布 npm `dsh-bonsai@0.1.13`，tag `v0.1.13` 已推送；工作版本回到 `0.1.14-test.0`。
