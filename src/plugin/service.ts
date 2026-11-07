@@ -422,6 +422,12 @@ export class TokenTreeService {
     foldCadence: number
     /** Block size relative to the keep window; 0 disables the relative rule. */
     foldBlockRatio: number
+    /** Relative cache-hit price; 0 disables automatic thresholding. */
+    cacheHitPrice: number
+    /** Relative cache-miss price; both prices must be positive and miss > hit. */
+    cacheMissPrice: number
+    /** Whether cache prices drive the fold threshold automatically. */
+    autoFold: boolean
     /** What the threshold measures: `block` or `history`. */
     foldTrigger: string
     foldScope: string
@@ -461,6 +467,9 @@ export class TokenTreeService {
       foldKeepTurns: overrides.foldKeepTurns ?? this.config.foldKeepTurns,
       foldCadence: overrides.foldCadence ?? this.config.foldCadence,
       foldBlockRatio: overrides.foldBlockRatio ?? this.config.foldBlockRatio,
+      cacheHitPrice: overrides.cacheHitPrice ?? this.config.cacheHitPrice,
+      cacheMissPrice: overrides.cacheMissPrice ?? this.config.cacheMissPrice,
+      autoFold: overrides.autoFold ?? this.config.autoFold,
       foldTrigger: overrides.foldTrigger ?? this.config.foldTrigger,
       foldScope: overrides.foldScope ?? this.config.foldScope,
       foldPolicy: overrides.foldPolicy ?? this.config.foldPolicy,
@@ -697,6 +706,9 @@ export class TokenTreeService {
         foldKeepTurns: this.config.foldKeepTurns,
         foldCadence: this.config.foldCadence,
         foldBlockRatio: this.config.foldBlockRatio,
+        cacheHitPrice: this.config.cacheHitPrice,
+        cacheMissPrice: this.config.cacheMissPrice,
+        autoFold: this.config.autoFold,
         foldTrigger: this.config.foldTrigger,
         foldScope: this.config.foldScope,
         foldPolicy: this.config.foldPolicy,

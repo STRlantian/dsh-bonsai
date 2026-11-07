@@ -117,12 +117,23 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 
 | 设置 | 默认 | 作用 |
 |---|---|---|
-| `foldAboveTokens` | `30000` | **待折块**（窗口之外准备移走的轮次）达到这个大小才折；`0` 只看相对规则 |
-| `foldBlockRatio` | `8` | 待折块还要 ≥ 这个倍数 × 保留窗口；`0` 关闭相对规则 |
+| `autoFold` | `true` | 价格都填了时，自动阈值优先；关闭后回到手填阈值 |
+| `cacheHitPrice` | `0` | 缓存命中相对价格；和未命中都 >0 时启用自动阈值 |
+| `cacheMissPrice` | `0` | 缓存未命中相对价格；需大于命中价 |
+| `foldAboveTokens` | `30000` | 手动待折块下限；填了缓存价格后自动阈值优先，此项只作兜底 |
+| `foldBlockRatio` | `8` | 待折块还要 ≥ 这个倍数 × 保留窗口；`0` 关闭相对规则；自动阈值模式下自动换算 |
 | `foldCadence` | `10` | 两次折叠至少间隔这么多轮（折叠会重写前缀缓存） |
 | `foldTrigger` | `block` | `block` 按块判定；`history` 是旧行为（整段可见历史 ≥ 阈值） |
 | `foldKeepTurns` | `2` | 最近这么多轮原样保留（也就是公式里的"窗口"） |
 | `foldScope` | `turns` | `turns` 整轮折叠，`tools` 只折叠工具输出（工具输出仍用旧的历史阈值） |
+
+填了 `cacheHitPrice` 和 `cacheMissPrice`（未命中 > 命中）后，插件用**实际平均每轮 token**自动算：
+
+```text
+T* = avgTurnTokens × √(2 × keepTurns × (miss/hit − 1))
+```
+
+不再需要手填 `foldAboveTokens`；`foldBlockRatio` 也由自动阈值取代。
 
 折叠后的占位行会告诉模型原文在哪：
 
@@ -260,7 +271,7 @@ config:
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 252 个用例（后端 226 + 浏览器端 26）
+pnpm test           # 253 个用例（后端 227 + 浏览器端 26）
 pnpm run check      # 类型检查 + 测试
 ```
 
@@ -296,7 +307,7 @@ powershell -File scripts/release.ps1           # 发布并推进到下一个测�
 | `src/core/` | 纯算法：图、边权、路径成本、加权检索、评估与回溯 |
 | `src/plugin/` | DSH 接线：`Config`、会话服务、工具、事件订阅、HTTP 路由、折叠规划 |
 | `client/client.js` | 浏览器端：dock、编辑器、图形视图、回收站、规则栏、设置面板、预设选择器 |
-| `tests/` | 252 个用例，含 jsdom 挂载真实 React 的客户端测试 |
+| `tests/` | 253 个用例，含 jsdom 挂载真实 React 的客户端测试 |
 | `docs/experiment-context-cache.md` | 全部实测记录（53 节，含失败实验） |
 
 ## License

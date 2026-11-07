@@ -164,6 +164,15 @@ export interface ResolvedConfig {
    * window at the miss price; `0` disables the relative rule.
    */
   foldBlockRatio: number
+  /** Whether automatic cache-price thresholding is enabled. */
+  autoFold: boolean
+  /**
+   * Relative cache prices. When both are positive and `cacheMissPrice > cacheHitPrice`, the fold
+   * floor is derived from the measured average turn size instead of `foldAboveTokens`.
+   */
+  cacheHitPrice: number
+  /** Relative cache-miss price; see {@link cacheHitPrice}. */
+  cacheMissPrice: number
   /**
    * What the threshold measures: `block` (the turns about to leave, the default) or `history` (the
    * whole visible prompt, the older behaviour).
@@ -418,6 +427,9 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 30000,
     foldCadence: scalar(source, 'foldCadence', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 10,
     foldBlockRatio: scalar(source, 'foldBlockRatio', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 8,
+    cacheHitPrice: scalar(source, 'cacheHitPrice', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
+    cacheMissPrice: scalar(source, 'cacheMissPrice', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
+    autoFold: scalar(source, 'autoFold', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
     foldTrigger: ((): string => {
       const value = source === undefined ? undefined : (source as Record<string, unknown>).foldTrigger
       if (value === undefined) return 'block'

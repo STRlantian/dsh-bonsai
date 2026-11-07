@@ -25,7 +25,7 @@ import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
-import { blockTokensOf, foldWorthIt, keptTokensOf, planFold, planTurnFold } from './fold.ts'
+import { blockTokensOf, foldWorthIt, keptTokensOf, optimalFoldThreshold, planFold, planTurnFold } from './fold.ts'
 import { SURFACE_TYPES } from './fold.ts'
 import { readTrailingMarkers } from './markers.ts'
 import type { TokenTreeService } from './service.ts'
@@ -395,7 +395,23 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   // `always` folds every finished turn outside the keep window, whatever the size: the experiment
   // "fold everything, force the model to consult the tree" needs no threshold at all.
   const always = settings.foldPolicy === 'always'
-  if (!always && settings.foldAboveTokens <= 0 && settings.foldBlockRatio <= 0) return
+  const autoFold = settings.autoFold && settings.cacheHitPrice > 0 && settings.cacheMissPrice > settings.cacheHitPrice
+  const perTurn = service.turnTokens(session.id)
+  let turnTotal = 0
+  let turnCount = 0
+  for (const count of perTurn.values()) {
+    if (count > 0) {
+      turnTotal += count
+      turnCount++
+    }
+  }
+  const averageTurn = turnCount === 0 ? 0 : turnTotal / turnCount
+  const autoThreshold = autoFold && averageTurn > 0
+    ? optimalFoldThreshold(averageTurn, settings.foldKeepTurns, settings.cacheMissPrice / settings.cacheHitPrice)
+    : 0
+  const floor = autoThreshold > 0 ? autoThreshold : settings.foldAboveTokens
+  const ratio = autoThreshold > 0 ? 0 : settings.foldBlockRatio
+  if (!always && floor <= 0 && ratio <= 0) return
   if (typeof session.append !== 'function') return
   // The whole session, not the current branch: the next request carries all of it.
   const tokens = service.historyTokens(session.id)
@@ -428,25 +444,24 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
     ? [...session.surface.nodes]
     : events.filter(event => SURFACE_TYPES.has(event.type)).map(event => event.seq)
   const legacy = !always && settings.foldTrigger === 'history'
-  if (legacy && tokens < settings.foldAboveTokens) return
+  if (legacy && tokens < floor) return
   if (settings.foldScope === 'turns') {
     // The turn that is still stopping is not history yet: a continuation inside it may still
     // need these messages, and `foldKeepTurns: 0` must never replace the question being asked.
     const turns = planTurnFold(events, visible, settings.foldKeepTurns, seq => service.turnOfSeq(session.id, seq))
       .filter(planned => planned.turn !== turn)
     if (turns.length === 0) {
-      service.noteFold(session.id, 0, tokens, settings.foldAboveTokens, { planned: 0, visible: visible.length })
+      service.noteFold(session.id, 0, tokens, floor, { planned: 0, visible: visible.length })
       return
     }
     // The threshold now measures the block about to leave, and the block must also be large
     // relative to the keep window: a fold re-prices that window at the miss price, so a small
     // block is a loss even when the total history is large.
     if (!always && !legacy) {
-      const perTurn = service.turnTokens(session.id)
       const block = blockTokensOf(turns, perTurn)
       const kept = keptTokensOf(turns, perTurn)
-      if (!foldWorthIt(block, kept, settings.foldAboveTokens, settings.foldBlockRatio)) {
-        service.noteFold(session.id, 0, tokens, block, { planned: turns.length, visible: visible.length, range: `block=${block} kept=${kept} ratio=${settings.foldBlockRatio}` })
+      if (!foldWorthIt(block, kept, floor, ratio)) {
+        service.noteFold(session.id, 0, tokens, block, { planned: turns.length, visible: visible.length, range: `block=${block} kept=${kept} ratio=${ratio}` })
         return
       }
     }
@@ -472,7 +487,7 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
 
   // Tool results are much smaller than a turn, so the absolute threshold still measures the whole
   // history here; the relative block rule is a turn-level decision.
-  if (!always && tokens < settings.foldAboveTokens) return
+  if (!always && tokens < floor) return
   // Keep the still-open turn's own results visible for the same reason as the turn fold above.
   const plan = planFold(events, visible, settings.foldKeepTurns)
     .filter(replacement => {

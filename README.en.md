@@ -136,13 +136,24 @@ was more expensive because its extra folds invalidated cached prefixes.
 
 | Setting | Default | Effect |
 |---|---|---|
-| `foldAboveTokens` | `30000` | The block about to be removed must reach this; `0` leaves only the relative rule |
-| `foldBlockRatio` | `8` | The block must also be at least this many times the keep window; `0` disables it |
+| `autoFold` | `true` | When prices are filled, the automatic threshold wins; turn it off to use the manual floor |
+| `cacheHitPrice` | `0` | Relative cache-hit price; automatic thresholding starts when both prices are positive |
+| `cacheMissPrice` | `0` | Relative cache-miss price; must exceed the hit price |
+| `foldAboveTokens` | `30000` | Manual block floor; the automatic threshold wins when prices are filled |
+| `foldBlockRatio` | `8` | Relative floor for the block; automatic thresholding replaces it |
 | `foldCadence` | `10` | Minimum turns between two folds (a fold rewrites the prefix cache) |
 | `foldTrigger` | `block` | `block` decides by block size; `history` is the old whole-history rule |
 | `foldKeepTurns` | `2` | Keep this many recent turns verbatim |
 | `foldScope` | `turns` | `turns` folds whole turns, `tools` folds only tool output |
 | `attachChoices` | `10` | How many candidate questions the model sees each turn (questions only); `0` turns it off |
+
+With both cache prices set (miss > hit), the floor is derived from the measured average turn size:
+
+```text
+T* = avgTurnTokens * sqrt(2 * keepTurns * (miss/hit - 1))
+```
+
+You no longer need to fill `foldAboveTokens`; `foldBlockRatio` is replaced by the automatic threshold.
 | `attachPrompt` | `any` | `any`: dependency `[attach:nX]`, new topic `[attach:root]`, meta turn `[attach:here]`; `follow`: anaphora only |
 | `attachGate` | `always` | `uncertain`: offer candidates only when the local placement was unsure; measured 0/259 firings in a coding session, 18/18 and 256/256 in two others |
 | `attachSummary` | `true` | Ask the model for an aspect summary at the end of every answer; fall back to the 200-char heuristic if it is missing |
@@ -307,7 +318,7 @@ p=10 and p=50, so the "block = 5x window" default can be re-derived under your o
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 252 cases (226 backend + 26 browser)
+pnpm test           # 253 cases (227 backend + 26 browser)
 pnpm run check      # typecheck + tests
 ```
 
@@ -346,7 +357,7 @@ It validates, sets `x.y.z`, publishes `./plugin` with `--tag latest`, advances t
 | `src/core/` | Pure algorithms: graph, edge weights, path cost, weighted retrieval, grading and backtracking |
 | `src/plugin/` | The DSH wiring: `Config`, the session service, tools, event subscriptions, HTTP routes, fold planning |
 | `client/client.js` | Browser half: dock, editor, graph view, recycle bin, rule bar, settings panel, preset picker |
-| `tests/` | 252 cases, including client tests that mount real React under jsdom |
+| `tests/` | 253 cases, including client tests that mount real React under jsdom |
 | `docs/experiment-context-cache.md` | Every measurement (53 sections) |
 
 ## License

@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** Keys the settings surface may override. */
-const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldCadence', 'foldBlockRatio', 'foldTrigger', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'attachChoices', 'attachPrompt', 'attachGate', 'attachSummary', 'admitRelevance', 'summaryMatch'] as const
+const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldCadence', 'foldBlockRatio', 'autoFold', 'cacheHitPrice', 'cacheMissPrice', 'foldTrigger', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'attachChoices', 'attachPrompt', 'attachGate', 'attachSummary', 'admitRelevance', 'summaryMatch'] as const
 
 export interface SettingsOverrides {
   /** Push a memory block every turn instead of the one-line hint. */
@@ -46,6 +46,12 @@ export interface SettingsOverrides {
   foldCadence?: number
   /** Block size relative to the keep window; 0 disables the relative rule. */
   foldBlockRatio?: number
+  /** Relative cache-hit price; 0 disables automatic thresholding. */
+  cacheHitPrice?: number
+  /** Relative cache-miss price; must be greater than the hit price for automatic thresholding. */
+  cacheMissPrice?: number
+  /** Whether cache prices drive the fold threshold automatically. */
+  autoFold?: boolean
   /** What the threshold measures: `block` or `history`. */
   foldTrigger?: string
   /** What to fold: tool output only, or whole turns. */
@@ -104,7 +110,7 @@ export function defaultSettingsPath(): string {
  * @returns The value when it has the right type, otherwise `undefined`.
  */
 function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number | string | string[] | undefined {
-  if (key === 'foldAboveTokens' || key === 'foldCadence' || key === 'foldBlockRatio') {
+  if (key === 'foldAboveTokens' || key === 'foldCadence' || key === 'foldBlockRatio' || key === 'cacheHitPrice' || key === 'cacheMissPrice') {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined
     return value
   }

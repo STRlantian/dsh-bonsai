@@ -46,6 +46,7 @@ export const PRESET_KEYS = [
   'foldKeepTurns',
   'foldCadence',
   'foldBlockRatio',
+  'autoFold',
   'foldTrigger',
   'foldScope',
   'foldPolicy',
@@ -67,6 +68,7 @@ export const PRESETS: readonly Preset[] = [
       toolDeny: [],
       retrievalHint: true,
       autoInject: false,
+      autoFold: true,
     },
   },
   {
@@ -74,6 +76,7 @@ export const PRESETS: readonly Preset[] = [
     settings: {
       // Record the tree, but do not change the model's prompt or loop.
       autoInject: false,
+      autoFold: false,
       retrievalHint: false,
       attachChoices: 0,
       attachSummary: false,
@@ -92,6 +95,7 @@ export const PRESETS: readonly Preset[] = [
       // Inert from the model's view: no injection, no hints, no folding, no plugin tools.
       // The panel can still show the tree that was recorded before/while off.
       autoInject: false,
+      autoFold: false,
       retrievalHint: false,
       attachChoices: 0,
       attachSummary: false,

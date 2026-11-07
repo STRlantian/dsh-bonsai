@@ -28,6 +28,22 @@ test('the shipped default folds at 30k tokens', () => {
   assert.equal(config.foldKeepTurns, 2)
   assert.equal(config.foldBlockRatio, 8)
   assert.equal(config.foldCadence, 10)
+  assert.equal(config.cacheHitPrice, 0, 'automatic thresholding is off until prices are filled')
+  assert.equal(config.cacheMissPrice, 0)
+  assert.equal(config.autoFold, true, 'prices drive the threshold when filled')
+})
+
+test('cache prices are per-session overridable', () => {
+  const { settings } = store()
+  const service = new TokenTreeService({
+    config: Config['~standard'].validate({ logEdgeUpdates: false }).value!,
+    logger,
+    settings,
+  })
+  service.updateSettings({ cacheHitPrice: 1, cacheMissPrice: 50 }, 'session-a')
+  assert.equal(service.effective('session-a').cacheHitPrice, 1)
+  assert.equal(service.effective('session-a').cacheMissPrice, 50)
+  assert.equal(service.effective().cacheHitPrice, 0, 'other scopes stay manual')
 })
 
 test('the panel offers default, tree-only, and off', () => {
@@ -39,16 +55,19 @@ test('the panel offers default, tree-only, and off', () => {
   assert.equal(balanced.settings.foldAboveTokens, 30000)
   assert.equal(balanced.settings.foldKeepTurns, 2)
   assert.deepEqual(balanced.settings.toolDeny, [], 'the default hides nothing')
+  assert.equal(balanced.settings.autoFold, true, 'the default follows cache prices')
   assert.equal(treeOnly.settings.autoInject, false)
   assert.equal(treeOnly.settings.retrievalHint, false)
   assert.equal(treeOnly.settings.attachChoices, 0)
   assert.equal(treeOnly.settings.foldAboveTokens, 0)
   assert.equal(treeOnly.settings.foldBlockRatio, 0)
+  assert.equal(treeOnly.settings.autoFold, false)
   assert.deepEqual(treeOnly.settings.toolDeny, [], 'tree-only keeps the tools callable')
   assert.equal(off.settings.autoInject, false)
   assert.equal(off.settings.retrievalHint, false)
   assert.equal(off.settings.attachChoices, 0)
   assert.equal(off.settings.foldAboveTokens, 0)
+  assert.equal(off.settings.autoFold, false)
   assert.equal(off.settings.fileRegion, 'off')
   assert.ok((off.settings.toolDeny as string[]).includes('retrieve_context'), 'off hides retrieval')
   assert.ok((off.settings.toolDeny as string[]).includes('tree_query'), 'off hides tree tools')
