@@ -1300,9 +1300,11 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var ruleText = ruleTextState[0]
     var setRuleText = ruleTextState[1]
 
-    /** The one shipped bundle; cost tuning is left to the advanced settings. */
+    /** The measured default plus the two explicit tree modes. */
     var PRESET_LIST = [
       { id: 'balanced', label: '默认', hint: '30k 折叠、保留 2 轮、不隐藏工具；省不省取决于缓存价格，不承诺“极省”' },
+      { id: 'treeOnly', label: '只建树', hint: '只记录完整对话树；关闭注入、提示、候选、折叠和反思，不隐藏工具' },
+      { id: 'off', label: '关闭', hint: '插件对模型完全静默：关闭所有模型侧行为，并隐藏插件工具' },
     ]
 
     /** Apply a preset, then refresh the panel so the numbers match. */

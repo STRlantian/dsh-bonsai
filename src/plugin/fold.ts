@@ -149,6 +149,39 @@ export function foldWorthIt(block: number, kept: number, floor: number, ratio: n
   return true
 }
 
+/**
+ * Optimal fold block for a cache-priced, steady-state conversation.
+ *
+ * Let `t` be tokens per turn, `K` the kept turns, `r = miss price / hit price`, and `T` the block
+ * removed at a fold. A fold reprices the kept window `K*t` at miss once, while the growing block
+ * costs hit-priced tokens each turn. Amortising over a cycle gives
+ *
+ *   cost/turn = t*(r-1)*K / T + T/2 + constant
+ *
+ * so the minimum is at
+ *
+ *   T* = t * sqrt(2*K*(r-1)).
+ *
+ * The current `foldBlockRatio` is a floor: the effective threshold is `max(T*, ratio*K*t)`. For
+ * `K=2, r=50`, `T* / t = 14`; the default ratio 8 asks for `16*t`, close to optimal. `K=1` gives
+ * `T* / t ≈ 9.9`, so a ratio-5 aggressive bundle folds too early.
+ *
+ * @param tokensPerTurn - average visible tokens added per turn.
+ * @param keepTurns - turns kept after a fold.
+ * @param missHitRatio - cache-miss price divided by cache-hit price, > 1.
+ * @returns Optimal block size in tokens, or 0 for invalid input.
+ */
+export function optimalFoldThreshold(tokensPerTurn: number, keepTurns: number, missHitRatio: number): number {
+  if (!(tokensPerTurn > 0) || !(keepTurns > 0) || !(missHitRatio > 1)) return 0
+  return tokensPerTurn * Math.sqrt(2 * keepTurns * (missHitRatio - 1))
+}
+
+/** The corresponding optimal ratio `T* / kept`. */
+export function optimalFoldRatio(keepTurns: number, missHitRatio: number): number {
+  if (!(keepTurns > 0) || !(missHitRatio > 1)) return 0
+  return Math.sqrt((2 * (missHitRatio - 1)) / keepTurns)
+}
+
 export function turnPlaceholder(turns: number): string {
   return `[已折叠] 之前的 ${turns} 轮对话已从上下文移除以节省 token；原文完整保存在对话树中，需要细节时调用 retrieve_context 取回，不要凭印象编造。`
 }

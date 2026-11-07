@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { foldPlaceholder, planFold, planTurnFold } from '../src/plugin/fold.ts'
+import { foldPlaceholder, optimalFoldRatio, optimalFoldThreshold, planFold, planTurnFold } from '../src/plugin/fold.ts'
 
 const tool = (seq, turn, text = 'output') => ({
   type: 'tool/result',
@@ -59,4 +59,13 @@ test('an injected token-tree message inside a turn does not make that turn forei
   const turns = new Map([[1, 1], [2, 1], [3, 2], [4, 2], [5, 2], [6, 2], [7, 3], [8, 3]])
   const plan = planTurnFold(events, [1, 2, 3, 4, 5, 6, 7, 8], 1, seq => turns.get(seq))
   assert.deepEqual(plan[0]?.seqs, [3, 4, 5, 6], 'the injected surface slot is mapped, not foreign')
+})
+
+test('the cost model gives the expected optimal fold block and ratio', () => {
+  assert.equal(optimalFoldThreshold(1000, 2, 50), 14_000)
+  assert.ok(Math.abs(optimalFoldRatio(2, 50) - 7) < 1e-12)
+  assert.ok(Math.abs(optimalFoldThreshold(1000, 1, 50) - 9_899.4949) < 0.1)
+  assert.equal(optimalFoldThreshold(0, 2, 50), 0)
+  assert.equal(optimalFoldThreshold(1000, 0, 50), 0)
+  assert.equal(optimalFoldThreshold(1000, 2, 1), 0)
 })

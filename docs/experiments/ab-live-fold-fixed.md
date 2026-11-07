@@ -93,6 +93,61 @@ r = (477,440 - 338,176) / (61,738 - 54,111)
 
 base 与 default 的平衡点约 **18.2×**；base 与 aggressive 约 **88.9×**。
 
+## 由 miss/hit 解最优折叠阈值
+
+假设每次折叠恰好到达阈值 `T`（待折块），每轮新增 `t` token，保留 `K` 轮，miss/hit 比为 `r`。
+
+折叠一次的代价：保留窗口 `K*t` 在折叠后要按 miss 重读一次，额外成本约：
+
+```text
+(r - 1) * K * t
+```
+
+折叠周期内，待折块从 0 长到 `T`，平均每轮被命中 `T/2` 个 token；周期长度 `T/t`，所以这部分成本是：
+
+```text
+(T/t) * T/2 = T²/(2t)
+```
+
+把折叠代价摊到每轮：
+
+```text
+cost/turn ≈ t*(r-1)*K / T + T/2 + 常数
+```
+
+对 `T` 求最小值：
+
+```text
+T* = t * sqrt(2*K*(r-1))
+```
+
+对应的最优比例：
+
+```text
+ratio* = T* / (K*t) = sqrt(2*(r-1)/K)
+```
+
+代入 `r=50`：
+
+| 保留轮数 K | 最优 T*/t | 最优 ratio |
+|---:|---:|---:|
+| 1 | 9.9 | 9.9 |
+| 2 | 14.0 | 7.0 |
+| 3 | 17.1 | 5.7 |
+
+所以：
+
+- default `K=2, ratio=8` 的 ratio 门槛 `16t`，离最优 `14t` 不远；
+- aggressive `K=1, ratio=5` 的门槛只有 `5t`，远低于最优 `9.9t`，折得太早，cache 失效成本超过了节省；
+- 这也解释了 50× 下 default 反而更便宜。
+
+注意这是**稳态、每轮 token 相同、每次恰好到阈值**的近似；实际还要受 `foldAboveTokens` 绝对下限、`foldCadence`、真实 turn token 波动和 cache 前缀实现影响。代码里对应：
+
+- [optimalFoldThreshold](src/plugin/fold.ts)
+- [optimalFoldRatio](src/plugin/fold.ts)
+
+
+
 > output token 未计入上表；若 output 也按 hit 单价计，base/default/aggressive 分别再加 386/681/649，排序不变。若 output 有独立价格，按实际单价加即可。
 
 ## 限制

@@ -30,17 +30,31 @@ test('the shipped default folds at 30k tokens', () => {
   assert.equal(config.foldCadence, 10)
 })
 
-test('there is exactly one shipped preset', () => {
-  assert.equal(PRESETS.length, 1)
+test('the panel offers default, tree-only, and off', () => {
+  assert.equal(PRESETS.length, 3)
   const balanced = presetOf('balanced')
-  assert.ok(balanced)
+  const treeOnly = presetOf('treeOnly')
+  const off = presetOf('off')
+  assert.ok(balanced && treeOnly && off)
   assert.equal(balanced.settings.foldAboveTokens, 30000)
   assert.equal(balanced.settings.foldKeepTurns, 2)
   assert.deepEqual(balanced.settings.toolDeny, [], 'the default hides nothing')
-  assert.equal(presetOf('treeOnly'), undefined, 'the old tree-only preset is gone')
-  assert.equal(presetOf('aggressive'), undefined, 'the old aggressive preset is gone')
-  assert.equal(presetOf('conservative'), undefined, 'the old conservative preset is gone')
-  assert.equal(presetOf('coding'), undefined, 'the old coding preset is gone')
+  assert.equal(treeOnly.settings.autoInject, false)
+  assert.equal(treeOnly.settings.retrievalHint, false)
+  assert.equal(treeOnly.settings.attachChoices, 0)
+  assert.equal(treeOnly.settings.foldAboveTokens, 0)
+  assert.equal(treeOnly.settings.foldBlockRatio, 0)
+  assert.deepEqual(treeOnly.settings.toolDeny, [], 'tree-only keeps the tools callable')
+  assert.equal(off.settings.autoInject, false)
+  assert.equal(off.settings.retrievalHint, false)
+  assert.equal(off.settings.attachChoices, 0)
+  assert.equal(off.settings.foldAboveTokens, 0)
+  assert.equal(off.settings.fileRegion, 'off')
+  assert.ok((off.settings.toolDeny as string[]).includes('retrieve_context'), 'off hides retrieval')
+  assert.ok((off.settings.toolDeny as string[]).includes('tree_query'), 'off hides tree tools')
+  assert.equal(presetOf('aggressive'), undefined, 'the old cost bundle is gone')
+  assert.equal(presetOf('conservative'), undefined, 'the old conservative bundle is gone')
+  assert.equal(presetOf('coding'), undefined, 'the old coding bundle is gone')
   assert.equal(presetOf('nope'), undefined)
 })
 
@@ -76,6 +90,20 @@ test('applying the default clears a previous numeric override', () => {
   assert.deepEqual(service.toolDeny(), [], 'the old hidden-tool override is cleared')
 })
 
+test('off hides the plugin tools; tree-only leaves them available', () => {
+  const { settings } = store()
+  const service = new TokenTreeService({
+    config: Config['~standard'].validate({ logEdgeUpdates: false }).value!,
+    logger,
+    settings,
+  })
+  service.applyPreset('off')
+  assert.deepEqual(service.effective().toolDeny, ['retrieve_context', 'tree_query', 'tree_mark', 'tree_focus', 'tree_backtrack'])
+  service.applyPreset('treeOnly')
+  assert.deepEqual(service.toolDeny(), [], 'tree-only restores the tools')
+  assert.equal(service.effective().foldAboveTokens, 0, 'tree-only still records without folding')
+})
+
 test('a preset applies to the scope it is asked for', () => {
   const { settings, files } = store()
   const service = new TokenTreeService({
@@ -84,10 +112,11 @@ test('a preset applies to the scope it is asked for', () => {
     settings,
   })
   // Session scope: the bundle lands on that conversation, the global set stays untouched.
-  const applied = service.applyPreset('balanced', 'session-a')
+  const applied = service.applyPreset('off', 'session-a')
   assert.ok(applied !== undefined)
-  assert.equal(applied.effective.foldKeepTurns, 2, 'session sees the preset')
+  assert.equal(applied.effective.foldAboveTokens, 0, 'session sees the preset')
+  assert.deepEqual(applied.effective.toolDeny, ['retrieve_context', 'tree_query', 'tree_mark', 'tree_focus', 'tree_backtrack'])
   const written = JSON.parse(files.get('C:/tmp/settings.json') as string)
   assert.deepEqual(Object.keys(written), ['sessions'], 'only the session map was written')
-  assert.equal(written.sessions['session-a'].foldAboveTokens, 30000)
+  assert.equal(written.sessions['session-a'].foldAboveTokens, 0)
 })

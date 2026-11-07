@@ -118,12 +118,18 @@ text.
 Default: fold when the block reaches 30,000 tokens and 8x the keep window, at most every 10 turns
 ```
 
-The settings page ships one **Default** preset. "Cheaper" is price-dependent, so no fixed bundle
-claims to be the cheapest; tune the advanced settings when needed:
+The settings page ships one **Default** preset plus two explicit tree modes. "Cheaper" is
+price-dependent, so no fixed bundle claims to be the cheapest:
 
-| Preset | What it does | Block floor | Turns kept | Fold scope | Tools hidden |
+| Preset | What it does | Block floor | Turns kept | Model-facing effect | Tools hidden |
 |---|---|---|---|---|---|
-| **Default** | general starting point; cost/context balance | 30,000 | 2 | whole turns | none |
+| **Default** | general starting point; cost/context balance | 30,000 | 2 | injection/hints/candidates/summary/reflection | none |
+| **Tree only** | record the tree only | 0 (off) | — | all off; tools remain callable | none |
+| **Off** | inert to the model | 0 (off) | — | all off; plugin tools hidden too | 5 plugin tools |
+
+With a steady-state approximation (t tokens/turn, K turns kept, miss/hit = r), the optimal fold
+block is `T* = t * sqrt(2K(r-1))`, or `ratio* = sqrt(2(r-1)/K)`. For K=2, r=50 that is about
+`14t`; the default 8x keep window (`16t`) is close.
 
 With cache miss = 50x hit, Default saved about **9.7%** versus no plugin; the earlier-fold bundle
 was more expensive because its extra folds invalidated cached prefixes.
@@ -301,7 +307,7 @@ p=10 and p=50, so the "block = 5x window" default can be re-derived under your o
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 250 cases (224 backend + 26 browser)
+pnpm test           # 252 cases (226 backend + 26 browser)
 pnpm run check      # typecheck + tests
 ```
 
@@ -340,7 +346,7 @@ It validates, sets `x.y.z`, publishes `./plugin` with `--tag latest`, advances t
 | `src/core/` | Pure algorithms: graph, edge weights, path cost, weighted retrieval, grading and backtracking |
 | `src/plugin/` | The DSH wiring: `Config`, the session service, tools, event subscriptions, HTTP routes, fold planning |
 | `client/client.js` | Browser half: dock, editor, graph view, recycle bin, rule bar, settings panel, preset picker |
-| `tests/` | 250 cases, including client tests that mount real React under jsdom |
+| `tests/` | 252 cases, including client tests that mount real React under jsdom |
 | `docs/experiment-context-cache.md` | Every measurement (53 sections) |
 
 ## License
