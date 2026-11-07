@@ -786,9 +786,9 @@ test('the settings panel opens on the global scope with a tab switch', { timeout
   assert.ok(visibleRows.some(text => text.includes('隐藏工具')), 'hidden tools is visible')
   // The rest still exist, inside the disclosure, in the order the fold decision is made.
   const advancedRows = [...disclosure.querySelectorAll('.twt-srow')].map(row => row.textContent ?? '')
-  const thresholdIndex = advancedRows.findIndex(text => text.includes('待折的旧内容至少多少 token'))
+  const thresholdIndex = advancedRows.findIndex(text => text.includes('折叠阈值'))
   const ratioIndex = advancedRows.findIndex(text => text.includes('待折块至少是保留窗口的几倍'))
   const cadenceIndex = advancedRows.findIndex(text => text.includes('两次折叠至少间隔几轮'))
-  assert.ok(thresholdIndex >= 0 && ratioIndex === thresholdIndex + 1, 'block floor then ratio')
+  assert.ok(thresholdIndex >= 0 && ratioIndex === thresholdIndex + 1, 'consolidated threshold then ratio')
   assert.ok(cadenceIndex === ratioIndex + 1, 'then the cadence')
 })

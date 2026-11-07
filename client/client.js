@@ -1601,6 +1601,28 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       })
     }
 
+    /** One raw numeric input, without its own label row. */
+    function thresholdInput(key, value, min, step, width) {
+      return h('input', {
+        key: key + ':' + String(value),
+        type: 'number',
+        min: String(min),
+        step: String(step),
+        defaultValue: String(value),
+        disabled: busy,
+        style: { width: width + 'px' },
+        onBlur: function (event) {
+          var next = Number(event.target.value)
+          if (!Number.isFinite(next) || next < min) {
+            event.target.value = String(value)
+            return
+          }
+          if (Math.round(next) === Number(value)) return
+          saveSetting(key, Math.round(next))
+        },
+      })
+    }
+
     /** One checkbox row, bound to the value in force. */
     function toggleRow(options) {
       return settingRow({
@@ -1616,6 +1638,27 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
         }),
       })
     }
+
+    var foldThresholdControl = h('div', { style: { display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' } },
+      h('select', {
+        value: effective.autoFold !== false ? 'auto' : 'manual',
+        disabled: busy,
+        onChange: function (event) { saveSetting('autoFold', event.target.value === 'auto') },
+      },
+        h('option', { value: 'auto' }, t('自动选阈值')),
+        h('option', { value: 'manual' }, t('手动填阈值'))),
+      effective.autoFold !== false
+        ? [
+          h('span', { className: 'twt-hint' }, t('命中')),
+          thresholdInput('cacheHitPrice', effective.cacheHitPrice === undefined ? 0 : effective.cacheHitPrice, 0, 1, 64),
+          h('span', { className: 'twt-hint' }, t('未命中')),
+          thresholdInput('cacheMissPrice', effective.cacheMissPrice === undefined ? 0 : effective.cacheMissPrice, 0, 1, 64),
+        ]
+        : [
+          h('span', { className: 'twt-hint' }, t('待折块')),
+          thresholdInput('foldAboveTokens', effective.foldAboveTokens === undefined ? 30000 : effective.foldAboveTokens, 0, 1000, 92),
+          h('span', { className: 'twt-hint' }, 'tok'),
+        ])
 
     settingsPanel = h('div', { className: 'twt-settings' },
       h('div', { className: 'twt-tabs', role: 'tablist' },
@@ -1701,42 +1744,12 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       h('details', { className: 'twt-advanced' },
         h('summary', null, t('高级（一般不用改）')),
         h('div', { className: 'twt-advanced-grid' },
-        toggleRow({
+        settingRow({
           key: 'autoFold',
           advanced: true,
-          label: '按缓存价格自动算阈值',
-          hint: '开启且两个价格都大于 0 时，用平均每轮 token 计算 T*；关闭后回到手填阈值',
-          checked: effective.autoFold !== false,
-        }),
-        numericRow({
-          key: 'cacheHitPrice',
-          advanced: true,
-          label: '缓存命中价格',
-          hint: '和未命中价格用同一单位；两个都大于 0 时，折叠阈值由实测每轮 token 自动计算，下面的手填阈值不再生效',
-          value: effective.cacheHitPrice === undefined ? 0 : effective.cacheHitPrice,
-          min: 0,
-          step: 1,
-          width: 76,
-        }),
-        numericRow({
-          key: 'cacheMissPrice',
-          advanced: true,
-          label: '缓存未命中价格',
-          hint: '例如命中填 1、未命中填 50；自动阈值 = 每轮 token × √(2×保留轮数×(miss/hit−1))',
-          value: effective.cacheMissPrice === undefined ? 0 : effective.cacheMissPrice,
-          min: 0,
-          step: 1,
-          width: 76,
-        }),
-        numericRow({
-          key: 'foldAboveTokens',
-          advanced: true,
-          label: '待折的旧内容至少多少 token',
-          hint: '手动阈值；填了缓存命中/未命中价格后自动阈值优先，此项只作兜底',
-          value: effective.foldAboveTokens === undefined ? 30000 : effective.foldAboveTokens,
-          min: 0,
-          step: 1000,
-          width: 92,
+          label: '折叠阈值',
+          hint: '自动：填缓存命中/未命中价格，按实际每轮 token 算；手动：直接填待折块 token',
+          control: foldThresholdControl,
         }),
         numericRow({
           key: 'foldBlockRatio',

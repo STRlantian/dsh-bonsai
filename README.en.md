@@ -147,6 +147,11 @@ was more expensive because its extra folds invalidated cached prefixes.
 | `foldScope` | `turns` | `turns` folds whole turns, `tools` folds only tool output |
 | `attachChoices` | `10` | How many candidate questions the model sees each turn (questions only); `0` turns it off |
 
+The advanced **fold threshold** row is one dropdown plus inputs:
+
+- `Auto`: fill the hit/miss prices; the threshold uses the measured average turn size.
+- `Manual`: enter the block token floor directly.
+
 With both cache prices set (miss > hit), the floor is derived from the measured average turn size:
 
 ```text
