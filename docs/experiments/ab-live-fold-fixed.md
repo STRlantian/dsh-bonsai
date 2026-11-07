@@ -40,10 +40,60 @@ prompt -24.8%
 
 ## 结论
 
-- 折叠真正发生后，**aggressive 最省**：prompt token 比不加插件少 **36.3%**，比 default 少 **24.8%**。
+- 按原始 token 计数，**aggressive 最少**：prompt token 比不加插件少 **36.3%**，比 default 少 **24.8%**。
+  但按 `miss = 50 × hit` 的缓存价格折算，**default 最省**；见下一节。
 - default 也省 **15.4%**，但它的 `keep=2`、`ratio=8` 让折叠发生得更晚，共折 7 次；aggressive 折 10 次。
 - 三臂质量都是 5/5，工具调用都是 0；这轮没有出现折叠导致答错，也没有额外工具调用。
 - 输出 token 上插件臂略高（summary/attach 标记）：base 386、default 681、aggressive 649；相对于节省的 prompt token，这个增量很小。
+
+## 按 cache miss = 50 × hit 折算
+
+只算输入侧，令 cache hit 单价为 1、miss 为 50：
+
+```text
+cost = inputTokens × 50 + cacheReadTokens × 1
+```
+
+| 臂 | input | cache read | 折算成本 | 相对 base |
+|---|---:|---:|---:|---:|
+| base | 59,144 | 568,832 | **3,526,032** | — |
+| default | 54,111 | 477,440 | **3,182,990** | **-9.7%** |
+| aggressive | 61,738 | 338,176 | **3,425,076** | **-2.9%** |
+
+结论变了：**50× miss 下 default 最省，不是 aggressive。**
+
+- default 比 base 省 **9.7%**
+- aggressive 只比 base 省 **2.9%**
+- aggressive 比 default **贵 7.6%**
+
+原因是 aggressive 折得更频繁（10 次 vs 7 次），每次折叠都会让 keep 窗口重新按 miss 计价；它省下的 cache read 抵不过增加的 uncached input：
+
+```text
+default     input 54,111  cache 477,440
+aggressive  input 61,738  cache 338,176
+             +7,627 input   -139,264 cache
+```
+
+在 50× 下，多出的 7,627 miss token 值 381,350，远大于少掉的 139,264 hit token。
+
+### 盈亏平衡点
+
+default 与 aggressive 的 input/cache 差：
+
+```text
+r = (477,440 - 338,176) / (61,738 - 54,111)
+  = 139,264 / 7,627
+  ≈ 18.3
+```
+
+所以：
+
+- **miss/hit > 18.3×**：default 更省（50× 属于这一档）；
+- **miss/hit < 18.3×**：aggressive 更省。
+
+base 与 default 的平衡点约 **18.2×**；base 与 aggressive 约 **88.9×**。
+
+> output token 未计入上表；若 output 也按 hit 单价计，base/default/aggressive 分别再加 386/681/649，排序不变。若 output 有独立价格，按实际单价加即可。
 
 ## 限制
 
