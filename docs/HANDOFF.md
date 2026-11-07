@@ -2,7 +2,7 @@
 
 给下一个对话的自己或别人：这份文件是当前状态的唯一入口。看完就不用去翻 300 多轮的历史。
 
-最后更新：2026-11-07 · 当前 HEAD · 未推送 31 个提交
+最后更新：2026-11-07 · 当前 HEAD · 未推送 32 个提交
 
 ## 这是什么
 
@@ -87,9 +87,10 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
 - semanticJump 的 40 条反事实边标注：BGE whole 85.0% vs hash 62.5% vs chunk meanAll 72.5%；
   边相似度适合整段向量，不适合检索用的 chunk 平均。边权暂未默认接 BGE。
   见 `docs/experiments/semantic-jump-results.md`。
-- 真机三臂 A/B（headless，未触发折叠）：5/5 全对、tool calls 全 0；default prompt token +9.4%、
-  aggressive +8.8%，aggressive 比 default 少 0.6%。headless 没有折叠占位，所以这轮不能证明
-  “折叠更省”。见 `docs/experiments/ab-live-three.md`。
+- 真机三臂 A/B（web，折叠已修复）：5/5 全对、tool calls 全 0；default prompt token **-15.4%**、
+  aggressive **-36.3%**（相对 no-plugin），aggressive 比 default 少 **24.8%**。
+  折叠次数 default 7、aggressive 10。见 `docs/experiments/ab-live-fold-fixed.md`。
+  旧的 headless 对照见 `docs/experiments/ab-live-three.md`（未折叠，不作结论）。
 
 ## 规矩（务必遵守）
 
@@ -106,4 +107,4 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
 3. `69ea4cc5` / `e8734fe5` 旧日志已无法靠当前代码恢复（`360db97` 只防再产生）；
 4. 复核本轮新加的回归测试：marker 结尾/围栏、fold turn 归属、surface replacement 去重、
    replay edits、node cap、settings scope、preset 整包、rule 持久化；
-5. 决定是否推送这 31 个提交（README 审计、诊断命令、设置页重写、预设合并、作用域修复、标记剥离、调参…）。
+5. 决定是否推送这 32 个提交（README 审计、诊断命令、设置页重写、预设合并、作用域修复、标记剥离、调参…）。

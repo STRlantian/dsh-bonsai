@@ -77,6 +77,14 @@ const promptSets = {
   recall: [...recallFacts, ...recallQuestionsStrict],
   // Same facts, but retrieval is allowed — the arm used when compaction is on.
   recallTools: [...recallFacts, ...recallQuestionsWithTools],
+  fold: [
+    ...Array.from({ length: 8 }, (_, index) => `这是第 ${index + 1} 段资料，只需记住，不要调用工具，回复了解：\n${['项目代号是青松；数据库是 SQLite，文件名 data/qingsong.db。','接口前缀是 /api/v3；认证算法是 HMAC-SHA256，时钟容差 30 秒。','部署目录是 /srv/qingsong；日志保留 14 天；缓存用内存 LRU，容量 512 条。','限流是每分钟每 IP 60 次；备份每天 03:15 执行；时区固定 Asia/Shanghai。','前端是 Vue 3 + Vite；错误码从 40001 开始；告警发到 ops@qingsong.dev。','数据库连接池上限 20；读写分离从库两个；慢查询阈值 200 毫秒。','会话 Cookie 是 HttpOnly + SameSite=Lax；刷新 token 有效期 7 天。','构建命令是 pnpm build；产物目录 dist；发布前必须跑 pnpm check。'][index]}\n${'以下是项目背景资料，请在后续问题中使用。'.repeat(650)}`),
+    '不要调用工具。根据前面资料回答：项目代号是什么？只答代号。',
+    '不要调用工具。根据前面资料回答：数据库文件名是什么？只答文件名。',
+    '不要调用工具。根据前面资料回答：认证时钟容差是多少秒？只答数字。',
+    '不要调用工具。根据前面资料回答：备份每天几点执行？只答时间。',
+    '不要调用工具。根据前面资料回答：数据库连接池上限是多少？只答数字。',
+  ],
 }
 
 const setName = argOf('set', 'mixed')

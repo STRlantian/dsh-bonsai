@@ -1,3 +1,5 @@
+> **注意：这是 headless CLI 的旧对照，未触发折叠，不能回答“最省”。**
+> 修复折叠后的 web 三臂结果见 `ab-live-fold-fixed.md`。
 # 真机三臂 A/B（headless CLI）
 
 日期：2026-11-07 13:45 +08:00  
