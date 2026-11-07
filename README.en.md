@@ -23,7 +23,7 @@ which one it is.
 | Capability | Status | Measured |
 |---|---|---|
 | **Hide tools** | Optional (defaults to hiding `tree_mark` and `tree_focus`; `[]` shows all) | 37 → 28 tools: **10,453 → 7,076 tokens/turn (−32%)** |
-| **Fold history** | On by default; the block must reach 30,000 tokens and 8x the keep window, at most every 10 turns | Live A/B: prompt/step **−9.2%**, but new input **+202%** (cache invalidated); short sessions cost **more**. The 60-turn cost model favours the tuned default |
+| **Fold history** | On by default; the block must reach 30,000 tokens and 8x the keep window, at most every 10 turns; cache prices can derive the threshold | Live web A/B (13 turns): default prompt **-15.4%**, aggressive **-36.3%**. At cache miss = 50x hit, cost is **-9.7%** for default and **-2.9%** for aggressive: default wins. Every fold rewrites the prefix |
 | Effect of folding on the cache | — | Every fold rewrites the prefix, so the cache misses: this is its real cost (experiment 23) |
 | Graphical tree editing / recycle bin | Done | Fork, re-parent, hide, restore, jump, compare branches; **cancelled turns leave the tree on their own** |
 | Rule editor | Done | Hand-written and auto-detected rules as chips, add/edit/delete, sent with the retrieval hint |
@@ -87,27 +87,27 @@ real tool list from the host; whatever you tick applies per agent:
 prompt  10,453 → 7,076 tokens (−32%, saved every turn)
 ```
 
-Nothing is hidden by default, because what you hide is **capability**. The list has to be right: the
-host validates every tool name and rejects the whole set when one is unknown (the settings panel
-shows the raw error).
+By default only `tree_mark` and `tree_focus` are hidden: they were never called in 201 real sessions
+but cost about 570 tokens per request. Tick "show all" (`toolDeny: []`) to give the model every tool.
+The list has to be right: the host validates every tool name and rejects the whole set when one is
+unknown (the settings panel shows the raw error).
 
 ### 2. Fold history (on by default)
 
-> **Folding shrinks the prompt, not the bill.** Live A/B (same tools, same questions, ABBA twice each):
-> prompt/step 10,345 -> 9,392 (-9.2%), but new input 3,674 -> 11,112 (+202%) - each fold rewrites the
-> prompt prefix and drops the cache. At a cache-read price of 1/10 the input price, folding the same
-> six-turn session was about 23% **more expensive**.
+> **Folding shrinks the prompt; the bill depends on cache prices.** Live web A/B (same tools,
+> same questions, 13 turns, 5/5 correct): default prompt **-15.4%**, aggressive **-36.3%**.
+> At cache miss = 50x hit, default cost is **-9.7%** and aggressive **-2.9%**: default wins because
+> aggressive folds more often and each fold reprices the keep window at miss. The break-even between
+> them is about **18.3x**.
 >
-> Folding pays off in **long sessions**, where folds are rare relative to turns and the folded content
-> is large. A 100-turn sweep (`docs/experiments/fold-param-sweep.md`) puts the balanced default at
-> 30,000 / keep 2 / 8x / cadence 10; the old 40,000 / keep 3 / 5x / cadence 3 setting was too
-> conservative and only broke even around turn 45.
+> This is a **price-dependent** conclusion, not "fold earlier and save". With `miss/hit = p`, keep
+> window `W`, block `T`, a fold costs about `(p-1)*W`; the steady-state optimum is
+> `T* = t * sqrt(2K(p-1))` (`t` tokens/turn, `K` kept turns). Default `K=2, ratio=8` is close at
+> p=50; aggressive `K=1, ratio=5` folds too early. Details and the live run:
+> `docs/experiments/ab-live-fold-fixed.md`.
 >
-> The price ratio is an **assumption**, not a constant: with `miss/hit = p`, one fold costs
-> `(1-1/p) * keep window` and saves `(1/p) * block` per later turn, so the break-even is
-> `N* = (p-1) * window / block`. At p=50 a block of 8x the window pays back in about 6 turns;
-> cadence 10 then amortises the rewrite. Lower the ratio if your real price gap is smaller. Details
-> in `docs/experiment-context-cache.md`, experiment 23, and the new sweep report.
+> Folding pays off in **long sessions**; short sessions or a low miss/hit ratio can cost more.
+> The settings row "fold threshold" can derive the value from cache prices or take a manual floor.
 
 Session history is derived by the host from the log. The plugin appends one
 `surfaceOp: { op: 'replace', startSeq, endSeq }` event, and the covered range stops entering
@@ -304,19 +304,18 @@ condition together with the number:
 | Claim | Sample | Condition |
 |---|---|---|
 | Tools -32% | one real assembly (37 -> 28 tools) | one machine, that profile's tool set |
-| Fold: prompt -9.2%, new input +202% | ABBA, two runs each | six-turn session, one model |
-| Block rule: 420 -> 44 folds, 68.7% of the cost | nine sessions replayed | cost model with a stated price ratio, not a bill |
-| Live arms 14,891 -> 8,544 | eight turns per arm, one run each | single run, noisy |
+| Fold prompt: default -15.4%, aggressive -36.3% | one run per arm, 13 turns | web host, 5/5 correct, tool calls=0 |
+| Fold cost: default -9.7%, aggressive -2.9% | same run | **assumed** cache miss=50x hit; not a bill |
 | Placement 14/18 | eighteen hand labels (one session) | one labeller |
 | Paraphrase 3/8, jump set 6/15 | eight / fifteen synthetic probes | same session, appended questions |
 | No retrieval gain | 219 replayed questions | one session, production order |
 
-**Not claimed**: no overall "X% cheaper" (folding costs more in short sessions) and no recall gain
-for retrieval. Counter-examples and failed experiments are kept in `docs/experiment-context-cache.md`
-(BM25, jieba, BGE, admission thresholds).
+**Not claimed**: no "always cheaper" (short sessions or low miss/hit can cost more) and no recall
+gain for retrieval. Counter-examples and failed experiments are kept in
+`docs/experiment-context-cache.md` (BM25, jieba, BGE, admission thresholds).
 
-The cache price ratio is an **assumption**: it is parameterised as `p` with break-even given for both
-p=10 and p=50, so the "block = 5x window" default can be re-derived under your own pricing.
+The cache price ratio is an **assumption**: with default `K=2, ratio=8`, `p=50` is close to the
+optimum `T*/W = sqrt(2(p-1)/K) = 7`; use the automatic threshold in settings for another price.
 
 ## Development
 

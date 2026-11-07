@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.1.13] — 2026-11-07
+
+Folding works again, and the threshold can be derived from cache prices.
+
+### Added
+
+- **Automatic fold threshold**: fill `cacheHitPrice` / `cacheMissPrice` and the block floor is
+  derived from the measured average turn size (`T* = t * sqrt(2K(miss/hit - 1))`); the settings
+  row is one dropdown (auto/manual) with the matching inputs. `treeOnly` and `off` disable it.
+- **Two-step retrieval**: `retrieve_context` returns a compact index (id/kind/summary) first and a
+  full node only when called with `nodeId`.
+- **Per-turn summaries** and a post-fold retrieval hint.
+
+### Changed
+
+- Presets are now **Default**, **Tree only**, and **Off**. The old cost-labelled bundles were
+  removed: at cache miss = 50x hit the measured default was cheaper than the early-fold bundle.
+- The retrieval hint waits for the first actual fold.
+
+### Fixed
+
+- **Folding never ran when plugin-injected `token-tree` messages sat inside a turn.** The turn
+  planner skipped those messages before recording `seq -> turn`, so their span looked foreign and
+  every such turn was discarded. A regression test and a live web session (7/10 folds) cover it.
+
 ## [0.1.12] — 2026-10-27
 
 Long nodes are served safely, and an anaphoric turn stays where it belongs.
