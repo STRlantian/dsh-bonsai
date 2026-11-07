@@ -141,6 +141,7 @@ test('the drift monitor compares billed growth against counted growth', () => {
     // appends one node, and the billed size tracks the counted growth at 1.1×.
     const growth = ['ab'.repeat(400), 'ab'.repeat(900), 'ab'.repeat(1_800), 'ab'.repeat(3_600)]
     const tree = service.stateOf('session-drift').tree
+    service.noteFoldTurn('session-drift', 1)
     let billed = 1_000
     let previousCounted = 0
     for (const [index, text] of growth.entries()) {

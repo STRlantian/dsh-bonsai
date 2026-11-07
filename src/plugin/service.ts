@@ -2093,6 +2093,17 @@ export class TokenTreeService {
     if (this.effective(sessionId).foldPolicy === 'always') {
       return MANDATORY_HINT_TEXT
     }
+    // Before the first fold the history is still there; a hint would only cost tokens.
+    if (!this.hasFolded(sessionId) && state.compacted !== true) {
+      state.lastHint = {
+        counted: undefined,
+        above: this.aboveTokens(sessionId),
+        fast: tree.nodes.size,
+        fired: false,
+        reason: 'no fold yet',
+      }
+      return undefined
+    }
     if (state.sawReduction === true) {
       // Appended, not returned: the compaction index and the size gate still apply in this turn.
       // Clearing the flag for the recursive call is what keeps the two hints composable.
@@ -2114,16 +2125,6 @@ export class TokenTreeService {
     const above = this.aboveTokens(sessionId)
     const counted = tokenizer === undefined ? undefined : this.conversationTokens(sessionId)
     if (counted !== undefined) state.promptTokens = counted
-    if (!this.hasFolded(sessionId)) {
-      state.lastHint = {
-        counted,
-        above,
-        fast: counted ?? tree.nodes.size,
-        fired: false,
-        reason: 'no fold yet',
-      }
-      return undefined
-    }
     state.lastHint = {
       counted,
       above,
