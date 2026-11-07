@@ -2056,5 +2056,32 @@ assistant/message、tool/result、注入的 runtime-context / 我们自己的 hi
   零依赖默认包。若接入，应做成**可选、异步的检索 embedding provider**，保存每节点多块向量，
   而不是全局替换 `embedText`；挂树评分仍走现有规则。
 
+## 实验 44：给 semanticJump 补边级标注
+
+实验 43 只测"答案节点排序"，没有直接测 `semanticJump`。补一套**反事实父边**标注：
+
+- 正边：问题 → 真正引入该概念的旧回答（`expectedTurn`）
+- 负边：问题 → 当前/最后一条回答（`wrongTurn`，目标为 18 时取 17）
+
+40 条边（17 学习 + 8 同义改写 + 15 跳转），标签与脚本：
+`docs/experiments/semantic-jump-labels.json`、`scripts/experiment-semantic-jump.mjs`。
+
+评分是问题与回答的余弦；`semanticJump = 1 - similarity`，正确父边应当更相似（margin 更大）：
+
+| 评分 | 正确率 | 正边相似度 | 负边相似度 | margin |
+|---|---:|---:|---:|---:|
+| hash | 62.5% | 0.281 | 0.256 | 0.025 |
+| **BGE whole** | **85.0%** | 0.550 | 0.492 | **0.058** |
+| BGE chunk meanAll | 72.5% | 0.532 | 0.502 | 0.030 |
+
+结论：
+
+- 在这套边级标注上，**BGE whole 明显好于 hash**（85% vs 62.5%），所以 `semanticJump` 换 BGE
+  是有依据的；但 chunk meanAll 反而只有 72.5%，边相似度更适合整段向量，而不是检索用的
+  chunk 平均。
+- 这仍然只是 40 条反事实边，不是完整的路径标注；而且此前完整 `retrieveContext` 的目标名次
+  没有改善，所以暂不把 BGE 边权设为默认，先把它做成可选 provider 再决定。
+- 现有附件/挂树评分继续 lexical，不受影响。
+
 脚本：`scripts/experiment-bge-vs-hash.mjs`；结果：
 `docs/experiments/bge-vs-hash-embedding.{md,csv,json}`。

@@ -2,7 +2,7 @@
 
 给下一个对话的自己或别人：这份文件是当前状态的唯一入口。看完就不用去翻 300 多轮的历史。
 
-最后更新：2026-11-06 · 当前 HEAD · 未推送 26 个提交
+最后更新：2026-11-06 · 当前 HEAD · 未推送 27 个提交
 
 ## 这是什么
 
@@ -72,7 +72,7 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
 
 ## 实验与数据
 
-- `docs/experiment-context-cache.md`：全部实测记录（52 节，含失败实验）。
+- `docs/experiment-context-cache.md`：全部实测记录（53 节，含失败实验）。
   **文档里的数字都有前提和样本量，引用时一起引。**
 - `docs/experiments/*.json`：标注集（18 条学习 / 8 条同义改写 / 15 条必须跳转）与探针结果。
 - 关键结果：整体检索没有显示召回增益（父回答进结果 23%、rank1 11%）；BM25 / jieba 没有显著提升。
@@ -80,6 +80,9 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
   MRR 0.541 vs 0.292；同义改写 5/8 vs 1/8，跳转 11/15 vs 3/15），但学习标注只有 1/17，
   不能替代挂树规则；长回答仍受 512 token 截断，且模型依赖不适合零依赖默认包。
   见 `docs/experiments/bge-vs-hash-embedding.md`。
+- semanticJump 的 40 条反事实边标注：BGE whole 85.0% vs hash 62.5% vs chunk meanAll 72.5%；
+  边相似度适合整段向量，不适合检索用的 chunk 平均。边权暂未默认接 BGE。
+  见 `docs/experiments/semantic-jump-results.md`。
 
 ## 规矩（务必遵守）
 
@@ -96,4 +99,4 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
 3. `69ea4cc5` / `e8734fe5` 旧日志已无法靠当前代码恢复（`360db97` 只防再产生）；
 4. 复核本轮新加的回归测试：marker 结尾/围栏、fold turn 归属、surface replacement 去重、
    replay edits、node cap、settings scope、preset 整包、rule 持久化；
-5. 决定是否推送这 26 个提交（README 审计、诊断命令、设置页重写、预设合并、作用域修复、标记剥离、调参…）。
+5. 决定是否推送这 27 个提交（README 审计、诊断命令、设置页重写、预设合并、作用域修复、标记剥离、调参…）。
