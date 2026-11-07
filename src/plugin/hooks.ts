@@ -131,16 +131,17 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     // The choices block rides along whatever else is injected: ten questions cost a few hundred
     // tokens, while a separate request to ask the model the same thing would cost a whole prompt.
     const choices = query === undefined ? '' : service.attachChoices(payload.agent.session.id, query)
+    const summary = service.summaryInstruction(payload.agent.session.id)
     if (!settings.autoInject) {
       const hint = settings.retrievalHint ? service.retrievalHint(payload.agent.session.id) : undefined
-      const body = [hint, choices].filter(part => part !== undefined && part !== '').join('\n\n')
+      const body = [hint, choices, summary].filter(part => part !== undefined && part !== '').join('\n\n')
       if (body === '') return decision
       return { ...decision, messages: [...decision.messages, buildInjectedMessage(body)] }
     }
     if (query === undefined) return decision
     try {
       const block = service.memoryBlock(payload.agent.session.id, query, config.injectBudgetTokens)
-      const body = [block, choices].filter(part => part !== undefined && part !== '').join('\n\n')
+      const body = [block, choices, summary].filter(part => part !== undefined && part !== '').join('\n\n')
       if (body === '') return decision
       ctx.logger.info(`token-tree: injecting memory block for session ${payload.agent.session.id} (turn ${payload.turn})`)
       return { ...decision, messages: [...decision.messages, buildInjectedMessage(body)] }

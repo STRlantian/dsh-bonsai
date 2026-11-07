@@ -2,7 +2,7 @@
 
 给下一个对话的自己或别人：这份文件是当前状态的唯一入口。看完就不用去翻 300 多轮的历史。
 
-最后更新：2026-11-06 · 当前 HEAD · 未推送 27 个提交
+最后更新：2026-11-06 · 当前 HEAD · 未推送 28 个提交
 
 ## 这是什么
 
@@ -25,6 +25,9 @@ DSH 插件 **盆栽 / dsh-bonsai**：对话树的编辑与压缩。给一段对�
 | 预设（只建树/日常默认/写代码/保上下文/极省） | 可用；切换时整包清除旧键；按钮下方带一行说明 | `src/plugin/presets.ts` |
 | 全局 / 本对话作用域 | 大部分可用；tokenizer 是全局设置 | `settings.ts`、`service.effective(sessionId)` |
 | 可选 BGE 检索 | config `bge:true`；chunk meanAll 只作用于 `retrieve_context`；失败回落 hash | `bge.ts`、`service.retrieveAsync` |
+| 两阶段检索 | `retrieve_context` 默认返回索引，传 `nodeId` 取详情 | `tools.ts` |
+| 每轮摘要 | `attachSummary` 默认 `true`；模型标记优先，缺失时 200 字启发式 | `service.summaryInstruction`、`hooks.ts` |
+| 提示时机 | 第一次折叠后才发 `retrievalHint`；`hintAboveTokens` 只作诊断 | `service.baseHint`、`hasFolded` |
 | 诊断命令 | 可用 | `/prompt` `/fold` `/usage` `/retrieve` `/tree` |
 
 ```text
@@ -99,4 +102,4 @@ pnpm run build && node scripts/stage.mjs  然后复制 plugin/ 到 profile
 3. `69ea4cc5` / `e8734fe5` 旧日志已无法靠当前代码恢复（`360db97` 只防再产生）；
 4. 复核本轮新加的回归测试：marker 结尾/围栏、fold turn 归属、surface replacement 去重、
    replay edits、node cap、settings scope、preset 整包、rule 持久化；
-5. 决定是否推送这 27 个提交（README 审计、诊断命令、设置页重写、预设合并、作用域修复、标记剥离、调参…）。
+5. 决定是否推送这 28 个提交（README 审计、诊断命令、设置页重写、预设合并、作用域修复、标记剥离、调参…）。

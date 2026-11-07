@@ -94,19 +94,17 @@ test('with a tokenizer the hint is gated on conversation tokens, not node count'
     assert.ok(config.value !== undefined)
     const service = new TokenTreeService({ config: config.value, logger })
 
-    // Plenty of nodes, but only a handful of tokens: the gate stays closed. Measuring
-    // node count here is exactly the proxy this replaces.
+    // Even a large conversation does not open the hint gate until a fold has happened.
     const state = service.stateOf('session-t')
     for (let index = 0; index < 50; index++) state.tree.addNode({ kind: 'question', content: 'ab', timestamp: index })
-    assert.equal(service.retrievalHint('session-t'), undefined, 'node count alone does not open the gate')
-
-    // Growing the conversation past the token threshold opens it.
     state.tree.addNode({ kind: 'question', content: 'ab'.repeat(400), timestamp: 100 })
+    assert.equal(service.retrievalHint('session-t'), undefined, 'no fold yet, no hint')
+    service.noteFoldTurn('session-t', 1)
     const hint = service.retrievalHint('session-t')
-    assert.ok(hint !== undefined && hint.includes('retrieve_context'), 'conversation tokens open the gate')
+    assert.ok(hint !== undefined && hint.includes('retrieve_context'), 'a completed fold opens the gate')
     assert.ok((service.settingsInfo().lastHint?.counted ?? 0) >= 200, 'the decision reports the measured size')
 
-    // With the tokenizer disabled, the node count is still the fallback.
+    // Without a tokenizer the same fold gate applies.
     const fallback = new TokenTreeService({
       config: Config['~standard'].validate({ logEdgeUpdates: false, hintMinNodes: 5, tokenizerVersion: 'off' }).value!,
       logger,
@@ -114,6 +112,8 @@ test('with a tokenizer the hint is gated on conversation tokens, not node count'
     const plain = fallback.stateOf('session-u')
     assert.equal(fallback.retrievalHint('session-u'), undefined)
     for (let index = 0; index < 6; index++) plain.tree.addNode({ kind: 'question', content: 'ab', timestamp: index })
+    assert.equal(fallback.retrievalHint('session-u'), undefined, 'node count alone no longer opens it')
+    fallback.noteFoldTurn('session-u', 1)
     assert.ok(fallback.retrievalHint('session-u') !== undefined)
   } finally {
     rmSync(dir, { recursive: true, force: true })

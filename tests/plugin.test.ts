@@ -392,7 +392,7 @@ test('the /tree command renders the tree for the calling agent', async () => {
   assert.match(missing.text, /unknown node/)
 })
 
-test('retrieve_context scores the buffer and queues it for the next step', async () => {
+test('retrieve_context returns an index, then a nodeId returns the detail', async () => {
   const { harness, service } = mount()
   const state = service.stateOf('session-1')
   state.tree.addNode({ kind: 'question', content: 'What is attention?', timestamp: 1_000 })
@@ -403,12 +403,20 @@ test('retrieve_context scores the buffer and queues it for the next step', async
   const tool = harness.tools.get('retrieve_context') as { execute(args: unknown, exec: unknown): Promise<Record<string, unknown>> }
   const result = await tool.execute({ query: 'attention token weight' }, { name: 'retrieve_context', agent: harness.agent })
 
-  const selected = result.selected as { nodeId: string; weight: number }[]
-  assert.ok(selected.length >= 1)
-  assert.ok(selected.some(node => node.nodeId === answer.id))
+  assert.equal(result.mode, 'index')
+  const candidates = result.candidates as { nodeId: string; label: string; weight: number }[]
+  assert.ok(candidates.length >= 1)
+  assert.ok(candidates.some(node => node.nodeId === answer.id))
+  assert.ok(candidates.every(node => typeof node.label === 'string' && node.label.length > 0))
   assert.equal(result.injected, true)
   assert.equal(harness.injected.length, 1)
-  assert.ok(harness.injected[0].content[0].text?.startsWith('[token-tree memory]'))
+  assert.ok(harness.injected[0].content[0].text?.startsWith('[token-tree] retrieval index:'))
+
+  const detail = await tool.execute({ nodeId: answer.id, query: 'attention token weight' }, { name: 'retrieve_context', agent: harness.agent })
+  assert.equal(detail.mode, 'detail')
+  const node = detail.detail as { content: string }
+  assert.ok(node.content.includes('weighted sum'))
+  assert.equal(harness.injected.length, 2, 'detail is injected too')
 })
 
 test('the supervisor reflects, backtracks to the better sibling, and queues guidance', () => {
@@ -490,10 +498,11 @@ test('the pre-step hook prepends exactly one memory block', async () => {
   assert.equal(later.messages.length, 1)
 })
 
-test('with injection off the hook appends one short retrieval hint instead', async () => {
+test('with injection off the hook appends the summary request and a post-fold hint', async () => {
   const { harness, service } = mount({ ...defaults(), autoInject: false, retrievalHint: true })
   const state = service.stateOf('session-1')
-  // The hint is suppressed while the tree is still trivial.
+  // The retrieval hint is suppressed until something was folded, but the summary request is
+  // present every turn.
   const userMessage = {
     id: 'm1',
     role: 'user' as const,
@@ -505,24 +514,23 @@ test('with injection off the hook appends one short retrieval hint instead', asy
     { agent: harness.agent, messages: [userMessage], turn: 1, step: 1 },
     async () => ({ kind: 'enter', messages: [userMessage] }),
   ) as { messages: UserMessageLike[] }
-  assert.equal(early.messages.length, 1, 'no hint before there is anything to retrieve')
+  assert.equal(early.messages.length, 2, 'the summary request is appended')
+  assert.ok(JSON.stringify(early.messages[1]).includes('[summary:'), 'summary every turn')
+  assert.ok(!JSON.stringify(early.messages[1]).includes('retrieve_context'), 'no retrieval hint before a fold')
 
   for (let index = 0; index < 6; index += 1) {
     state.tree.addNode({ kind: 'question', content: `q${index}`, timestamp: 1_000 + index })
     state.tree.addNode({ kind: 'answer', content: `a${index}`, timestamp: 1_500 + index })
   }
 
-  // 12 nodes is still below `hintMinNodes`: a short conversation carries its whole
-  // history, so paying for the hint every turn buys nothing (measured three times).
   const shortConversation = await harness.waterfall(
     'agent/pre-step',
     { agent: harness.agent, messages: [userMessage], turn: 2, step: 1 },
     async () => ({ kind: 'enter', messages: [userMessage] }),
   ) as { messages: UserMessageLike[] }
-  // The retrieval hint still waits for the history to grow, but the choices block does not: it is
-  // what the model needs to answer "which thread is this?" on every turn that has candidates.
   assert.equal(shortConversation.messages.length, 2, 'the choices block rides along')
   assert.ok(JSON.stringify(shortConversation.messages[1]).includes('[attach:'), 'and asks for a marker')
+  assert.ok(!JSON.stringify(shortConversation.messages[1]).includes('retrieve_context'), 'still no hint before a fold')
 
   const withoutChoices = mount({ ...defaults(), autoInject: false, retrievalHint: true, attachChoices: 0 })
   const plainState = withoutChoices.service.stateOf('session-1')
@@ -535,10 +543,12 @@ test('with injection off the hook appends one short retrieval hint instead', asy
     { agent: withoutChoices.harness.agent, messages: [userMessage], turn: 2, step: 1 },
     async () => ({ kind: 'enter', messages: [userMessage] }),
   ) as { messages: UserMessageLike[] }
-  assert.equal(bare.messages.length, 1, 'attachChoices: 0 keeps the step untouched')
+  assert.equal(bare.messages.length, 2, 'summary only; attachChoices: 0 suppresses the candidate block')
+  assert.ok(!JSON.stringify(bare.messages[1]).includes('[attach:'), 'no attach candidates')
+  assert.ok(JSON.stringify(bare.messages[1]).includes('[summary:'), 'summary stays')
 
-  // A compaction is the moment the hint starts to earn its tokens.
-  state.compacted = true
+  // A completed fold is the hint gate.
+  service.noteFoldTurn('session-1', 2)
   const decision = await harness.waterfall(
     'agent/pre-step',
     { agent: harness.agent, messages: [userMessage], turn: 3, step: 1 },
@@ -546,11 +556,11 @@ test('with injection off the hook appends one short retrieval hint instead', asy
   ) as { messages: UserMessageLike[] }
   assert.equal(decision.messages.length, 2)
   const hint = JSON.stringify(decision.messages[1])
-  assert.ok(hint.includes('retrieve_context'), 'hint names the tool')
+  assert.ok(hint.includes('retrieve_context'), 'hint names the tool after a fold')
   assert.ok(hint.length < 1200, 'hint stays small')
 
-  // Turning the hint off leaves the step untouched.
-  const silent = mount({ ...defaults(), autoInject: false, retrievalHint: false })
+  // Turning both switches off leaves the step untouched.
+  const silent = mount({ ...defaults(), autoInject: false, retrievalHint: false, attachSummary: false })
   const silentState = silent.service.stateOf('session-1')
   for (let index = 0; index < 6; index += 1) {
     silentState.tree.addNode({ kind: 'question', content: `q${index}`, timestamp: 1_000 + index })

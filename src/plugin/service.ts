@@ -323,7 +323,7 @@ function summarize(text: string): string | undefined {
  * that older turns may already be gone from it.
  */
 const MANDATORY_HINT_TEXT =
-  '[token-tree] 本轮只保留了当前提问：之前的对话已全部折叠。回答任何需要前文的问题前，必须先调用 retrieve_context 取回原文；不要假定自己记得被折叠的内容。'
+  '[token-tree] 本轮只保留了当前提问：之前的对话已全部折叠。需要前文时，先调用 retrieve_context 取候选索引，再用返回的 nodeId 调用 retrieve_context 或 tree_query 取全文；不要假定自己记得被折叠的内容。'
 
 /**
  * The file path a filesystem tool was given, if it names one.
@@ -349,9 +349,10 @@ function relativeLabel(filePath: string): string {
   return parts.slice(-2).join('/')
 }
 
-const HINT_TEXT = '[token-tree] Older turns may be summarised or trimmed. Before answering anything that '
-  + 'depends on earlier details, call retrieve_context (weighted over this conversation\'s tree) '
-  + 'to pull them back; do not guess from the summary.'
+/** One-line retrieval reminder used once folding has actually happened. */
+const HINT_TEXT = '[token-tree] Older turns have been folded. When a question depends on earlier details, '
+  + 'first call retrieve_context to get a ranked index (id, kind, summary/question), then call it again with the chosen nodeId '
+  + '(or use tree_query) to read the full text; do not guess from the summary.'
 
 /**
  * Session-scoped weighted-tree memory.
@@ -609,6 +610,11 @@ export class TokenTreeService {
     const last = this.lastFold.get(sessionId)
     if (last === undefined) return Number.POSITIVE_INFINITY
     return Math.max(0, this.sessionTurn(sessionId) - last)
+  }
+
+  /** Whether at least one fold has happened in this session. */
+  hasFolded(sessionId: string): boolean {
+    return this.lastFold.has(sessionId)
   }
 
   /**
@@ -1904,6 +1910,16 @@ export class TokenTreeService {
   }
 
   /**
+   * The one-line request for a model-written summary at the end of every answer.
+   * @returns Instruction text, or an empty string when summaries are disabled.
+   */
+  summaryInstruction(sessionId?: string): string {
+    return this.effective(sessionId).attachSummary
+      ? '[token-tree] 回答最后另起一行写 [summary: 用 2–4 个短语说明本条回答讲了哪些方面，逗号分隔，≤40 字]。'
+      : ''
+  }
+
+  /**
    * Offer the model a short list of nodes this turn could hang under.
    *
    * Local scoring still picks the default; the list is for the cases it cannot judge - "它" across
@@ -1946,12 +1962,11 @@ export class TokenTreeService {
         '[token-tree] 本轮的落点由你判，在回答最后单独一行写一种：',
         '  [attach:nX]  依赖下面某一条（含代词指代）；[attach:root] 新话题；[attach:here] 要求/元指令（让我换个方式来问），留在当前这条线上。',
         '问题问的是某条回答里提到的子概念时，挂那条回答（不是刚才那条）。',
-        ...(this.effective(sessionId).attachSummary ? ['最后再另起一行写 [summary: 用 2–4 个短语说明本条回答讲了哪些方面，逗号分隔，≤40 字]。'] : []),
-        '只给问题，回答内容按需用 retrieve_context 取。',
+        '只给问题；需要正文时先取候选索引，再用 nodeId 取详情。',
       ]
       : [
         '[token-tree] 若本轮是在追问下面某一条，请在回答最后单独一行写 [attach:nX]（X 取自列表）；',
-        '若只是延续上一条，或都不是，就不要写。只给问题，回答内容按需用 retrieve_context 取。',
+        '若只是延续上一条，或都不是，就不要写。只给问题；需要正文时先取候选索引，再用 nodeId 取详情。',
       ]
     return [...instruction, ...rows].join('\n')
   }
@@ -2081,7 +2096,7 @@ export class TokenTreeService {
     if (state.sawReduction === true) {
       // Appended, not returned: the compaction index and the size gate still apply in this turn.
       // Clearing the flag for the recursive call is what keeps the two hints composable.
-      const reduced = '[token-tree] 长内容只给了标识或逐字节选；代码、数字、精确措辞请用 retrieve_context 取回原文，不要凭节选作答。'
+      const reduced = '[token-tree] 长内容只给了标识或逐字节选；代码、数字、精确措辞请先取候选索引，再用 nodeId 取回原文，不要凭节选作答。'
       state.sawReduction = false
       const base = this.baseHint(sessionId)
       state.sawReduction = true
@@ -2093,29 +2108,30 @@ export class TokenTreeService {
       const index = this.compactionIndex(sessionId)
       return index === undefined ? HINT_TEXT : `${HINT_TEXT}\n\n${index}`
     }
-    // The measured size of the conversation so far, from node tokens (re-counted from
-    // estimates to real numbers when the tokenizer loads). Deliberately not based on
-    // `decision.messages`: at `agent/pre-step` those hold only the newest message, so a
-    // threshold applied to them never fires — measured on a live host: 394 tokens on
-    // turn one while the conversation was already growing.
+    // Retrieval only matters after the plugin has actually folded something away. The token
+    // threshold is kept only as a diagnostic hint; it no longer opens the gate on its own.
     const tokenizer = this.loadTokenizer()
     const above = this.aboveTokens(sessionId)
-    if (tokenizer !== undefined) {
-      const counted = this.conversationTokens(sessionId)
-      state.promptTokens = counted
-      const fired = counted >= above
-      state.lastHint = { counted, above, fast: counted, fired, reason: fired ? 'conversation over threshold' : 'conversation under threshold' }
-      return fired ? HINT_TEXT : undefined
+    const counted = tokenizer === undefined ? undefined : this.conversationTokens(sessionId)
+    if (counted !== undefined) state.promptTokens = counted
+    if (!this.hasFolded(sessionId)) {
+      state.lastHint = {
+        counted,
+        above,
+        fast: counted ?? tree.nodes.size,
+        fired: false,
+        reason: 'no fold yet',
+      }
+      return undefined
     }
-    const fired = tree.nodes.size >= this.effective(sessionId).hintMinNodes
     state.lastHint = {
-      counted: undefined,
+      counted,
       above,
-      fast: 0,
-      fired,
-      reason: fired ? 'no tokenizer: node count over hintMinNodes' : 'no tokenizer: node count under hintMinNodes',
+      fast: counted ?? tree.nodes.size,
+      fired: true,
+      reason: 'history folded',
     }
-    return fired ? HINT_TEXT : undefined
+    return HINT_TEXT
   }
 
   /**

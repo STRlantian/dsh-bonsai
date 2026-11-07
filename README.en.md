@@ -142,7 +142,7 @@ explanation, and every value is still adjustable:
 | `attachChoices` | `10` | How many candidate questions the model sees each turn (questions only); `0` turns it off |
 | `attachPrompt` | `any` | `any`: dependency `[attach:nX]`, new topic `[attach:root]`, meta turn `[attach:here]`; `follow`: anaphora only |
 | `attachGate` | `always` | `uncertain`: offer candidates only when the local placement was unsure; measured 0/259 firings in a coding session, 18/18 and 256/256 in two others |
-| `attachSummary` | `false` | Ask the model for an aspect summary shown in the candidate list; no measured benefit, off by default |
+| `attachSummary` | `true` | Ask the model for an aspect summary at the end of every answer; fall back to the 200-char heuristic if it is missing |
 | `mandatoryContext` | `true` | Force-injects the answer a turn hangs under plus its question; this is a wiring guarantee (~99%), not a scoring gain |
 | `fileRegion` | `auto` | Retrieval returns the current text of files this session read (auto/digest/content/off) |
 
@@ -202,9 +202,9 @@ user message
 **What the model actually sees**: the host's conversation history (full answer text) until folding or
 compaction trims it; folding replaces everything outside the last two turns once the estimated
 block passes `foldAboveTokens` (30,000 by default) and is at least `foldBlockRatio` (8x) times the
-keep window, at most every `foldCadence` (10) turns; the ten candidate *questions*; and whatever it
-pulls with `retrieve_context`. "Only the previous turn" is true in long, already-folded sessions,
-not in short ones.
+keep window, at most every `foldCadence` (10) turns; the ten candidate *questions*; and the
+two-step `retrieve_context` path (index first, then full text by `nodeId`). "Only the previous
+turn" is true in long, already-folded sessions, not in short ones.
 
 ## Settings
 
@@ -215,7 +215,7 @@ changed); precedence is **settings file > profile config**.
 |---|---|---|
 | `autoInject` | `false` | Push the whole retrieval block into the context every turn (about +428 tokens/turn) |
 | `retrievalHint` | `true` | Add one hint line only, about 57 tokens/turn |
-| `hintAboveTokens` | `12000` | Send the hint only once the conversation reaches this size |
+| `hintAboveTokens` | `30000` | Hint starts after the first fold; kept as a diagnostic value, not a standalone gate |
 | `autoReflect` | `true` | At turn end, grade the failure, write a reflection, retry a better sibling branch |
 | `admitRelevance` | `0.3` | Retrieval admission threshold; relaxes once when it comes back empty |
 | `toolDeny` | `[tree_mark, tree_focus]` | Tool names to hide (the picker fills it); neither was called in 201 session logs |

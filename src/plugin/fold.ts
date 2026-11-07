@@ -51,7 +51,7 @@ export interface FoldEvent {
  * @returns One line telling the model where the original went.
  */
 export function foldPlaceholder(toolName: string): string {
-  return `[已折叠] ${toolName} 的完整输出已从上下文移除以节省 token；原文保存在对话树中，需要细节时调用 retrieve_context 取回。`
+  return `[已折叠] ${toolName} 的完整输出已从上下文移除以节省 token；原文保存在对话树中，需要细节时先调用 retrieve_context 取候选索引，再用返回的 nodeId 取详情。`
 }
 
 /**

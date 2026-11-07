@@ -28,7 +28,7 @@ test('hintAboveTokens and toolDeny are read through the session scope', () => {
   service.updateSettings({ hintAboveTokens: 1234, toolDeny: ['workflow'] }, 'session-a')
   assert.equal(service.effective('session-a').hintAboveTokens, 1234)
   assert.deepEqual(service.toolDeny('session-a'), ['workflow'])
-  assert.equal(service.effective('session-b').hintAboveTokens, 12000)
+  assert.equal(service.effective('session-b').hintAboveTokens, 30000)
   assert.deepEqual(service.toolDeny('session-b'), ['tree_mark', 'tree_focus'])
 })
 

@@ -47,9 +47,8 @@ export interface Config {
    */
   hintMinNodes?: number
   /**
-   * Measured-context threshold for the hint, used when `tokenizerPath` is set.
-   * The node count above is only a proxy; measured tokens are the quantity that decides
-   * whether older history can still be in the model's context.
+   * Diagnostic size associated with the hint. The hint itself now starts after the first
+   * actual fold; this value is kept for reporting and profile compatibility.
    */
   hintAboveTokens?: number
   /** Path to a HuggingFace `tokenizer.json`; absent falls back to the character estimate. */
@@ -405,7 +404,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         hintMinNodes: scalar(source, 'hintMinNodes', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input > 0, issues, 'a positive integer') ?? 40,
         // With a tokenizer, the hint is gated on measured context size instead: below
         // this many tokens the history is still fully present, so the hint buys nothing.
-        hintAboveTokens: scalar(source, 'hintAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input > 0, issues, 'a positive integer') ?? 12000,
+        hintAboveTokens: scalar(source, 'hintAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input > 0, issues, 'a positive integer') ?? 30000,
         // Optional path to a `tokenizer.json`. Absent means "use the character estimate".
         tokenizerPath: typeof source.tokenizerPath === 'string' && source.tokenizerPath.trim() !== ''
           ? source.tokenizerPath.trim()
@@ -428,7 +427,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
     })(),
     // Measured on the B/C scenario: the sub-concept instruction alone scores 5/5, adding summaries
     // 4/5. The summary stays available but off by default.
-    attachSummary: scalar(source, 'attachSummary', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,
+    attachSummary: scalar(source, 'attachSummary', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
     attachGate: (() => {
       const mode = scalar(source, 'attachGate', (input): input is string => typeof input === 'string', issues, 'a string')
       return mode === 'uncertain' ? 'uncertain' : 'always'

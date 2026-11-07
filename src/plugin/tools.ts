@@ -14,7 +14,6 @@
  */
 
 import type { NodeId, NodeKind } from '../core/types.ts'
-import { renderContextBlock } from '../core/retrieve.ts'
 import { scoreBranch } from '../core/reflect.ts'
 import type { ContentBlockLike, ToolDefinitionLike, ToolRunContextLike, AgentLike } from './dsh.ts'
 import { buildInjectedMessage } from './messages.ts'
@@ -103,18 +102,18 @@ export function createTools(service: TokenTreeService): ToolDefinitionLike[] {
   const retrieveTool: ToolDefinitionLike = {
     name: 'retrieve_context',
     description: `${COMMON} `
-      + 'Use this to pull the most valuable history back into context for a query: it scores every node, applies the weight floor, '
-      + 'Top-k cap, and token budget, then returns the selected nodes and injects them for your next step.',
+      + 'Use this to find history in two steps. Without `nodeId` it returns a ranked index of node id, kind, question/summary and size — '
+      + 'no full text. Pick a node, then call again with `nodeId` (or use tree_query) to read the full text.',
     parameters: {
       type: 'object',
       additionalProperties: false,
-      required: ['query'],
       properties: {
         query: { type: 'string', description: 'What you are about to work on or ask about.' },
+        nodeId: { type: 'string', description: 'Read one node from a previous index instead of returning a new index.' },
         budgetTokens: { type: 'integer', description: 'Token budget of the returned buffer; defaults to the configured budget.' },
         topK: { type: 'integer', description: 'Maximum number of nodes to consider for the buffer.' },
         threshold: { type: 'number', description: 'Minimum weight in [0, 1]; lower-scored nodes are dropped.' },
-        inject: { type: 'boolean', description: 'Queue the buffer as context for your next step; defaults to true.' },
+        inject: { type: 'boolean', description: 'Queue the index or detail as context for your next step; defaults to true.' },
         kinds: {
           type: 'array',
           description: 'Restrict to these node kinds.',
@@ -126,43 +125,77 @@ export function createTools(service: TokenTreeService): ToolDefinitionLike[] {
       schema: objectSchema({
         query: { type: 'string' },
         originId: { type: 'string' },
-        tokensUsed: { type: 'integer' },
-        budget: { type: 'integer' },
+        mode: { type: 'string', enum: ['index', 'detail'] },
         injected: { type: 'boolean' },
-        dropped: { type: 'integer' },
-        selected: {
+        candidates: {
           type: 'array',
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['nodeId', 'kind', 'weight', 'tokens', 'compressed', 'text'],
+            required: ['nodeId', 'kind', 'label', 'weight', 'tokens'],
             properties: {
               nodeId: { type: 'string' },
               kind: { type: 'string' },
+              label: { type: 'string' },
               weight: { type: 'number' },
               tokens: { type: 'integer' },
-              compressed: { type: 'boolean' },
-              text: { type: 'string' },
             },
           },
         },
-      }, ['query', 'originId', 'tokensUsed', 'budget', 'injected', 'dropped', 'selected']),
+        detail: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['nodeId', 'kind', 'content', 'tokens'],
+          properties: {
+            nodeId: { type: 'string' },
+            kind: { type: 'string' },
+            content: { type: 'string' },
+            summary: { type: 'string' },
+            tokens: { type: 'integer' },
+          },
+        },
+      }, ['query', 'originId', 'mode', 'injected', 'candidates']),
       render: (_args, value) => {
-        const record = value as { selected: { nodeId: string; kind: string; weight: number; tokens: number; compressed: boolean }[]; tokensUsed: number; budget: number; injected: boolean; dropped: number }
-        if (record.selected.length === 0) {
-          return textBlock(`No node qualified for "${String((value as { query?: string }).query ?? '')}".`)
+        const record = value as {
+          mode: 'index' | 'detail'
+          injected: boolean
+          candidates: { nodeId: string; kind: string; label: string; weight: number; tokens: number }[]
+          detail?: { nodeId: string; kind: string; content: string }
         }
-        const lines = record.selected.map(node =>
-          `- ${node.nodeId} ${node.kind} w=${node.weight} tokens=${node.tokens}${node.compressed ? ' (compressed)' : ''}`)
-        return textBlock(
-          `Retrieved ${record.selected.length} node(s), ${record.tokensUsed}/${record.budget} tokens, ${record.dropped} dropped, `
-          + `injected=${record.injected}.\n${lines.join('\n')}`,
-        )
+        if (record.mode === 'detail' && record.detail !== undefined) {
+          return textBlock(`Node ${record.detail.nodeId} (${record.detail.kind}):\n${record.detail.content}`)
+        }
+        if (record.candidates.length === 0) return textBlock('No node qualified.')
+        const lines = record.candidates.map(node =>
+          `- ${node.nodeId} ${node.kind} w=${node.weight.toFixed(3)} tokens=${node.tokens} · ${node.label}`)
+        return textBlock(`Index (${record.candidates.length} candidates), injected=${record.injected}. Pick one, then call retrieve_context with its nodeId for the full text.\n${lines.join('\n')}`)
       },
     },
     async execute(args, exec) {
       const agent = requireAgent(exec)
       const record = args as Record<string, unknown>
+      const nodeId = optionalString(record, 'nodeId')
+      if (nodeId !== undefined) {
+        const state = service.stateOf(agent.session.id)
+        const node = state.tree.nodes.get(nodeId)
+        if (node === undefined || state.tree.hidden(nodeId)) throw new Error(`dsh-token-tree: unknown node ${nodeId}`)
+        const shouldInject = optionalBoolean(record, 'inject') !== false
+        if (shouldInject) agent.inject(buildInjectedMessage(`[token-tree] node ${node.id} (${node.kind}):\n${node.content}`))
+        return {
+          query: optionalString(record, 'query') ?? '',
+          originId: state.tree.currentId,
+          mode: 'detail',
+          injected: shouldInject,
+          candidates: [],
+          detail: {
+            nodeId: node.id,
+            kind: node.kind,
+            content: node.content,
+            ...(node.summary === undefined ? {} : { summary: node.summary }),
+            tokens: node.tokens,
+          },
+        }
+      }
       const query = requireString(record, 'query')
       const kinds = optionalKinds(record, 'kinds')
       const budgetTokens = optionalInteger(record, 'budgetTokens')
@@ -175,24 +208,28 @@ export function createTools(service: TokenTreeService): ToolDefinitionLike[] {
         ...(threshold === undefined ? {} : { threshold }),
         ...(kinds === undefined ? {} : { kinds }),
       })
-      const block = renderContextBlock(result)
-      const shouldInject = optionalBoolean(record, 'inject') !== false && block.length > 0
-      if (shouldInject) agent.inject(buildInjectedMessage(block))
+      const state = service.stateOf(agent.session.id)
+      const candidates = result.selected.map(selected => {
+        const node = state.tree.nodes.get(selected.nodeId)
+        const label = (node?.summary ?? node?.content ?? selected.text).replace(/\s+/g, ' ').trim()
+        return {
+          nodeId: selected.nodeId,
+          kind: selected.kind,
+          label: label.length > 180 ? label.slice(0, 180) + '…' : label,
+          weight: selected.weight,
+          tokens: selected.tokens,
+        }
+      })
+      const shouldInject = optionalBoolean(record, 'inject') !== false && candidates.length > 0
+      if (shouldInject) {
+        agent.inject(buildInjectedMessage(`[token-tree] retrieval index:\n${candidates.map(node => `- ${node.nodeId} ${node.kind} w=${node.weight.toFixed(3)} · ${node.label}`).join('\n')}`))
+      }
       return {
         query,
         originId: result.originId,
-        tokensUsed: result.tokensUsed,
-        budget: result.budget,
+        mode: 'index',
         injected: shouldInject,
-        dropped: result.dropped.length,
-        selected: result.selected.map(node => ({
-          nodeId: node.nodeId,
-          kind: node.kind,
-          weight: node.weight,
-          tokens: node.tokens,
-          compressed: node.compressed,
-          text: node.text,
-        })),
+        candidates,
       }
     },
   }

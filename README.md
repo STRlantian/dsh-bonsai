@@ -124,7 +124,7 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 
 折叠后的占位行会告诉模型原文在哪：
 
-> `[已折叠] 之前的 1 轮对话已从上下文移除以节省 token；原文完整保存在对话树中，需要细节时调用 retrieve_context 取回，不要凭印象编造。`
+> `[已折叠] 之前的 1 轮对话已从上下文移除以节省 token；原文完整保存在对话树中，需要细节时先调用 retrieve_context 取候选索引，再用返回的 nodeId 取详情，不要凭印象编造。`
 
 ## 把落点判断交给模型
 
@@ -164,7 +164,7 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 |---|---|---|
 | `autoInject` | `false` | 每回合把检索结果整块推进上下文（约 +428 token/轮） |
 | `retrievalHint` | `true` | 只加一行提示，约 57 token/轮 |
-| `hintAboveTokens` | `12000` | 对话达到这个 token 数才发提示 |
+| `hintAboveTokens` | `30000` | 第一次折叠后发提示；值只作诊断，不再单独触发 |
 | `autoReflect` | `true` | 回合结束评估失败、写反思、回溯更优兄弟分支 |
 | `admitRelevance` | `0.3` | 检索准入阈值，空手时自动放宽一次 |
 | `toolDeny` | `[tree_mark, tree_focus]` | 要隐藏的工具名（用勾选面板填）；这两个在 201 个会话的日志里从未被调用 |
@@ -177,7 +177,7 @@ prompt  10,453 → 7,076 token（−32%，每轮都省）
 | `attachChoices` | `10` | 每轮给模型看的候选问题数量（只给问题，不给正文）；`0` 关闭 |
 | `attachPrompt` | `any` | `any`：依赖写 `[attach:nX]`、新话题写 `[attach:root]`、元指令写 `[attach:here]`；`follow`：只问指代 |
 | `attachGate` | `always` | `uncertain`：只在本地没把握时才发候选块；实测两极分化——写代码会话 0/259 次触发，学习/编码会话 18/18 与 256/256 全部触发 |
-| `attachSummary` | `false` | 让模型在回答末尾写"方面摘要"，显示在候选列表里；实测无收益，默认关 |
+| `attachSummary` | `true` | 每轮要求模型在回答末尾写“方面摘要”；没写时用前 200 字启发式兜底 |
 | `mandatoryContext` | `true` | 把一个回合的"父回答 + 它的提问"强制放进检索结果；这是接线保证（≈99%），不是打分检索的增益 |
 | `fileRegion` | `auto` | 检索返回本会话读过文件的当前内容（auto/digest/content/off） |
 | `tokenizerVersion` | `auto` | `auto` / `3` / `4` / `off`（估算 + 账单校准） |
@@ -218,7 +218,7 @@ config:
 - 宿主发来的对话历史（回答全文），直到折叠/压缩把它削短；
 - 折叠：待折块（"保留最近 2 轮"之外的历史）达到 `foldAboveTokens` 且不小于 `foldBlockRatio` × 窗口时，把这些轮次换成占位行，且两次折叠至少隔 `foldCadence` 轮；
 - 候选块的 10 条**问题**（不含回答正文）；
-- 需要别处的正文时，调 `retrieve_context` 从树里取。
+- 需要别处的正文时，先调 `retrieve_context` 取候选索引，再用返回的 `nodeId` 或 `tree_query` 取详情。
 
 所以"模型只看得到上一轮正文"只在**折叠已经触发**的长会话里成立；短会话里它看到的是完整历史。
 
