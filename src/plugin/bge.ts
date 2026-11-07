@@ -46,7 +46,13 @@ export class BgeScorer implements BgeScorerLike {
     if (this.loading === undefined) {
       this.loading = (async () => {
         try {
-          const transformers = await import('@huggingface/transformers')
+          // Keep the specifier in a variable: this package is optional, so TypeScript must not
+          // resolve `@huggingface/transformers` at compile time. A literal dynamic import made a
+          // clean clone fail with TS2307 even though the runtime path is lazily guarded.
+          const moduleName = '@huggingface/transformers'
+          const transformers = await import(moduleName) as {
+            pipeline: (task: string, model: string, options: Record<string, unknown>) => Promise<unknown>
+          }
           const pipeline = transformers.pipeline as unknown as (
             task: string,
             model: string,

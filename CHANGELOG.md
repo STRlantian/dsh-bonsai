@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.14] — 2026-11-07
+
+A clean clone type-checks without the optional BGE package.
+
+### Fixed
+
+- `@huggingface/transformers` is imported through a runtime variable, so TypeScript no longer
+  requires its type declarations. The package remains optional and the runtime still falls back to
+  the hashed embedding when it is absent.
+
 ## [0.1.13] — 2026-11-07
 
 Folding works again, and the threshold can be derived from cache prices.
