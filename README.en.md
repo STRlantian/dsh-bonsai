@@ -304,7 +304,7 @@ p=10 and p=50, so the "block = 5x window" default can be re-derived under your o
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 251 cases (225 backend + 26 browser)
+pnpm test           # 252 cases (226 backend + 26 browser)
 pnpm run check      # typecheck + tests
 ```
 
@@ -343,7 +343,7 @@ It validates, sets `x.y.z`, publishes `./plugin` with `--tag latest`, advances t
 | `src/core/` | Pure algorithms: graph, edge weights, path cost, weighted retrieval, grading and backtracking |
 | `src/plugin/` | The DSH wiring: `Config`, the session service, tools, event subscriptions, HTTP routes, fold planning |
 | `client/client.js` | Browser half: dock, editor, graph view, recycle bin, rule bar, settings panel, preset picker |
-| `tests/` | 251 cases, including client tests that mount real React under jsdom |
+| `tests/` | 252 cases, including client tests that mount real React under jsdom |
 | `docs/experiment-context-cache.md` | Every measurement (53 sections) |
 
 ## License

@@ -187,10 +187,10 @@ export function planTurnFold(
     if (!SURFACE_TYPES.has(event.type)) continue
     const data = event.data ?? {}
     const sourceKind = (data.source as { kind?: string } | undefined)?.kind
-    // A placeholder from an earlier fold, or a compaction checkpoint, is not conversation content.
-    if (sourceKind === "token-tree" || sourceKind === "compact-checkpoint") continue
     // The resolver is the plugin's own bookkeeping and is preferred: a host may stamp the same turn
-    // number on every surface event even though the conversation has moved on.
+    // number on every surface event even though the conversation has moved on. Record the turn
+    // before skipping injected placeholders: they still occupy a surface slot, and the span check
+    // below must be able to resolve them or every turn containing one looks "foreign".
     const turn = turnOf?.(event.seq) ?? (typeof data.turn === "number" ? data.turn : current)
     if (turn > 0) {
       turnOfSeq.set(event.seq, turn)
@@ -198,6 +198,8 @@ export function planTurnFold(
       // the host's surface-node-0 rule, but folding one would remove instructions from the prompt.
       if (event.type === "system/message") protectedTurns.add(turn)
     }
+    // A placeholder from an earlier fold, or a compaction checkpoint, is not conversation content.
+    if (sourceKind === "token-tree" || sourceKind === "compact-checkpoint") continue
   }
   const byTurn = new Map<number, number[]>()
   for (const [seq, turn] of turnOfSeq) {

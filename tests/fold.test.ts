@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { foldPlaceholder, planFold } from '../src/plugin/fold.ts'
+import { foldPlaceholder, planFold, planTurnFold } from '../src/plugin/fold.ts'
 
 const tool = (seq, turn, text = 'output') => ({
   type: 'tool/result',
@@ -43,4 +43,20 @@ test('already hidden results, and non-tool events, are never folded twice', () =
 test('a session with nothing older than the keep window folds nothing', () => {
   const events = [tool(2, 1), tool(3, 2)]
   assert.deepEqual(planFold(events, [2, 3], 5), [], 'keeping five turns keeps everything')
+})
+
+test('an injected token-tree message inside a turn does not make that turn foreign', () => {
+  const events = [
+    { type: 'user/message', seq: 1, data: { turn: 1, source: { kind: 'user' } } },
+    { type: 'assistant/message', seq: 2, data: { turn: 1 } },
+    { type: 'user/message', seq: 3, data: { turn: 2, source: { kind: 'user' } } },
+    { type: 'assistant/message', seq: 4, data: { turn: 2 } },
+    { type: 'user/message', seq: 5, data: { turn: 2, source: { kind: 'token-tree' } } },
+    { type: 'assistant/message', seq: 6, data: { turn: 2 } },
+    { type: 'user/message', seq: 7, data: { turn: 3, source: { kind: 'user' } } },
+    { type: 'assistant/message', seq: 8, data: { turn: 3 } },
+  ]
+  const turns = new Map([[1, 1], [2, 1], [3, 2], [4, 2], [5, 2], [6, 2], [7, 3], [8, 3]])
+  const plan = planTurnFold(events, [1, 2, 3, 4, 5, 6, 7, 8], 1, seq => turns.get(seq))
+  assert.deepEqual(plan[0]?.seqs, [3, 4, 5, 6], 'the injected surface slot is mapped, not foreign')
 })
