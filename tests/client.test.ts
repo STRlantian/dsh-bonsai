@@ -505,16 +505,17 @@ test('the settings panel offers five intent-named presets', { timeout: 30000 }, 
   assert.ok(bar !== null, 'the preset bar is present')
   assert.ok(bar.querySelector('.twt-preset-grid') !== null, 'presets use the two-column grid wrapper')
   const labels = [...bar.querySelectorAll('button')].map(button => button.textContent ?? '')
-  assert.deepEqual(labels, ['只建树', '日常默认', '写代码', '保上下文', '极省'], 'five presets, in order')
+  assert.deepEqual(labels, ['默认'], 'one default preset')
   const hints = [...bar.querySelectorAll('.twt-preset-hint')].map(node => node.textContent ?? '')
-  assert.equal(hints.length, 5, 'every preset carries a visible explanation')
-  assert.ok(hints.some(hint => hint.includes('成本和上下文平衡')), 'the default explains its trade-off')
-  const aggressive = [...bar.querySelectorAll('button')].find(button => (button.textContent ?? '').includes('极省'))
-  await React.act(async () => { aggressive.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
+  assert.equal(hints.length, 1, 'the default carries a visible explanation')
+  assert.ok(hints[0].includes('缓存价格'), 'the hint says cost is price-dependent')
+  const preset = bar.querySelector('button')
+  assert.ok(preset !== null, 'the default button is present')
+  await React.act(async () => { preset.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
   await client.flush()
   const posted = client.requests.find(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST')
   assert.ok(posted !== undefined, 'the preset route was called')
-  assert.ok(String(posted.body).includes('aggressive'), 'with the chosen preset')
+  assert.ok(String(posted.body).includes('balanced'), 'with the default preset')
 })
 
 test('tools are hidden through a checklist, not a name field', { timeout: 30000 }, async t => {
@@ -683,21 +684,19 @@ test('a jump only lands on the row of its own turn', { timeout: 30000 }, async t
   assert.ok(renumbered.style.outline.includes('6ea8fe'), 'and lands on the user-message row')
 })
 
-test('the settings panel offers one preset row, not two overlapping ones', { timeout: 30000 }, async t => {
+test('the settings panel offers one default preset row', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)
   await client.click('盆栽')
   await client.click('设置')
   const labels = [...client.document.querySelectorAll('.twt-presets button')].map(node => (node.textContent ?? '').trim())
-  for (const expected of ['日常默认', '写代码', '保上下文', '极省']) {
-    assert.ok(labels.includes(expected), `preset "${expected}" is offered: ${labels.join(',')}`)
-  }
+  assert.deepEqual(labels, ['默认'], 'only the measured default remains')
   assert.equal(client.document.querySelectorAll('.twt-guide').length, 0, 'the guided card is gone')
   const before = client.requests.filter(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST').length
-  await client.click('写代码')
+  await client.click('默认')
   const posts = client.requests.filter(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST')
   assert.ok(posts.length > before, 'the choice goes through the preset route')
-  assert.ok(String(posts.at(-1).body).includes('coding'), 'and names the coding preset')
+  assert.ok(String(posts.at(-1).body).includes('balanced'), 'and names the default preset')
 })
 
 test('the settings panel can switch the interface language', { timeout: 30000 }, async t => {

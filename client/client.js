@@ -1300,13 +1300,9 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     var ruleText = ruleTextState[0]
     var setRuleText = ruleTextState[1]
 
-    /** The bundles the host understands; the labels are what people read. */
+    /** The one shipped bundle; cost tuning is left to the advanced settings. */
     var PRESET_LIST = [
-      { id: 'treeOnly', label: '只建树', hint: '只记录完整对话树；关闭注入、提示、候选、折叠和反思' },
-      { id: 'balanced', label: '日常默认', hint: '成本和上下文平衡；大多数会话选它' },
-      { id: 'coding', label: '写代码', hint: '工具输出占历史大头；折叠只针对工具结果' },
-      { id: 'conservative', label: '保上下文', hint: '尽量少折叠，保留更多最近轮次，不隐藏工具' },
-      { id: 'aggressive', label: '极省', hint: '最小上下文；更早折叠并隐藏 9 个重工具，旧细节靠检索' },
+      { id: 'balanced', label: '默认', hint: '30k 折叠、保留 2 轮、不隐藏工具；省不省取决于缓存价格，不承诺“极省”' },
     ]
 
     /** Apply a preset, then refresh the panel so the numbers match. */

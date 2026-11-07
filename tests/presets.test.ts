@@ -30,83 +30,50 @@ test('the shipped default folds at 30k tokens', () => {
   assert.equal(config.foldCadence, 10)
 })
 
-test('the presets differ in exactly the knobs they advertise', () => {
-  const conservative = presetOf('conservative')
+test('there is exactly one shipped preset', () => {
+  assert.equal(PRESETS.length, 1)
   const balanced = presetOf('balanced')
-  const coding = presetOf('coding')
-  const aggressive = presetOf('aggressive')
-  assert.ok(conservative && balanced && coding && aggressive)
-  assert.equal(conservative.settings.foldAboveTokens, 60000)
+  assert.ok(balanced)
   assert.equal(balanced.settings.foldAboveTokens, 30000)
-  assert.equal(aggressive.settings.foldAboveTokens, 10000)
-  // An empty list is the explicit "show every tool"; only undefined falls back to the default.
-  assert.deepEqual(conservative.settings.toolDeny, [], 'conservative hides nothing')
-  assert.deepEqual(balanced.settings.toolDeny, [], 'balanced hides nothing either')
-  assert.ok(Array.isArray(aggressive.settings.toolDeny), 'aggressive hides tools')
-  assert.ok((aggressive.settings.toolDeny as string[]).includes('workflow'))
-  assert.equal(presetOf('learning'), undefined, 'the niche learning preset was folded into balanced')
+  assert.equal(balanced.settings.foldKeepTurns, 2)
+  assert.deepEqual(balanced.settings.toolDeny, [], 'the default hides nothing')
+  assert.equal(presetOf('treeOnly'), undefined, 'the old tree-only preset is gone')
+  assert.equal(presetOf('aggressive'), undefined, 'the old aggressive preset is gone')
+  assert.equal(presetOf('conservative'), undefined, 'the old conservative preset is gone')
+  assert.equal(presetOf('coding'), undefined, 'the old coding preset is gone')
   assert.equal(presetOf('nope'), undefined)
-  assert.equal(PRESETS.length, 5)
 })
 
-test('the tree-only preset switches every model-facing behaviour off', () => {
-  const treeOnly = presetOf('treeOnly')
-  assert.ok(treeOnly !== undefined)
-  assert.equal(treeOnly.settings.autoInject, false)
-  assert.equal(treeOnly.settings.retrievalHint, false)
-  assert.equal(treeOnly.settings.attachChoices, 0, 'no candidate block')
-  assert.equal(treeOnly.settings.foldAboveTokens, 0, 'no folding')
-  assert.equal(treeOnly.settings.foldBlockRatio, 0)
-  assert.equal(treeOnly.settings.mandatoryContext, false)
-  assert.deepEqual(treeOnly.settings.toolDeny, [])
-})
-
-test('the coding preset folds tool output instead of whole turns', () => {
-  const coding = presetOf('coding')
-  assert.ok(coding)
-  assert.equal(coding.settings.foldScope, 'tools')
-  assert.equal(coding.settings.foldKeepTurns, 3)
-})
-
-test('applying a preset writes the whole bundle at once', () => {
+test('applying the default writes the whole bundle at once', () => {
   const { settings, files } = store()
   const service = new TokenTreeService({
     config: Config['~standard'].validate({ logEdgeUpdates: false }).value!,
     logger,
     settings,
   })
-  const applied = service.applyPreset('aggressive')
+  const applied = service.applyPreset('balanced')
   assert.ok(applied !== undefined)
-  assert.equal(applied.preset, 'aggressive')
-  assert.equal(applied.effective.foldAboveTokens, 10000)
-  assert.equal(applied.effective.foldKeepTurns, 1)
+  assert.equal(applied.preset, 'balanced')
+  assert.equal(applied.effective.foldAboveTokens, 30000)
+  assert.equal(applied.effective.foldKeepTurns, 2)
   const written = JSON.parse(files.get('C:/tmp/settings.json') as string)
-  assert.equal(written.foldAboveTokens, 10000, 'persisted, not only in memory')
-  assert.ok(Array.isArray(written.toolDeny), 'hidden tools persisted too')
-
-  // Switching back clears what the previous preset added.
-  service.applyPreset('conservative')
-  assert.deepEqual(service.effective().foldAboveTokens, 60000)
-  assert.equal(service.toolDeny().length, 0, 'tools are shown again')
+  assert.equal(written.foldAboveTokens, 30000, 'persisted, not only in memory')
+  assert.deepEqual(written.toolDeny, [], 'no tools are hidden')
   assert.equal(service.applyPreset('nope'), undefined)
 })
 
-test('switching presets clears the previous bundle entirely', () => {
+test('applying the default clears a previous numeric override', () => {
   const { settings } = store()
   const service = new TokenTreeService({
     config: Config['~standard'].validate({ logEdgeUpdates: false }).value!,
     logger,
     settings,
   })
-  service.applyPreset('treeOnly')
-  service.applyPreset('conservative')
-  const effective = service.effective()
-  assert.equal(effective.autoReflect, true, 'reflection comes back')
-  assert.equal(effective.attachChoices, 10, 'the candidate block comes back')
-  assert.equal(effective.foldCadence, 3, 'the cadence comes back')
-  assert.equal(effective.foldBlockRatio, 5, 'the block ratio comes back')
-  assert.equal(effective.fileRegion, 'auto', 'the file region comes back')
-  assert.equal(effective.mandatoryContext, true, 'mandatory context comes back')
+  service.updateSettings({ foldAboveTokens: 10000, toolDeny: ['workflow'] })
+  assert.equal(service.effective().foldAboveTokens, 10000)
+  service.applyPreset('balanced')
+  assert.equal(service.effective().foldAboveTokens, 30000, 'the old 10k override is cleared')
+  assert.deepEqual(service.toolDeny(), [], 'the old hidden-tool override is cleared')
 })
 
 test('a preset applies to the scope it is asked for', () => {
@@ -117,15 +84,10 @@ test('a preset applies to the scope it is asked for', () => {
     settings,
   })
   // Session scope: the bundle lands on that conversation, the global set stays untouched.
-  const applied = service.applyPreset('conservative', 'session-a')
+  const applied = service.applyPreset('balanced', 'session-a')
   assert.ok(applied !== undefined)
-  assert.equal(applied.effective.foldKeepTurns, 4, 'session sees the preset')
-  assert.equal(service.effective().foldKeepTurns, 2, 'global still has the profile default')
+  assert.equal(applied.effective.foldKeepTurns, 2, 'session sees the preset')
   const written = JSON.parse(files.get('C:/tmp/settings.json') as string)
   assert.deepEqual(Object.keys(written), ['sessions'], 'only the session map was written')
-  assert.equal(written.sessions['session-a'].foldKeepTurns, 4)
-  // Global scope still works the old way.
-  service.applyPreset('conservative')
-  const global = JSON.parse(files.get('C:/tmp/settings.json') as string)
-  assert.equal(global.foldKeepTurns, 4, 'global bundle written')
+  assert.equal(written.sessions['session-a'].foldAboveTokens, 30000)
 })
