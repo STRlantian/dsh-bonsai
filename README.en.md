@@ -1,36 +1,46 @@
-# Bonsai / 盆栽
+# Bonsai / 鐩嗘牻
 
-[简体中文](https://github.com/STRlantian/dsh-bonsai/blob/main/README.md) · English
+[绠€浣撲腑鏂嘳(https://github.com/STRlantian/dsh-bonsai/blob/main/README.md) 路 English
 
-**A conversation-tree plugin for DeepSeek Harness that starts with the two things that actually cost money:
-folding history and retrieving it on demand.**
+**A conversation-tree plugin for DeepSeek Harness. By default it only records the tree and changes nothing the model sees: no injection, hints, folding, or plugin tools. Switch to the "Full feature" preset for the folding/retrieval behaviour.**
 
 A conversation becomes a tree: questions, answers, and tool results are nodes that can branch, be re-parented,
-hidden, restored, or used as a new starting point. The tree carries exact token accounting; the model sees
-folded history by default and calls `retrieve_context` only when it needs an old detail.
+hidden, restored, or used as a new starting point. The tree carries exact token accounting.
+
+## Why tree-only is the default
+
+This is an experimental conclusion, not a claim that folding never helps:
+
+- Five retrieval comparisons found no stable recall gain; forced-fold stress tests answered correctly with marker/tool, but cost far more than not folding.
+- With prefix-cache pricing, marker costs about **3.0–3.5x** no-plugin. Break-even is around 1,500–1,900 turns, while a 128k context only lasts about 420–520 turns.
+- Folding reduces prompt size, but every fold re-prices the keep window at the miss price; in short sessions with high cache hits it does not pay back.
+- DSH's built-in compact preserves facts well, but short conversations only compress 3–4x and still leave hundreds of summary tokens; it is not suitable for every turn.
+
+So the default treats the tree as a **read-only record and editing structure**: it does not change the prompt and does not participate in retrieval or attachment. Switch to "Full feature" when a model stops relying on a stable prefix cache, or when a session is long enough for folding to pay for itself.
 
 ```text
-dsh-bonsai · DeepSeek Harness plugin · zero runtime dependencies · MIT · Node >= 24
+dsh-bonsai 路 DeepSeek Harness plugin 路 zero runtime dependencies 路 MIT 路 Node >= 24
 ```
 
 ## Fold history
 
 > **Folding saves prompt size, not necessarily money.** Real web A/B (same tools, same questions, 13 turns,
-> 5/5 correct): default prompt **−15.4%**, aggressive **−36.3%**. At cache miss = 50x hit, default cost
-> **−9.7%**, aggressive **−2.9%** — **default wins** because aggressive folds more often, and every fold
+> 5/5 correct): default prompt **鈭?5.4%**, aggressive **鈭?6.3%**. At cache miss = 50x hit, default cost
+> **鈭?.7%**, aggressive **鈭?.9%** 鈥?**default wins** because aggressive folds more often, and every fold
 > re-prices the keep window at the miss price. Break-even is around **18.3x**.
 >
-> This is a **price-dependent** result, not "fold earlier and save more". With `miss/hit = ρ`, keep window
-> `W`, and block `T`, one fold loses about `(ρ−1)·W` and earns it back from the removed block. The steady-state
-> optimum is `T* = t·√(2K(ρ−1))` (`t` tokens per turn, `K` kept turns). The default `K=2, ratio=8` is close at
-> ρ=50. Folding suits **long sessions**; in a short session, or when miss/hit is low, do not rush it.
+> This is a **price-dependent** result, not "fold earlier and save more". With `miss/hit = 蟻`, keep window
+> `W`, and block `T`, one fold loses about `(蟻鈭?)路W` and earns it back from the removed block. The steady-state
+> optimum is `T* = t路鈭?2K(蟻鈭?))` (`t` tokens per turn, `K` kept turns). The default `K=2, ratio=8` is close at
+> 蟻=50. Folding suits **long sessions**; in a short session, or when miss/hit is low, do not rush it.
 
 The host derives history from the append-only log. The plugin appends one
 `surfaceOp: { op: 'replace', startSeq, endSeq }` event; the covered range stops entering `deriveMessages()`
 while **the original log is untouched** and the tree still holds the full text.
 
-The default threshold is derived from DeepSeek's cache prices, `0.02` (hit) / `1` (miss), and keeps the last
-two turns; folds are at least ten turns apart. The formula is:
+The default is tree-only: folding is off and no model-facing features are enabled. The "Full feature" preset
+derives the threshold from DeepSeek's cache prices, `0.02` (hit) / `1` (miss), keeps the last two turns, and
+folds at least ten turns apart. The formula is:
 
 ```text
 T* = avgTurnTokens * sqrt(2 * keepTurns * (miss/hit - 1))
@@ -41,13 +51,13 @@ Three presets:
 
 | Preset | Behaviour | Folding | Model-facing effects | Hidden tools |
 |---|---|---|---|---|
-| **Default** | general starting point; cost/context balance | automatic threshold | injection/hints/candidates/summary/reflection | none |
-| **Tree only** | record the full tree | off | all off; tools remain callable | none |
-| **Off** | silent to the model | off | all off; plugin tools hidden | 6 plugin tools |
+| **Default (tree only)** | record the full tree | off | none | all plugin tools |
+| **Full feature** | folding/retrieval/marker all on | automatic threshold | injection/hints/candidates/summary/reflection | none |
+| **Off** | silent to the model | off | all off; plugin tools hidden | all plugin tools |
 
 The placeholder tells the model where the text went:
 
-> `[folded] The previous turn was removed from the context to save tokens; the full text is kept in the conversation tree — call retrieve_context when you need the details.`
+> `[folded] The previous turn was removed from the context to save tokens; the full text is kept in the conversation tree 鈥?call retrieve_context when you need the details.`
 
 ## Retrieval: on demand
 
@@ -59,7 +69,7 @@ Long answers are never summarised (a summary rewrites code and numbers); they ar
 
 ```text
 <= 800 tokens   the text as is
-800–3000        sentence selection: head + whole matching sentences (no rewrite)
+800鈥?000        sentence selection: head + whole matching sentences (no rewrite)
 > 3000          one-line "what it is" + line count + pointer to the tree
 ```
 
@@ -90,10 +100,10 @@ log replay, billed fields) and **modelled** (estimated from stated price ratios)
 
 | Capability | Status | Measured |
 |---|---|---|
-| **Fold history** | on by default; automatic threshold from 0.02/1 cache prices | Real web A/B (13 turns): default prompt **−15.4%**, aggressive **−36.3%**; at miss=50x hit, default cost **−9.7%**, aggressive **−2.9%**. Every fold rewrites the prefix — that is its real cost |
-| Fold vs prompt cache | — | Every fold invalidates the prefix cache (experiment 23) |
+| **Fold history** | enabled by the Full feature preset; off in the tree-only default | Real web A/B (13 turns): default prompt **−15.4%**, aggressive **−36.3%**; at miss=50x hit, default cost **−9.7%**, aggressive **−2.9%**. Every fold rewrites the prefix — that is its real cost |
+| Fold vs prompt cache | 鈥?| Every fold invalidates the prefix cache (experiment 23) |
 | Retrieval (`retrieve_context`) | available; no automatic injection by default | no recall gain in five experiments; the model calls it explicitly when it needs an old detail |
-| **Hide tools** | optional; hides `tree_mark` / `tree_focus` by default; `[]` shows all | 37 -> 28 tools: **10,453 -> 7,076 tokens/turn (−32%)** |
+| **Hide tools** | tree-only hides every plugin tool; the Full feature preset hides none | hiding all plugin tools removes their schemas from the prompt |
 | Editable tree / recycle bin | done | branch, re-parent, hide, restore, jump, compare; **cancelled turns leave the tree** |
 | Exact token accounting | done | official tokenizer; billed fields when no vocabulary is available |
 
@@ -105,7 +115,7 @@ Requires DeepSeek Harness (desktop or `dsh` CLI). **Quit the desktop app complet
 dsh plugin --profile desktop add dsh-bonsai
 ```
 
-After restart: a **🌳 Bonsai** dock appears above the composer and a “Bonsai” button in the session header.
+After restart: a **馃尦 Bonsai** dock appears above the composer and a 鈥淏onsai鈥?button in the session header.
 
 Local development (without npm):
 
@@ -114,15 +124,15 @@ pnpm install; pnpm run build; node scripts/stage.mjs
 dsh plugin --profile desktop add "file:<repo>/plugin"
 ```
 
-> Do not use `link:` on the repository root — the desktop app scans that root as a workspace.
+> Do not use `link:` on the repository root 鈥?the desktop app scans that root as a workspace.
 
 ## Interface
 
 - **Dock above the composer**: canvas on the left, details on the right; click a node to jump to its turn.
-- **Bonsai editor**: five tabs — conversation blocks / full tree / graph / recycle bin / settings.
+- **Bonsai editor**: five tabs 鈥?conversation blocks / full tree / graph / recycle bin / settings.
 - **Drag a row onto another**: re-parent it; the whole subtree follows. **Delete** is a soft hide; restore it
   from the recycle bin.
-- **“Continue from here”**: your next question attaches under that node (one turn only).
+- **鈥淐ontinue from here鈥?*: your next question attaches under that node (one turn only).
 
 ## Letting the model place the turn
 
@@ -143,7 +153,7 @@ tree_attach(target="nX", summary="aspect 1, aspect 2")
 ```
 
 The hint also says: **when the question asks about a sub-concept some answer mentioned, attach to that
-answer**. That sentence makes “answered A mentioning B and C, now ask B / ask C” put both under A:
+answer**. That sentence makes 鈥渁nswered A mentioning B and C, now ask B / ask C鈥?put both under A:
 3/5 -> 5/5 on the same five probes; without it the two follow-ups chain B->C.
 
 Only ids offered that turn are accepted: an invented node number is ignored. Placement and summary are tool
@@ -159,14 +169,14 @@ All settings are live and stored in `~/.dsh/token-tree/settings.json` (only keys
 
 | Key | Default | Effect |
 |---|---|---|
-| `autoFold` | `true` | derive the threshold from cache prices; off uses the manual floor |
-| `cacheHitPrice` | `0.02` | relative cache-hit price; automatic thresholding starts when both prices are positive |
+| `autoFold` | `false` | off by default; the Full feature preset enables it |
+| `cacheHitPrice` | `0.02` | relative cache-hit price; ships with DeepSeek's 0.02/1 and enables automatic thresholding |
 | `cacheMissPrice` | `1` | relative cache-miss price; must exceed the hit price |
-| `foldAboveTokens` | `30000` | manual block floor; the automatic threshold wins when enabled, this is the fallback |
-| `foldBlockRatio` | `8` | block must also be at least this many keep windows; `0` disables the relative rule |
-| `foldCadence` | `10` | minimum turns between folds (a fold rewrites the prefix cache) |
+| `foldAboveTokens` | `0` | manual block floor; `0` disables it |
+| `foldBlockRatio` | `0` | relative floor; `0` disables the relative rule |
+| `foldCadence` | `0` | minimum turns between folds; `0` re-evaluates every turn |
 | `foldTrigger` | `block` | `block` measures the block; `history` is the older behaviour |
-| `foldKeepTurns` | `2` | recent turns kept verbatim (the “window” in the formula) |
+| `foldKeepTurns` | `2` | recent turns kept verbatim (the 鈥渨indow鈥?in the formula) |
 | `foldScope` | `turns` | `turns` folds whole turns; `tools` folds only tool output |
 
 In the advanced settings area, **fold threshold** is one dropdown plus inputs:
@@ -179,31 +189,32 @@ In the advanced settings area, **fold threshold** is one dropdown plus inputs:
 | Key | Default | Effect |
 |---|---|---|
 | `autoInject` | `false` | inject the whole retrieval result every turn (about +428 tokens/turn) |
-| `retrievalHint` | `true` | append a one-line hint (about 57 tokens/turn) |
+| `retrievalHint` | `false` | off by default; the Full feature preset enables it |
 | `hintAboveTokens` | `30000` | send the hint after the first fold; the value is diagnostic only |
 | `admitRelevance` | `0.3` | retrieval admission threshold; relaxes once when empty |
-| `mandatoryContext` | `true` | force the parent answer plus its question into the result; a wiring guarantee (~99%), not ranking |
-| `fileRegion` | `auto` | retrieval returns the current text of files this session read (auto/digest/content/off) |
-| `attachChoices` | `10` | candidate questions per turn (questions only); `0` disables |
+| `mandatoryContext` | `false` | force the parent answer into retrieval; the Full feature preset enables it |
+| `fileRegion` | `off` | retrieval returns file text when enabled (auto/digest/content/off) |
+| `attachChoices` | `0` | candidate questions per turn; `0` disables |
+| `candidateSource` | `attach` | candidate table source; `retrieve` uses the weighted retrieval ranking and merges the attach list with the search index |
 | `attachPrompt` | `any` | `any`: dependency `target="nX"`, new topic `"root"`, meta `"here"`; `follow`: anaphora only |
+| `attachMode` | `local` | `local`: plugin decides, no model attach (default); `marker`: trailing marker; `tool`: call `tree_attach` (explicit experiment config) |
 | `attachGate` | `always` | `uncertain`: offer candidates only when the local placement was unsure |
-| `attachSummary` | `true` | ask for an aspect summary in `tree_attach`; fall back to the 200-char heuristic |
+| `attachSummary` | `false` | ask for an aspect summary when enabled |
 
 ### Other
 
 | Key | Default | Effect |
 |---|---|---|
-| `autoReflect` | `true` | evaluate failed turns, write a reflection, backtrack to a better sibling |
-| `toolDeny` | `[tree_mark, tree_focus]` | tools to hide (the checklist panel writes this) |
+| `autoReflect` | `false` | evaluate failed turns and backtrack when enabled |
+| `toolDeny` | all plugin tools | tools to hide (the checklist panel writes this) |
 | `tokenizerVersion` | `auto` | `auto` / `3` / `4` / `off` (estimate + billed calibration) |
 | `locale` | `auto` | UI language: `auto` / `zh` / `en` |
 
-**Hiding tools** is an optional token saver: 83% of the prompt characters are tool definitions. The checklist
-applies per agent. By default only `tree_mark` and `tree_focus` are hidden — never called in 201 real sessions,
-yet about 570 tokens per request. Choose “show all” to write `toolDeny: []`. Names must be exact: the host
-rejects the whole batch when one is unknown.
+**Hiding tools** is an optional token saver: tool definitions dominate the prompt. The checklist applies per
+agent. The tree-only default hides every plugin tool; the Full feature preset hides none. Names must be exact:
+the host rejects the whole batch when one is unknown.
 
-API: `GET /api/token-tree/settings` returns `{ effective, overrides, path, availableTools, fold, toolRestriction, lastAssembly, … }`;
+API: `GET /api/token-tree/settings` returns `{ effective, overrides, path, availableTools, fold, toolRestriction, lastAssembly, 鈥?}`;
 `POST` the same path with `{ key: value }` (`null` clears an override); `POST /api/token-tree/preset` writes a whole preset bundle.
 
 ## Diagnostic commands
@@ -246,7 +257,7 @@ user question
 - the ten candidate **questions**, never answer text;
 - old detail on demand: `retrieve_context` for an index, then `nodeId` or `tree_query` for the text.
 
-So “only the previous turn is visible” is true in long, already-folded sessions, not in short ones.
+So 鈥渙nly the previous turn is visible鈥?is true in long, already-folded sessions, not in short ones.
 
 - The tree is replayed entirely from `user/message`, `assistant/message`, and `tool/result`; no custom events.
 - Reasoning is **paid for but not stored** (billed output tokens exceed the visible text; storing only text
@@ -258,8 +269,8 @@ So “only the previous turn is visible” is true in long, already-folded sessi
 - **Retrieval has not shown a recall gain.** In 219 replayed questions the parent answer entered the result
   **23%** of the time and ranked first **11%**; `mandatoryContext` raises it to about 99% by **forcing** it,
   not by ranking better.
-- **Folding hides content from the model.** In tests it answered “that is not in the session” rather than
-  inventing — but it also does not always call `retrieve_context`.
+- **Folding hides content from the model.** In tests it answered 鈥渢hat is not in the session鈥?rather than
+  inventing 鈥?but it also does not always call `retrieve_context`.
 - **The opening turn is never folded**: the first surface node is the system prompt and can only be rewritten
   by a system message.
 - **Compaction is not data loss**: the tree keeps the full text; only the prompt is shortened.
@@ -270,28 +281,31 @@ Every number can be reproduced with the scripts in the repo, but each has a scop
 
 | Claim | Sample | Conditions |
 |---|---|---|
-| tool trimming −32% | one real assembly (37 -> 28 tools) | one machine, that profile's tool set |
-| fold prompt: default −15.4%, aggressive −36.3% | one run per arm, 13 turns | web host, 5/5 correct, zero tool calls |
-| fold cost: default −9.7%, aggressive −2.9% | same | **assumed** cache miss=50x hit; not a bill |
+| tool trimming 鈭?2% | one real assembly (37 -> 28 tools) | one machine, that profile's tool set |
+| fold prompt: default 鈭?5.4%, aggressive 鈭?6.3% | one run per arm, 13 turns | web host, 5/5 correct, zero tool calls |
+| fold cost: default 鈭?.7%, aggressive 鈭?.9% | same | **assumed** cache miss=50x hit; not a bill |
 | attachment hit 14/18 | 18 hand labels (one session) | single labeller |
 | paraphrase 3/8, jump set 6/15 | 8 / 15 synthetic probes | same session, appended questions |
 | retrieval no gain | 219 replayed questions | one session (37bfb65c), production order |
 
-**What is not claimed**: no “always cheaper”; folding can cost more in short sessions or at low miss/hit.
+**What is not claimed**: no 鈥渁lways cheaper鈥? folding can cost more in short sessions or at low miss/hit.
 Counterexamples and failed experiments remain in `docs/experiment-context-cache.md`: BM25, jieba,
 BGE vectors, retrieval admission.
 
 The cache price ratio is an **assumption**, not a constant: the default `K=2, ratio=8` is near optimal at
-ρ=50 (`T*/W = sqrt(2(ρ−1)/K)=7`). Recompute with the automatic threshold when prices differ.
+蟻=50 (`T*/W = sqrt(2(蟻鈭?)/K)=7`). Recompute with the automatic threshold when prices differ.
 
 ## Development
 
 ```powershell
 pnpm install
 pnpm run build      # TypeScript -> dist/ + lib/client.js
-pnpm test           # 251 tests
+pnpm test           # 269 tests
 pnpm run check      # typecheck + tests
 ```
+
+Debug logging: set `DSH_BONSAI_LOG=1` and the plugin installs a stdout exporter through
+`ctx.logger.exporter()`, writing one line per log entry. It is off by default so normal output stays clean.
 
 Zero-cost self-checks (no model needed):
 
@@ -326,9 +340,9 @@ pushes. A failure rolls back automatically.
 | `src/core/` | pure algorithms: graph, edge weights, path costs, weighted retrieval, reflection |
 | `src/plugin/` | DSH wiring: `Config`, session service, tools, event hooks, HTTP routes, fold planner |
 | `client/client.js` | browser side: dock, editor, graph view, recycle bin, rules bar, settings, presets |
-| `tests/` | 251 tests, including jsdom-mounted React client tests |
+| `tests/` | 269 tests, including jsdom-mounted React client tests |
 | `docs/experiment-context-cache.md` | all measurements (53 sections, including failed experiments) |
 
 ## License
 
-MIT © 2026 STRlantian
+MIT 漏 2026 STRlantian

@@ -42,7 +42,7 @@ test('a question with no host turn belongs to the turn it opens', () => {
   const plan = planTurnFold(
     events as never,
     visible,
-    0,
+    1,
     seq => service.turnOfSeq('host-shape', seq),
   )
   const second = plan.find(fold => fold.turn === 2)

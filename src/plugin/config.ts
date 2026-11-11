@@ -192,10 +192,17 @@ export interface ResolvedConfig {
   /** How many candidate nodes the hint offers the model (0 = no choices block). */
   /** What the choices block asks for: follow-ups only, or any turn with a clear dependency. */
   attachPrompt: string
+  /** How the model reports placement: the `tree_attach` tool, a trailing marker, or nothing. */
+  attachMode: string
   /** When the candidate block is offered: every turn, or only when the local placement was unsure. */
   attachGate: string
   /** Whether the model is asked for a trailing aspect summary. */
   attachSummary: boolean
+  /**
+   * Where the candidate table comes from: the attachment score (`attach`, the shipped default) or
+   * the weighted retrieval ranking (`retrieve`), which merges the attach list and the search index.
+   */
+  candidateSource: string
   attachChoices: number
   mandatoryContext: boolean
   /** Whether to supervise failures. */
@@ -204,7 +211,7 @@ export interface ResolvedConfig {
   includeSubagents: boolean
   /** Token budget of the injected block. */
   injectBudgetTokens: number
-  /** Node cap per session. */
+  /** Optional node cap per session; `0` keeps every node (the shipped default). */
   maxNodesPerSession: number
   /** Whether edge updates are logged. */
   logEdgeUpdates: boolean
@@ -382,8 +389,8 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
 
       const injectBudgetTokens = scalar(source, 'injectBudgetTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input), issues, 'an integer')
         ?? 600
-      const maxNodesPerSession = scalar(source, 'maxNodesPerSession', (input): input is number => typeof input === 'number' && Number.isInteger(input), issues, 'an integer')
-        ?? 400
+      const maxNodesPerSession = scalar(source, 'maxNodesPerSession', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer')
+        ?? 0
 
       const attachmentsRaw = source.attachments
       if (attachmentsRaw !== undefined && attachmentsRaw !== 'semantic' && attachmentsRaw !== 'linear') {
@@ -407,7 +414,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
         // and a short conversation already carries its whole history. Callers that
         // want recall pushed automatically can set `autoInject: true`.
         autoInject: scalar(source, 'autoInject', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,
-        retrievalHint: scalar(source, 'retrievalHint', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
+        retrievalHint: scalar(source, 'retrievalHint', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,
         // 40 nodes is roughly 20 exchanges: past this point a long session is the norm
         // and the hint stops being pure overhead.
         hintMinNodes: scalar(source, 'hintMinNodes', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input > 0, issues, 'a positive integer') ?? 40,
@@ -423,13 +430,13 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
           : undefined,
         ...(typeof source.modelId === 'string' && source.modelId.trim() !== '' ? { modelId: source.modelId.trim() } : {}),
         conservativeBudgetRatio: scalar(source, 'conservativeBudgetRatio', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input > 0 && input <= 1, issues, 'a number within (0, 1]') ?? 0.85,
-        compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
-        foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 30000,
-    foldCadence: scalar(source, 'foldCadence', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 10,
-    foldBlockRatio: scalar(source, 'foldBlockRatio', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 8,
+        compactionIndex: scalar(source, 'compactionIndex', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,
+        foldAboveTokens: scalar(source, 'foldAboveTokens', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
+    foldCadence: scalar(source, 'foldCadence', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
+    foldBlockRatio: scalar(source, 'foldBlockRatio', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
     cacheHitPrice: scalar(source, 'cacheHitPrice', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input >= 0, issues, 'a finite non-negative number') ?? 0.02,
     cacheMissPrice: scalar(source, 'cacheMissPrice', (input): input is number => typeof input === 'number' && Number.isFinite(input) && input >= 0, issues, 'a finite non-negative number') ?? 1,
-    autoFold: scalar(source, 'autoFold', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
+    autoFold: scalar(source, 'autoFold', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,
     foldTrigger: ((): string => {
       const value = source === undefined ? undefined : (source as Record<string, unknown>).foldTrigger
       if (value === undefined) return 'block'
@@ -439,7 +446,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
     })(),
     // Measured on the B/C scenario: the sub-concept instruction alone scores 5/5, adding summaries
     // 4/5. The summary stays available but off by default.
-    attachSummary: scalar(source, 'attachSummary', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
+    attachSummary: scalar(source, 'attachSummary', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,
     attachGate: (() => {
       const mode = scalar(source, 'attachGate', (input): input is string => typeof input === 'string', issues, 'a string')
       return mode === 'uncertain' ? 'uncertain' : 'always'
@@ -449,11 +456,20 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
       // Measured: `any` wrongly marked 0/10 new topics, `follow` 4/10.
       return mode === 'follow' ? 'follow' : 'any'
     })(),
-    attachChoices: scalar(source, 'attachChoices', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 10,
-    mandatoryContext: scalar(source, 'mandatoryContext', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
+    attachMode: (() => {
+      const mode = scalar(source, 'attachMode', (input): input is string => typeof input === 'string', issues, 'a string')
+      // Tree-only is the shipped default: record the tree, but do not change the model's prompt.
+      return mode === 'marker' || mode === 'tool' ? mode : 'local'
+    })(),
+    attachChoices: scalar(source, 'attachChoices', (input): input is number => typeof input === 'number' && Number.isInteger(input) && input >= 0, issues, 'a non-negative integer') ?? 0,
+    candidateSource: (() => {
+      const value = scalar(source, 'candidateSource', (input): input is string => typeof input === 'string', issues, 'a string')
+      return value === 'retrieve' ? 'retrieve' : 'attach'
+    })(),
+    mandatoryContext: scalar(source, 'mandatoryContext', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,
     fileRegion: (() => {
       const mode = scalar(source, 'fileRegion', (input): input is string => typeof input === 'string', issues, 'a string')
-      return mode === 'off' || mode === 'digest' || mode === 'content' ? mode : 'auto'
+      return mode === 'off' || mode === 'digest' || mode === 'content' ? mode : 'off'
     })(),
     foldPolicy: (() => {
       const policy = scalar(source, 'foldPolicy', (input): input is string => typeof input === 'string', issues, 'a string')
@@ -469,7 +485,7 @@ export const Config: StandardSchemaLike<ResolvedConfig> = {
           : typeof source.tokenizerVersion === 'number'
             ? String(source.tokenizerVersion)
             : 'auto',
-        autoReflect: scalar(source, 'autoReflect', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? true,
+        autoReflect: scalar(source, 'autoReflect', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,
         includeSubagents: scalar(source, 'includeSubagents', (input): input is boolean => typeof input === 'boolean', issues, 'a boolean') ?? false,
         injectBudgetTokens,
         maxNodesPerSession,

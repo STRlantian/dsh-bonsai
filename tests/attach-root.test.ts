@@ -7,8 +7,8 @@ import { TokenTreeService } from '../src/plugin/service.ts'
 const logger = { info: () => {}, warn: () => {}, debug: () => {}, error: () => {} }
 
 function conversation() {
-  const config = Config['~standard'].validate({ logEdgeUpdates: false }).value
-  const current = { attachChoices: 5, attachPrompt: 'any', mandatoryContext: false, autoInject: false, retrievalHint: false, hintMinNodes: 99 }
+  const config = Config['~standard'].validate({ logEdgeUpdates: false, attachMode: 'marker', attachSummary: true }).value
+  const current = { attachMode: 'marker', attachChoices: 5, attachSummary: true, attachPrompt: 'any', mandatoryContext: false, autoInject: false, retrievalHint: false, hintMinNodes: 99 }
   const settings = {
     path: 'memory',
     all: () => ({ ...current }),
@@ -32,7 +32,7 @@ test('any mode offers the new-topic call, follow mode does not', () => {
   const run = conversation()
   run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小决定。')
   const block = run.service.attachChoices('root-marker', '它的误判率怎么算')
-  assert.ok(block.includes('tree_attach') && block.includes('"root"'), 'any mode names the sentinel: ' + block)
+  assert.ok(block.includes('[attach:') && block.includes('"root"'), 'any mode names the sentinel: ' + block)
   run.service.updateSettings({ attachPrompt: 'follow' })
   run.service.attachChoices('root-marker', '它的误判率怎么算')
   assert.equal(run.service.stateOf('root-marker').offeredRoot, false, 'follow mode offers no root call')

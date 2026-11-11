@@ -50,6 +50,22 @@ test('a null value clears an override so the profile config applies again', () =
   }
 })
 
+test('attachMode is validated and can be scoped to one conversation', () => {
+  const { store, dir } = tempStore()
+  try {
+    store.apply({ attachMode: 'marker' })
+    assert.deepEqual(store.all(), { attachMode: 'marker' })
+    store.applyFor('session-a', { attachMode: 'tool' })
+    assert.deepEqual(store.allFor('session-a'), { attachMode: 'tool' })
+    store.applyFor('session-a', { attachMode: 'not-a-mode' })
+    assert.deepEqual(store.allFor('session-a'), { attachMode: 'tool' }, 'invalid values are ignored')
+    store.apply({ attachMode: null })
+    assert.deepEqual(store.all(), {}, 'null hands the key back to the profile config')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
 test('a corrupt settings file is ignored rather than fatal', () => {
   const { path, dir } = tempStore()
   try {

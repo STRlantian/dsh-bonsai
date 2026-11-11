@@ -65,9 +65,9 @@ function summarise(prefix) {
   const users = events.filter(event => event.type === 'user/message')
   const injected = users.filter(event => {
     const text = textOf(event.data?.content)
-    return /^Current runtime context|^Time sampled|^\[盆栽\]|^\[token-tree\]|^session-log/.test(text.trim())
+    return /^Current runtime context|^Time sampled|^\[(?:盆栽|token-tree)\]|^\[token-tree\]|^session-log/.test(text.trim())
   })
-  const pluginHints = users.filter(event => textOf(event.data?.content).includes('[盆栽]'))
+  const pluginHints = users.filter(event => /\[(?:盆栽|token-tree)\]/.test(textOf(event.data?.content)))
   const surfaces = events.filter(event => JSON.stringify(event.data ?? {}).includes('surfaceOp'))
   const headers = events.filter(event => event.type === 'request/header')
   let tools = null

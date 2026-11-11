@@ -42,7 +42,12 @@ test('the prompt head is never folded; every message turn can be', () => {
     msg('user/message', 4, 3),
   ]
   const plan = planTurnFold(events, events.map(event => event.seq), 0)
-  assert.deepEqual(plan.map(entry => entry.startSeq), [3, 4], 'the system prompt and the opening turn stay')
+  assert.equal(plan.length, 1, 'the two foldable turns share one replacement')
+  const fold = plan[0]!
+  assert.equal(fold.startSeq, 3, 'the system prompt and the opening turn stay')
+  assert.equal(fold.endSeq, 4)
+  assert.equal(fold.turns, 2)
+  assert.deepEqual(fold.seqs, [3, 4])
 })
 
 test('already folded turns are not planned again', () => {

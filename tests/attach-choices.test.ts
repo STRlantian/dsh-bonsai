@@ -6,9 +6,9 @@ import { TokenTreeService } from '../src/plugin/service.ts'
 
 const logger = { info: () => {}, warn: () => {}, debug: () => {}, error: () => {} }
 
-function conversation() {
-  const config = Config['~standard'].validate({ logEdgeUpdates: false }).value
-  const current = { attachChoices: 5, mandatoryContext: false, autoInject: false, retrievalHint: false, hintMinNodes: 99 }
+function conversation(overrides: Record<string, unknown> = {}) {
+  const config = Config['~standard'].validate({ logEdgeUpdates: false, attachMode: 'marker', attachSummary: true, ...overrides }).value
+  const current = { attachChoices: 5, attachSummary: true, mandatoryContext: false, autoInject: false, retrievalHint: false, hintMinNodes: 99 }
   const settings = {
     path: 'memory',
     all: () => ({ ...current }),
@@ -35,7 +35,7 @@ test('the choices block lists questions, not answers', () => {
   const block = run.service.attachChoices('choices', '它的误判率怎么算')
   assert.ok(block.includes('布隆过滤器的误判率由什么决定'), 'the question is the label: ' + block)
   assert.ok(!block.includes('位数组大小'), 'the generated answer text is not included')
-  assert.ok(block.includes('tree_attach'), 'the instruction is there')
+  assert.ok(block.includes('[attach:'), 'the instruction is there')
   const rows = block.split('\n').filter(line => line.startsWith('- '))
   assert.ok(rows.length <= 5 && rows.length >= 1, 'within the limit: ' + rows.length)
 })
@@ -108,6 +108,40 @@ test('tree_attach with auto keeps the automatic parent and still records the sum
   assert.equal(answer.summary, '误判率公式')
 })
 
+test('tree_rule records a model rule without removing the attachable question', () => {
+  const run = conversation()
+  run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小决定。')
+  run.push('turn/start', { turn: 2 })
+  run.push('user/message', { role: 'user', id: 'q2', source: { kind: 'user' }, content: [{ type: 'text', text: '这个项目里我们用 pnpm 吧' }] })
+  const before = [...run.tree().nodes.values()].filter(node => node.kind === 'question').at(-1)
+  const recorded = run.service.recordRule('choices', undefined, false)
+  assert.equal(recorded.cancel, false)
+  assert.equal(recorded.active, 1)
+  const rules = run.service.constraintsOf('choices')
+  assert.equal(rules.length, 1)
+  assert.equal(rules[0].source, 'model')
+  assert.equal(rules[0].text, '这个项目里我们用 pnpm 吧')
+  run.push('assistant/message', { message: { role: 'assistant', content: [{ type: 'text', text: '好，之后用 pnpm。' }] } })
+  const questions = [...run.tree().nodes.values()].filter(node => node.kind === 'question')
+  const answers = [...run.tree().nodes.values()].filter(node => node.kind === 'answer')
+  assert.equal(questions.length, 2, 'the rule turn still keeps its question')
+  assert.equal(answers.length, 2, 'the answer is not skipped')
+  assert.equal(questions.at(-1).parentId, before.parentId, 'tree_attach placement is unchanged')
+})
+
+test('tree_rule can cancel every active rule', () => {
+  const run = conversation()
+  run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小决定。')
+  run.push('turn/start', { turn: 2 })
+  run.push('user/message', { role: 'user', id: 'q2', source: { kind: 'user' }, content: [{ type: 'text', text: '这个项目里我们用 pnpm 吧' }] })
+  run.service.recordRule('choices')
+  assert.equal(run.service.constraintsOf('choices').length, 1)
+  const cancelled = run.service.recordRule('choices', undefined, true)
+  assert.equal(cancelled.cancel, true)
+  assert.equal(cancelled.active, 0)
+  assert.equal(run.service.constraintsOf('choices').length, 0)
+})
+
 test('the instruction follows the attachPrompt mode', () => {
   const run = conversation()
   run.turn('布隆过滤器的误判率由什么决定', 1, '误判率由位数组大小决定。')
@@ -116,6 +150,18 @@ test('the instruction follows the attachPrompt mode', () => {
   run.service.updateSettings({ attachPrompt: 'any' })
   const anyBlock = run.service.attachChoices('choices', '它的误判率怎么算')
   assert.ok(anyBlock.includes('"root"') && anyBlock.includes('"here"'), 'any mode offers all three: ' + anyBlock)
+})
+
+test('the merged candidate source gives local the same retrieval index', () => {
+  const run = conversation({ candidateSource: 'retrieve', attachMode: 'local' })
+  run.turn('青禾的端口和缓存 TTL 是多少', 1, '青禾端口 7421，缓存 TTL 37 分钟。')
+  const answer = [...run.tree().nodes.values()].find(node => node.kind === 'answer')
+  assert.ok(answer !== undefined)
+  const block = run.service.attachChoices('choices', '青禾端口是多少')
+  assert.ok(block.includes('相关节点索引'), 'local gets the retrieval table: ' + block)
+  assert.ok(!block.includes('tree_attach'), 'local is not asked to attach: ' + block)
+  assert.ok(block.includes(answer.id), 'the retrieved answer id is in the table: ' + block)
+  assert.match(block, /w=\d+\.\d{3} tokens=\d+/, 'rows carry the retrieval columns: ' + block)
 })
 
 test('the model summary is stored, stripped, and shown next to the question', () => {

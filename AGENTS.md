@@ -11,6 +11,7 @@ visible to everyone who has installed the plugin and cannot be taken back cleanl
   instruction** in the current conversation, for that specific release.
 - Do not infer permission from "looks good", "分析一下结果", or a previous release.
 - Committing and verifying locally is fine; pushing a branch or publishing is not.
+- `pnpm build`, typecheck, and tests are pre-authorized: run them without asking first.
 
 If a release fix is urgent (a broken README, a corrupt manifest), say what is wrong and ask.
 
@@ -18,12 +19,25 @@ If a release fix is urgent (a broken README, a corrupt manifest), say what is wr
 
 Push only when asked. The default rhythm here is: change, verify locally, report, wait.
 
+## Use the `tokentree` test profile
+
+All live/manual tests of this plugin use the **`tokentree`** profile, not `desktop`:
+
+```powershell
+dsh plugin --profile tokentree add "file:D:\dsh-token-tree\plugin"
+dsh --profile tokentree web
+```
+
+Never install a development build into `profiles/desktop` while the desktop app is running, and do not
+use `desktop` as a scratch profile. The `tokentree` profile is disposable: recreate it from the default
+web template if a test leaves it in a bad state.
+
 ## Do not swap the installed plugin under a running app
 
 Overwriting `profiles/desktop/node_modules/dsh-bonsai` while the desktop app is running makes the
 renderer fetch a bundle that no longer matches, and the panel fails with `Failed to fetch` /
 `net::ERR_FAILED` until the files settle or the app restarts. Build and copy while the app is
-closed, then start it; when debugging a live app, use `dsh web` on a scratch profile instead.
+closed, then start it; when debugging a live app, use `dsh web` on the `tokentree` profile instead.
 
 ## Verification before claiming something works
 

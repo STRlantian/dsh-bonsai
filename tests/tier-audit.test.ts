@@ -30,7 +30,7 @@ test('an excerpt never emits half a code block', () => {
 })
 
 function service() {
-  const config = Config['~standard'].validate({ logEdgeUpdates: false }).value
+  const config = Config['~standard'].validate({ logEdgeUpdates: false, mandatoryContext: true }).value
   return new TokenTreeService({ config, logger })
 }
 

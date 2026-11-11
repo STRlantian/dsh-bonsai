@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** Keys the settings surface may override. */
-const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldCadence', 'foldBlockRatio', 'autoFold', 'cacheHitPrice', 'cacheMissPrice', 'foldTrigger', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'attachChoices', 'attachPrompt', 'attachGate', 'attachSummary', 'admitRelevance', 'summaryMatch'] as const
+const SETTING_KEYS = ['autoInject', 'retrievalHint', 'autoReflect', 'hintMinNodes', 'hintAboveTokens', 'tokenizerVersion', 'locale', 'compactionIndex', 'toolDeny', 'foldAboveTokens', 'foldKeepTurns', 'foldCadence', 'foldBlockRatio', 'autoFold', 'cacheHitPrice', 'cacheMissPrice', 'foldTrigger', 'foldScope', 'foldPolicy', 'fileRegion', 'mandatoryContext', 'attachChoices', 'attachPrompt', 'attachGate', 'attachSummary', 'attachMode', 'admitRelevance', 'summaryMatch'] as const
 
 export interface SettingsOverrides {
   /** Push a memory block every turn instead of the one-line hint. */
@@ -68,6 +68,8 @@ export interface SettingsOverrides {
   /** Whether the model is asked for an aspect summary. */
   attachSummary?: boolean
   attachChoices?: number
+  /** How the model reports placement: `local`, `marker`, or `tool`. */
+  attachMode?: string
   /** Always include the answer a turn depends on. */
   mandatoryContext?: boolean
   /**
@@ -140,6 +142,11 @@ function coerce(key: keyof SettingsOverrides, value: unknown): boolean | number 
     if (typeof value !== 'string') return undefined
     const mode = value.trim().toLowerCase()
     return mode === 'any' || mode === 'follow' ? mode : undefined
+  }
+  if (key === 'attachMode') {
+    if (typeof value !== 'string') return undefined
+    const mode = value.trim().toLowerCase()
+    return mode === 'local' || mode === 'marker' || mode === 'tool' ? mode : undefined
   }
   if (key === 'attachChoices') {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return undefined

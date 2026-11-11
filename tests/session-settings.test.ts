@@ -29,7 +29,7 @@ test('hintAboveTokens and toolDeny are read through the session scope', () => {
   assert.equal(service.effective('session-a').hintAboveTokens, 1234)
   assert.deepEqual(service.toolDeny('session-a'), ['workflow'])
   assert.equal(service.effective('session-b').hintAboveTokens, 30000)
-  assert.deepEqual(service.toolDeny('session-b'), ['tree_mark', 'tree_focus'])
+  assert.deepEqual(service.toolDeny('session-b'), ['retrieve_context', 'tree_query', 'tree_reflect', 'tree_mark', 'tree_focus', 'tree_attach', 'tree_rule', 'tree_backtrack'])
 })
 
 test('settingsInfo reports raw session overrides, not the merged global layer', () => {
@@ -39,6 +39,14 @@ test('settingsInfo reports raw session overrides, not the merged global layer', 
   const info = service.settingsInfo('session-a')
   assert.deepEqual(info.overrides, { autoInject: false })
   assert.equal(info.globalOverrides.autoInject, true)
+})
+
+test('attachMode is read through the session scope', () => {
+  const service = serviceWithSettings()
+  assert.equal(service.effective('session-a').attachMode, 'local')
+  service.updateSettings({ attachMode: 'marker' }, 'session-a')
+  assert.equal(service.effective('session-a').attachMode, 'marker')
+  assert.equal(service.effective('session-b').attachMode, 'local', 'the other conversation keeps the profile mode')
 })
 
 test('a session-scoped tokenizer choice is rejected instead of being silently inert', () => {

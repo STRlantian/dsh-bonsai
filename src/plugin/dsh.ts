@@ -14,6 +14,28 @@
  * @module dsh-token-tree/plugin/dsh
  */
 
+/** One line handed to a logger exporter. */
+export interface LoggerMessageLike {
+  /** Unix timestamp in milliseconds. */
+  readonly ts: number
+  /** Level name, such as `info` or `warn`. */
+  readonly type: string
+  /** Logger name, normally the plugin name. */
+  readonly name: string
+  /** printf-style format and its parameters. */
+  readonly args: readonly unknown[]
+}
+
+/** Options accepted by `ctx.logger.exporter()`. */
+export interface LoggerExporterOptionsLike {
+  /** Whether the host may colour the output; a stdout exporter ignores this. */
+  readonly colors?: boolean
+  /** Per-level verbosity, for example `{ default: 3 }`. */
+  readonly levels?: Readonly<Record<string, number>>
+  /** Receives one formatted-or-raw log line. */
+  export(message: LoggerMessageLike): void
+}
+
 /** printf-style logger, as provided by `ctx.logger`. */
 export interface LoggerLike {
   /** Informational line. */
@@ -24,6 +46,11 @@ export interface LoggerLike {
   debug(format: unknown, ...params: unknown[]): void
   /** Failed operation. */
   error(format: unknown, ...params: unknown[]): void
+  /**
+   * Install an exporter. Pass {@link stdoutExporter} to write every line to stdout.
+   * @param options - host exporter options; `export` receives each line.
+   */
+  exporter(options?: LoggerExporterOptionsLike): void
 }
 
 /** One model-facing content block. */
@@ -60,7 +87,8 @@ export interface UserMessageLike {
 export interface SessionLike {
   /** Ordered message seqs currently visible to the model, plus generation counters. */
   readonly surface?: {
-    readonly nodes?: readonly number[]
+    /** A seq, or an inclusive range when the host compresses adjacent user messages. */
+    readonly nodes?: readonly (number | readonly [number, number])[]
     readonly replaceGeneration?: number
   }
   /**

@@ -2,11 +2,21 @@
 
 [English](README.en.md) · 简体中文
 
-**DeepSeek Harness 的对话树插件，先把两件最花钱的事做好：折叠历史、按需检索。**
+**DeepSeek Harness 的对话树插件：默认只建树，不改变模型上下文。**
 
 一段对话被画成一棵树：问题、回答、工具结果都是节点，可以分叉、改挂、隐藏、回收、跳回某一点继续长。
-树上挂着精确到 token 的记账；模型默认只看到折叠后的历史，需要旧细节时再通过 `retrieve_context`
-把原文取回来。
+默认只记录结构，不注入、不提示、不折叠、不暴露任何插件工具；需要折叠/检索时再切到「完整功能」预设。
+
+## 为什么默认只建树
+
+这是实验后的决定，不是“折叠没用”：
+
+- 5 次检索对照里没有测出稳定的召回增益；人为强制折叠的压力测试里 marker/tool 能答对，但成本远高于不折叠。
+- 按前缀缓存计价，marker 总成本约为 no-plugin 的 **3.0–3.5 倍**；追平点约 1,500–1,900 轮，而 128k 上下文约 420–520 轮就到顶。
+- 折叠真正省的是 prompt 体积，但每次折叠会让保留窗口重新按 miss 计价；短会话和缓存命中高时，省不回折叠成本。
+- DSH 自带 compact 保事实很完整，但短对话压缩比只有 3–4 倍，摘要仍有几百 token；也不适合每轮跑。
+
+所以默认把树当**只读记录和编辑结构**：不改变模型看到的 prompt，也不参与检索/挂载。等模型不再依赖稳定前缀缓存，或会话长到折叠收益能覆盖成本时，再切「完整功能」。
 
 ```text
 dsh-bonsai · DeepSeek Harness 插件 · 零运行时依赖 · MIT · Node ≥ 24
@@ -27,7 +37,7 @@ dsh-bonsai · DeepSeek Harness 插件 · 零运行时依赖 · MIT · Node ≥ 2
 会话历史由宿主从日志派生。插件追加一条 `surfaceOp: { op: 'replace', startSeq, endSeq }` 事件，
 被覆盖的区间就不再进入 `deriveMessages()` —— **原始日志一个字节都没改**，树里也仍然是全文。
 
-默认按 DeepSeek 的缓存价 `0.02`（命中）/ `1`（未命中）自动算阈值，保留最近 2 轮；两次折叠至少隔 10 轮。
+「完整功能」预设按 DeepSeek 的缓存价 `0.02`（命中）/ `1`（未命中）自动算阈值，保留最近 2 轮；两次折叠至少隔 10 轮。默认只建树时折叠关闭。
 公式：
 
 ```text
@@ -38,9 +48,9 @@ T* = avgTurnTokens × √(2 × keepTurns × (miss/hit − 1))
 
 | 预设 | 行为 | 折叠 | 模型侧影响 | 隐藏工具 |
 |---|---|---|---|---|
-| **默认** | 通用起点；成本与上下文平衡 | 自动阈值 | 注入/提示/候选/摘要/反思 | 无 |
-| **只建树** | 只记录完整树 | 关闭 | 全部关闭；工具仍可显式调用 | 无 |
-| **关闭** | 对模型静默 | 关闭 | 全部关闭；插件工具也隐藏 | 6 个插件工具 |
+| **默认（只建树）** | 只记录完整树 | 关闭 | 无 | 全部插件工具 |
+| **完整功能** | 折叠/检索/marker 全开 | 自动阈值 | 注入/提示/候选/摘要/反思 | 无 |
+| **关闭** | 对模型静默 | 关闭 | 全部关闭 | 全部插件工具 |
 
 折叠后的占位行会告诉模型原文在哪：
 
@@ -85,7 +95,7 @@ BGE 不可用、模型加载失败或调用失败时逐次回落到 hash。挂�
 
 | 能力 | 状态 | 实测 |
 |---|---|---|
-| **折叠历史** | 默认开启；默认按 0.02/1 缓存价自动算阈值 | 真机 web A/B（13 轮）：default prompt **−15.4%**、aggressive **−36.3%**；按 miss=50×hit 折算，default 成本 **−9.7%**、aggressive **−2.9%**（default 最省）。每次折叠都会改写前缀，这是它的真实代价 |
+| **折叠历史** | 「完整功能」预设开启；默认只建树时关闭 | 真机 web A/B（13 轮）：default prompt **−15.4%**、aggressive **−36.3%**；按 miss=50×hit 折算，default 成本 **−9.7%**、aggressive **−2.9%**（default 最省）。每次折叠都会改写前缀，这是它的真实代价 |
 | 折叠对缓存的影响 | — | 每次折叠改写前缀 → 缓存命中失效，这是它真正的代价（实验 23） |
 | 检索（`retrieve_context`） | 可用；默认不自动注入 | 5 次实验里没有测出召回增益；需要旧细节时由模型显式调用 |
 | **隐藏工具** | 可选，默认藏 `tree_mark` / `tree_focus`；设为 `[]` 全部显示 | 37 → 28 个工具：**10,453 → 7,076 token/轮（−32%）** |
@@ -150,12 +160,12 @@ tree_attach(target="nX", summary="方面 1, 方面 2")
 
 | 键 | 默认 | 作用 |
 |---|---|---|
-| `autoFold` | `true` | 默认用缓存价格自动算阈值；关闭后回到手填阈值 |
+| `autoFold` | `false` | 只建树默认不折；完整功能预设里改为 `true` |
 | `cacheHitPrice` | `0.02` | 缓存命中相对价格；和未命中都 >0 时启用自动阈值 |
 | `cacheMissPrice` | `1` | 缓存未命中相对价格；需大于命中价 |
-| `foldAboveTokens` | `30000` | 手动待折块下限；自动阈值优先，此项只作兜底 |
-| `foldBlockRatio` | `8` | 待折块 ≥ 这个倍数 × 保留窗口；`0` 关闭相对规则 |
-| `foldCadence` | `10` | 两次折叠至少间隔这么多轮（折叠会重写前缀缓存） |
+| `foldAboveTokens` | `0` | 手动待折块下限；`0` 关闭 |
+| `foldBlockRatio` | `0` | 待折块 ≥ 这个倍数 × 保留窗口；`0` 关闭相对规则 |
+| `foldCadence` | `0` | 两次折叠至少间隔这么多轮（折叠会重写前缀缓存） |
 | `foldTrigger` | `block` | `block` 按块判定；`history` 是旧行为 |
 | `foldKeepTurns` | `2` | 最近这么多轮原样保留（公式里的“窗口”） |
 | `foldScope` | `turns` | `turns` 整轮折叠，`tools` 只折叠工具输出 |
@@ -170,29 +180,29 @@ tree_attach(target="nX", summary="方面 1, 方面 2")
 | 键 | 默认 | 作用 |
 |---|---|---|
 | `autoInject` | `false` | 每回合把检索结果整块推进上下文（约 +428 token/轮） |
-| `retrievalHint` | `true` | 只加一行提示，约 57 token/轮 |
+| `retrievalHint` | `false` | 只建树默认不提示；完整功能预设里改为 `true` |
 | `hintAboveTokens` | `30000` | 第一次折叠后发提示；值只作诊断，不再单独触发 |
 | `admitRelevance` | `0.3` | 检索准入阈值，空手时自动放宽一次 |
-| `mandatoryContext` | `true` | 强制把“父回答 + 它的提问”放进检索结果；这是接线保证（≈99%），不是打分增益 |
-| `fileRegion` | `auto` | 检索返回本会话读过文件的当前内容（auto/digest/content/off） |
-| `attachChoices` | `10` | 每轮给模型看的候选问题数量（只给问题，不给正文）；`0` 关闭 |
+| `mandatoryContext` | `false` | 强制把“父回答 + 它的提问”放进检索结果；这是接线保证（≈99%），不是打分增益 |
+| `fileRegion` | `off` | 检索返回本会话读过文件的当前内容（auto/digest/content/off） |
+| `attachChoices` | `0` | 每轮给模型看的候选问题数量（只给问题，不给正文）；`0` 关闭 |
+| `candidateSource` | `attach` | 候选表来源；`retrieve` 改用加权检索排名，把挂树候选和检索索引合并成同一张表 |
+| `attachMode` | `local` | `local`：插件自己挂，模型不参与（默认）；`marker`：结尾写标记；`tool`：调用 `tree_attach`（实验配置） |
 | `attachPrompt` | `any` | `any`：依赖用 `target="nX"`、新话题 `"root"`、元指令 `"here"`；`follow`：只问指代 |
 | `attachGate` | `always` | `uncertain`：只在本地没把握时才发候选块 |
-| `attachSummary` | `true` | 每轮要求模型在 `tree_attach` 里带“方面摘要”；没写时用前 200 字兜底 |
+| `attachSummary` | `false` | 每轮要求模型在 `tree_attach` 或结尾标记里带“方面摘要”；没写时用前 200 字兜底 |
 
 ### 其他
 
 | 键 | 默认 | 作用 |
 |---|---|---|
-| `autoReflect` | `true` | 回合结束评估失败、写反思、回溯更优兄弟分支 |
-| `toolDeny` | `[tree_mark, tree_focus]` | 要隐藏的工具名（用勾选面板填） |
+| `autoReflect` | `false` | 回合结束评估失败、写反思、回溯更优兄弟分支 |
+| `toolDeny` | 全部插件工具 | 要隐藏的工具名（用勾选面板填） |
 | `tokenizerVersion` | `auto` | `auto` / `3` / `4` / `off`（估算 + 账单校准） |
 | `locale` | `auto` | 界面语言：`auto` / `zh` / `en` |
 
-**隐藏工具**是可选的省 token 手段：prompt 里 83% 的字符是工具定义，勾选后按 agent 生效。
-默认只藏 `tree_mark` / `tree_focus` 两个在 201 个真实会话里从未被调用、却占约 570 token/请求的工具；
-想把能力全部还给模型，就在设置里勾选“全部显示”（写入 `toolDeny: []`）。名单必须写对：
-宿主会校验工具名，有一个不认识的就整批拒绝。
+默认只建树，所有插件工具都隐藏；切到「完整功能」后默认一个都不藏。
+隐藏全部插件工具能省下工具 schema；名单必须写对：宿主会校验工具名，有一个不认识的就整批拒绝。
 
 接口：`GET /api/token-tree/settings` 返回 `{ effective, overrides, path, availableTools, fold, toolRestriction, lastAssembly, … }`；
 `POST` 同一路径写 `{ key: value }`（`null` 表示清除覆盖）；`POST /api/token-tree/preset` 一次写入整包预设。
@@ -276,9 +286,12 @@ tree_attach(target="nX", summary="方面 1, 方面 2")
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 251 个用例
+pnpm test           # 269 个用例
 pnpm run check      # 类型检查 + 测试
 ```
+
+调试日志：设置 `DSH_BONSAI_LOG=1` 后，插件通过 `ctx.logger.exporter()` 把每条日志逐行写到 stdout；
+默认关闭，不会污染正常输出。
 
 零成本自查（不需要模型）：
 
@@ -312,7 +325,7 @@ powershell -File scripts/release.ps1           # 发布并推进到下一个测�
 | `src/core/` | 纯算法：图、边权、路径成本、加权检索、评估与回溯 |
 | `src/plugin/` | DSH 接线：`Config`、会话服务、工具、事件订阅、HTTP 路由、折叠规划 |
 | `client/client.js` | 浏览器端：dock、编辑器、图形视图、回收站、规则栏、设置面板、预设选择器 |
-| `tests/` | 251 个用例，含 jsdom 挂载真实 React 的客户端测试 |
+| `tests/` | 269 个用例，含 jsdom 挂载真实 React 的客户端测试 |
 | `docs/experiment-context-cache.md` | 全部实测记录（53 节，含失败实验） |
 
 ## License

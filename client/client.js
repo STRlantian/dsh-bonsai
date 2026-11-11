@@ -50,6 +50,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "还没有规则。规则会跟着检索提示一起发给模型。": "No rules yet. Rules ride along with the retrieval hint.",
   "手写": "hand-written",
   "自动识别": "detected",
+  "模型判断": "model",
   "点击编辑": "click to edit",
   "＋ 规则": "＋ Rule",
   "新增规则": "New rule",
@@ -643,6 +644,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     '.twt-dockdetail{font-size:11px;opacity:.78;line-height:1.5;white-space:pre-wrap;max-height:14vh;',
     'overflow:auto;padding:6px 10px 0}',
     '.twt-dockactions{display:flex;gap:6px;flex-wrap:wrap;padding:8px 10px}',
+    '.twt-marker-hidden{display:none!important}',
   ].join('')
 
   var injected = false
@@ -655,6 +657,86 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
     document.head.appendChild(tag)
   }
 
+
+  /**
+   * Hide the trailing `[attach:...]` / `[summary:...]` marker text from the transcript.
+   *
+   * The markers stay in the session log and in the model-visible message (the host forbids
+   * replacing an assistant message), but they are a protocol detail, not part of the answer.
+   * This is a rendering-only cleanup: no model call, no log rewrite.
+   */
+  var markerPattern = /\[(?:attach|summary):[^\]\r\n]*\]/g
+  var markerContainers = '[data-chat-flow-kind="assistant-step"]:not([data-chat-group-part="reasoning"]),[data-chat-flow-kind="assistant-message"]'
+  var markerCleanupStarted = false
+  var markerCleanupPending = false
+  var markerView = typeof window !== 'undefined' ? window : undefined
+  var markerNodeFilter = typeof NodeFilter !== 'undefined' ? NodeFilter : (markerView && markerView.NodeFilter)
+  var markerObserverClass = typeof MutationObserver !== 'undefined' ? MutationObserver : (markerView && markerView.MutationObserver)
+
+  function hideMarkerText() {
+    if (typeof document === 'undefined' || document.body === null) return
+    var containers = document.querySelectorAll(markerContainers)
+    for (var index = 0; index < containers.length; index++) {
+      var container = containers[index]
+      var walker = document.createTreeWalker(container, markerNodeFilter === undefined ? 4 : markerNodeFilter.SHOW_TEXT)
+      var textNode = walker.nextNode()
+      while (textNode !== null) {
+        var parent = textNode.parentElement
+        if (parent !== null && parent.closest('.twt-marker-hidden, pre, code') === null) {
+          var text = textNode.nodeValue || ''
+          markerPattern.lastIndex = 0
+          var match = markerPattern.exec(text)
+          if (match !== null) {
+            var range = document.createRange()
+            range.setStart(textNode, match.index)
+            range.setEnd(textNode, match.index + match[0].length)
+            var hidden = document.createElement('span')
+            hidden.className = 'twt-marker-hidden'
+            try {
+              range.surroundContents(hidden)
+            } catch (error) {
+              // Split text nodes or a DOM the range cannot surround: leave it for the next pass.
+            }
+          }
+        }
+        textNode = walker.nextNode()
+      }
+    }
+  }
+
+  function scheduleMarkerCleanup() {
+    if (markerCleanupPending) return
+    markerCleanupPending = true
+    var run = function () {
+      markerCleanupPending = false
+      hideMarkerText()
+    }
+    if (markerView !== undefined && typeof markerView.requestAnimationFrame === 'function') {
+      markerView.requestAnimationFrame(run)
+    } else if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(run)
+    } else {
+      setTimeout(run, 0)
+    }
+  }
+
+  function startMarkerCleanup() {
+    if (markerCleanupStarted || typeof document === 'undefined' || document.body === null) return
+    markerCleanupStarted = true
+    ensureStyles()
+    hideMarkerText()
+    if (markerObserverClass === undefined) return
+    var observer = new markerObserverClass(scheduleMarkerCleanup)
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true })
+  }
+
+  if (typeof document !== 'undefined') {
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startMarkerCleanup, { once: true })
+    } else {
+      startMarkerCleanup()
+    }
+  }
 
   /**
    * Node-link diagram of the tree, drawn as plain SVG.
@@ -1302,8 +1384,8 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
 
     /** The measured default plus the two explicit tree modes. */
     var PRESET_LIST = [
-      { id: 'balanced', label: '默认', hint: '30k 折叠、保留 2 轮、不隐藏工具；省不省取决于缓存价格，不承诺“极省”' },
-      { id: 'treeOnly', label: '只建树', hint: '只记录完整对话树；关闭注入、提示、候选、折叠和反思，不隐藏工具' },
+      { id: 'treeOnly', label: '默认（只建树）', hint: '只记录完整对话树；关闭注入、提示、候选、折叠、反思，并隐藏所有插件工具' },
+      { id: 'balanced', label: '完整功能', hint: '30k 折叠、保留 2 轮、marker 挂树；省不省取决于缓存价格，不承诺“极省”' },
       { id: 'off', label: '关闭', hint: '插件对模型完全静默：关闭所有模型侧行为，并隐藏插件工具' },
     ]
 
@@ -1791,6 +1873,24 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
           width: 72,
         }),
         settingRow({
+          key: 'attachMode',
+          advanced: true,
+          label: t('挂树方式'),
+          hint: t('marker：结尾写 summary 和 attach；local：插件自动挂，模型不参与'),
+          control: h('select', {
+            className: 'twt-select',
+            defaultValue: effective.attachMode === 'marker' ? 'marker' : effective.attachMode === 'tool' ? 'tool' : 'local',
+            disabled: busy,
+            style: { width: '110px' },
+            onChange: function (event) {
+              saveSetting('attachMode', String(event.target.value || 'local'))
+            },
+          },
+            h('option', { value: 'local' }, t('local（默认，不参与）')),
+            h('option', { value: 'marker' }, t('marker（文本标记）')),
+            effective.attachMode === 'tool' ? h('option', { value: 'tool' }, t('tool（实验）')) : null),
+        }),
+        settingRow({
           key: 'tokenizerVersion',
           advanced: true,
           label: t('tokenizer 版本'),
@@ -2107,7 +2207,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               key: rule.id,
               className: 'twt-rule-chip',
               disabled: busy,
-              title: (rule.source === 'manual' ? t('手写') : t('自动识别')) + ' · ' + t('点击编辑'),
+              title: (rule.source === 'manual' ? t('手写') : rule.source === 'model' ? t('模型判断') : t('自动识别')) + ' · ' + t('点击编辑'),
               onClick: function () { setRuleDraft({ id: rule.id, source: rule.source, text: rule.text }); setRuleText(rule.text) },
             },
               (rule.source === 'manual' ? '✎ ' : '') + rule.text)

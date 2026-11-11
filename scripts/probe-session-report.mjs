@@ -10,6 +10,7 @@ import { zstdDecompressSync } from 'node:zlib'
 
 import { Config } from '../src/plugin/config.ts'
 import { TokenTreeService } from '../src/plugin/service.ts'
+import { EditStore } from '../src/plugin/store.ts'
 
 const prefix = process.argv[2]
 const project = process.argv[3] ?? '--D-dsh-token-tree--'
@@ -46,7 +47,7 @@ for (const line of text.split('\n')) {
 
 const logger = { info: () => {}, warn: () => {}, debug: () => {}, error: () => {} }
 const config = Config['~standard'].validate({ logEdgeUpdates: false }).value
-const service = new TokenTreeService({ config, logger })
+const service = new TokenTreeService({ config, logger, store: new EditStore() })
 const session = { id: sessionId, snapshotEvents: () => events }
 service.backfillFromSession(session)
 

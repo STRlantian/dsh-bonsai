@@ -41,12 +41,14 @@ function eventsOf(count) {
 test('the always policy folds every finished turn except the keep window', () => {
   const events = eventsOf(5)
   const visible = events.map(event => event.seq)
-  // keepTurns 0: only the opening turn stays, everything else is foldable.
+  // keepTurns 0: only the opening turn stays, and turns 2-5 coalesce into one replacement.
   const all = planTurnFold(events, visible, 0)
-  assert.equal(all.length, 4, 'four turns after the opening one')
-  // keepTurns 2: the last two turns stay verbatim.
+  assert.equal(all.length, 1, 'all foldable turns share one replacement')
+  assert.equal(all[0].turns, 4, 'four turns after the opening one')
+  // keepTurns 2: the last two turns stay verbatim, the other two coalesce.
   const kept = planTurnFold(events, visible, 2)
-  assert.equal(kept.length, 2, 'three turns minus the opening one and the keep window')
+  assert.equal(kept.length, 1, 'the remaining two turns share one replacement')
+  assert.equal(kept[0].turns, 2, 'three turns minus the opening one and the keep window')
 })
 
 test('the policy is exposed and defaults to the threshold', () => {

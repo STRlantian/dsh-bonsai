@@ -1,8 +1,8 @@
 /**
  * Model-facing tools.
  *
- * Seven tools cover the loop: inspect the tree, recall a weighted context buffer,
- * place the current question, write a reflection, pick a better branch, and mark a branch by hand. Each one
+ * Eight tools cover the loop: inspect the tree, recall a weighted context buffer,
+ * place the current question, record a rule, write a reflection, pick a better branch, and mark a branch by hand. Each one
  * is a plain `ToolDefinition` object — the exact structure `ctx.tools.register`
  * accepts and `defineTool` would compile to — so the plugin can register them
  * without importing the harness packages.
@@ -547,6 +547,40 @@ export function createTools(service: TokenTreeService): ToolDefinitionLike[] {
     },
   }
 
+  const ruleTool: ToolDefinitionLike = {
+    name: 'tree_rule',
+    description: `${COMMON} `
+      + 'Use this when the current user message states a durable rule or preference ("from now on use pnpm", '
+      + '"keep answers short") that the phrase classifier may have missed. It records the rule but does not move '
+      + 'or remove the question; if the same message is also worth retrieving, call tree_attach separately.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        text: { type: 'string', description: 'Rule text; defaults to the current question.' },
+        cancel: { type: 'boolean', description: 'Lift every active rule instead of adding one.' },
+      },
+    },
+    output: {
+      schema: objectSchema({
+        ruleId: { type: 'string' },
+        text: { type: 'string' },
+        cancel: { type: 'boolean' },
+        active: { type: 'number' },
+      }, ['text', 'cancel', 'active']),
+      render: (_args, value) => {
+        const record = value as { ruleId?: string; text: string; cancel: boolean; active: number }
+        if (record.cancel) return textBlock(`tree_rule: lifted active rules; ${record.active} still active.`)
+        return textBlock(`tree_rule: recorded ${record.ruleId ?? 'rule'} — ${record.text} (${record.active} active).`)
+      },
+    },
+    async execute(args, exec) {
+      const agent = requireAgent(exec)
+      const record = args as Record<string, unknown>
+      return service.recordRule(agent.session.id, optionalString(record, 'text'), optionalBoolean(record, 'cancel') === true)
+    },
+  }
+
   const focusTool: ToolDefinitionLike = {
     name: 'tree_focus',
     description: `${COMMON} `
@@ -588,5 +622,5 @@ export function createTools(service: TokenTreeService): ToolDefinitionLike[] {
     },
   }
 
-  return [retrieveTool, queryTool, reflectTool, backtrackTool, markTool, focusTool, attachTool]
+  return [retrieveTool, queryTool, reflectTool, backtrackTool, markTool, focusTool, attachTool, ruleTool]
 }

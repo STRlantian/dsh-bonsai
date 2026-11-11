@@ -8,7 +8,7 @@ const logger = { info: () => {}, warn: () => {}, debug: () => {}, error: () => {
 
 /** A service with a tree of `count` question nodes. */
 function withTree(count) {
-  const config = Config['~standard'].validate({ logEdgeUpdates: false }).value!
+  const config = Config['~standard'].validate({ logEdgeUpdates: false, compactionIndex: true, retrievalHint: true }).value!
   const service = new TokenTreeService({ config, logger })
   const state = service.stateOf('s')
   for (let index = 0; index < count; index++) {

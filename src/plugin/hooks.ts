@@ -25,7 +25,7 @@ import { appendFileSync, mkdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
-import { blockTokensOf, foldWorthIt, keptTokensOf, optimalFoldThreshold, planFold, planTurnFold } from './fold.ts'
+import { blockTokensOf, expandSurfaceSeq, foldWorthIt, keptTokensOf, optimalFoldThreshold, planFold, planTurnFold } from './fold.ts'
 import { SURFACE_TYPES } from './fold.ts'
 import type { TokenTreeService } from './service.ts'
 
@@ -130,17 +130,19 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
     // The choices block rides along whatever else is injected: ten questions cost a few hundred
     // tokens, while a separate request to ask the model the same thing would cost a whole prompt.
     const choices = query === undefined ? '' : service.attachChoices(payload.agent.session.id, query)
+    const ruleHint = service.ruleInstruction(payload.agent.session.id)
     const summary = service.summaryInstruction(payload.agent.session.id)
+    const rules = settings.retrievalHint || settings.autoInject ? service.ruleBlock(payload.agent.session.id) : undefined
     if (!settings.autoInject) {
       const hint = settings.retrievalHint ? service.retrievalHint(payload.agent.session.id) : undefined
-      const body = [hint, choices, summary].filter(part => part !== undefined && part !== '').join('\n\n')
+      const body = [hint, choices, ruleHint, summary, rules].filter(part => part !== undefined && part !== '').join('\n\n')
       if (body === '') return decision
       return { ...decision, messages: [...decision.messages, buildInjectedMessage(body)] }
     }
     if (query === undefined) return decision
     try {
       const block = service.memoryBlock(payload.agent.session.id, query, config.injectBudgetTokens)
-      const body = [block, choices, summary].filter(part => part !== undefined && part !== '').join('\n\n')
+      const body = [block, choices, ruleHint, summary, rules].filter(part => part !== undefined && part !== '').join('\n\n')
       if (body === '') return decision
       ctx.logger.info(`token-tree: injecting memory block for session ${payload.agent.session.id} (turn ${payload.turn})`)
       return { ...decision, messages: [...decision.messages, buildInjectedMessage(body)] }
@@ -319,8 +321,10 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   }
   // A snapshot event may carry no sequence, while the host tracks the view as real sequence numbers.
   // Rebuild from the surface list when the host can resolve each seq, so the planner's ranges are the
-  // values the fold op has to cite.
-  const surfaceSeqs = Array.isArray(session.surface?.nodes) ? [...session.surface.nodes] : []
+  // values the fold op has to cite. The host may compress adjacent user messages into a range entry;
+  // expand it first so every later step sees plain seqs.
+  const surfaceEntries = Array.isArray(session.surface?.nodes) ? [...session.surface.nodes] : []
+  const surfaceSeqs = surfaceEntries.flatMap(expandSurfaceSeq)
   const resolveEvent = typeof session.eventAt === 'function' ? (seq: number) => session.eventAt?.(seq) : undefined
   const events = surfaceSeqs.length > 0 && resolveEvent !== undefined
     ? surfaceSeqs.map(seq => {
@@ -335,20 +339,20 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
   // The host's surface list is the authority when it is there. Without it, fall back to the
   // surface event types only: the planner groups messages by turn and rejects a turn whose nodes are
   // not contiguous, and step bookkeeping between two messages would break that.
-  const visible = Array.isArray(session.surface?.nodes) && session.surface.nodes.length > 0
-    ? [...session.surface.nodes]
+  const visible = surfaceSeqs.length > 0
+    ? surfaceSeqs
     : events.filter(event => SURFACE_TYPES.has(event.type)).map(event => event.seq)
   const legacy = !always && settings.foldTrigger === 'history'
   if (legacy && tokens < floor) return
   if (settings.foldScope === 'turns') {
     // The turn that is still stopping is not history yet: a continuation inside it may still
     // need these messages, and `foldKeepTurns: 0` must never replace the question being asked.
-    const turns = planTurnFold(events, visible, settings.foldKeepTurns, seq => service.turnOfSeq(session.id, seq))
-      .filter(planned => planned.turn !== turn)
+    const turns = planTurnFold(events, visible, settings.foldKeepTurns, seq => service.turnOfSeq(session.id, seq), turn)
     if (turns.length === 0) {
       service.noteFold(session.id, 0, tokens, floor, { planned: 0, visible: visible.length })
       return
     }
+    const plannedTurns = turns.reduce((total, planned) => total + planned.turns, 0)
     // The threshold now measures the block about to leave, and the block must also be large
     // relative to the keep window: a fold re-prices that window at the miss price, so a small
     // block is a loss even when the total history is large.
@@ -356,7 +360,7 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
       const block = blockTokensOf(turns, perTurn)
       const kept = keptTokensOf(turns, perTurn)
       if (!foldWorthIt(block, kept, floor, ratio)) {
-        service.noteFold(session.id, 0, tokens, block, { planned: turns.length, visible: visible.length, range: `block=${block} kept=${kept} ratio=${ratio}` })
+        service.noteFold(session.id, 0, tokens, block, { planned: plannedTurns, visible: visible.length, range: `block=${block} kept=${kept} ratio=${ratio}` })
         return
       }
     }
@@ -366,17 +370,17 @@ function maybeFold(session: SessionLike, service: TokenTreeService, ctx: Context
         session.append('user/message', planned.data, {
           surfaceOp: { op: 'replace', startSeq: planned.startSeq, endSeq: planned.endSeq },
           // The host requires every shadowed surface node to be named.
-          sourceEventSeqs: planned.seqs,
+          sourceEventSeqs: planned.seqs.flat(),
         })
-        folded++
+        folded += planned.turns
       } catch (error) {
-        ctx.logger.warn(`token-tree: could not fold turn ${planned.startSeq}-${planned.endSeq} (${describe(error)})`)
-        service.noteFold(session.id, folded, tokens, settings.foldAboveTokens, { planned: turns.length, visible: visible.length, range: `first=${planned.startSeq}-${planned.endSeq} seqs=${planned.seqs.join(',')} visible=${visible.join(',')}`, error: describe(error) })
+        ctx.logger.warn(`token-tree: could not fold turns ${planned.startSeq}-${planned.endSeq} (${describe(error)})`)
+        service.noteFold(session.id, folded, tokens, settings.foldAboveTokens, { planned: plannedTurns, visible: visible.length, range: `first=${planned.startSeq}-${planned.endSeq} seqs=${planned.seqs.join(',')} visible=${visible.join(',')}`, error: describe(error) })
         return
       }
     }
     if (folded > 0) service.noteFoldTurn(session.id, turn)
-    service.noteFold(session.id, folded, tokens, settings.foldAboveTokens, { planned: turns.length, visible: visible.length })
+    service.noteFold(session.id, folded, tokens, settings.foldAboveTokens, { planned: plannedTurns, visible: visible.length })
     return
   }
 

@@ -92,6 +92,8 @@ try {
   # `file:` install uses.
   & node scripts/stage.mjs
   if ($LASTEXITCODE -ne 0) { throw "staging failed with exit code $LASTEXITCODE" }
+  & node scripts/check-release.mjs
+  if ($LASTEXITCODE -ne 0) { throw "release check failed with exit code $LASTEXITCODE" }
 
   # --ignore-scripts: the staged package is already built, and npm would otherwise run the root's
   # prepublishOnly inside plugin/, where scripts/ does not exist.

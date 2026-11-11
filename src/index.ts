@@ -4,7 +4,7 @@
  *
  * The plugin exports the function-plugin contract — `name`, `inject`, `Config`,
  * `apply` — and nothing else is needed to mount it: `apply` publishes
- * `ctx.tokenTree`, registers five tools on `ctx.tools`, and subscribes to the
+ * `ctx.tokenTree`, registers eight tools on `ctx.tools`, and subscribes to the
  * three loop extension points described in `hooks.ts`.
  *
  * @module dsh-bonsai
@@ -20,6 +20,7 @@ import { TokenTreeService } from './plugin/service.ts'
 import { BgeScorer } from './plugin/bge.ts'
 import { EditStore } from './plugin/store.ts'
 import { SettingsStore } from './plugin/settings.ts'
+import { exportToStdout } from './plugin/logger.ts'
 
 export { Config } from './plugin/config.ts'
 export type { Config as TokenTreeConfig, ResolvedConfig } from './plugin/config.ts'
@@ -29,6 +30,8 @@ export type { EditOp } from './plugin/store.ts'
 export { SettingsStore, defaultSettingsPath } from './plugin/settings.ts'
 export type { SettingsOverrides } from './plugin/settings.ts'
 export { renderTree } from './plugin/render.ts'
+export { formatLogLine, stdoutExporter, exportToStdout } from './plugin/logger.ts'
+export type { StdoutExporterOptions } from './plugin/logger.ts'
 export { blocksOf } from './plugin/blocks.ts'
 export type { BlockView, TreePayload, BlockOrigin } from './plugin/blocks.ts'
 export type { RenderTreeOptions } from './plugin/render.ts'
@@ -46,6 +49,9 @@ export const name = 'dsh-bonsai'
  */
 export const inject = ['tools']
 
+/** Release builds must never install the stdout exporter automatically. */
+const debugMode = false
+
 /**
  * Mount the plugin.
  * @param ctx - plugin context carrying the tool registry and event bus.
@@ -57,6 +63,13 @@ export function apply(
   config: ResolvedConfig,
   deps: { store?: EditStore; settings?: SettingsStore } = {},
 ): void {
+  if (debugMode) {
+    try {
+      exportToStdout(ctx.logger)
+    } catch (error) {
+      ctx.logger.warn(`token-tree: could not install the stdout logger (${error instanceof Error ? error.message : String(error)})`)
+    }
+  }
   // Manual edits are not in the session log, so they get their own append-only file
   // and are replayed on top of the rebuilt tree. A broken file costs the overrides,
   // never the plugin: the store is fail-soft by construction.
@@ -108,7 +121,8 @@ export function apply(
 
   let tools = [] as ReturnType<typeof createTools>
   guard('tools', () => {
-    tools = createTools(service)
+    const all = createTools(service)
+    tools = config.attachMode === 'tool' ? all : all.filter(tool => tool.name !== 'tree_attach')
     for (const tool of tools) ctx.tools.register(tool)
   })
   guard('hooks', () => {

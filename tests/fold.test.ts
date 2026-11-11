@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { foldPlaceholder, optimalFoldRatio, optimalFoldThreshold, planFold, planTurnFold } from '../src/plugin/fold.ts'
+import { expandSurfaceSeq, foldPlaceholder, optimalFoldRatio, optimalFoldThreshold, planFold, planTurnFold } from '../src/plugin/fold.ts'
 
 const tool = (seq, turn, text = 'output') => ({
   type: 'tool/result',
@@ -59,6 +59,38 @@ test('an injected token-tree message inside a turn does not make that turn forei
   const turns = new Map([[1, 1], [2, 1], [3, 2], [4, 2], [5, 2], [6, 2], [7, 3], [8, 3]])
   const plan = planTurnFold(events, [1, 2, 3, 4, 5, 6, 7, 8], 1, seq => turns.get(seq))
   assert.deepEqual(plan[0]?.seqs, [3, 4, 5, 6], 'the injected surface slot is mapped, not foreign')
+})
+
+test('a surface range expands to every seq it covers', () => {
+  assert.deepEqual(expandSurfaceSeq([145, 147]), [145, 146, 147])
+  assert.deepEqual(expandSurfaceSeq(9), [9])
+  assert.deepEqual(expandSurfaceSeq([7, 6]), [], 'a backwards range is rejected')
+  assert.deepEqual(expandSurfaceSeq([1, 20_000]), [], 'an implausibly wide range is rejected')
+})
+
+test('adjacent foldable turns become one replacement and one placeholder', () => {
+  const events = [
+    { type: 'user/message', seq: 1, data: { turn: 1 } },
+    { type: 'assistant/message', seq: 2, data: { turn: 1 } },
+    { type: 'user/message', seq: 3, data: { turn: 2 } },
+    { type: 'user/message', seq: 4, data: { turn: 2 } },
+    { type: 'user/message', seq: 5, data: { turn: 2 } },
+    { type: 'assistant/message', seq: 6, data: { turn: 2 } },
+    { type: 'user/message', seq: 7, data: { turn: 3 } },
+    { type: 'assistant/message', seq: 8, data: { turn: 3 } },
+    { type: 'user/message', seq: 9, data: { turn: 4 } },
+    { type: 'assistant/message', seq: 10, data: { turn: 4 } },
+  ]
+  const turns = new Map([[1, 1], [2, 1], [3, 2], [4, 2], [5, 2], [6, 2], [7, 3], [8, 3], [9, 4], [10, 4]])
+  const plan = planTurnFold(events, [1, 2, [3, 5], 6, 7, 8, 9, 10] as const, 1, seq => turns.get(seq))
+  assert.equal(plan.length, 1, 'turns 2 and 3 share one replacement')
+  const fold = plan[0]!
+  assert.equal(fold.turn, 2)
+  assert.equal(fold.turns, 2)
+  assert.deepEqual(fold.seqs, [3, 4, 5, 6, 7, 8], 'the range is expanded and stays flat')
+  assert.equal(fold.startSeq, 3)
+  assert.equal(fold.endSeq, 8)
+  assert.match((fold.data.content as { text: string }[])[0].text, /之前的 2 轮/)
 })
 
 test('the cost model gives the expected optimal fold block and ratio', () => {

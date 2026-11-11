@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import { Config } from '../src/plugin/config.ts'
 import { TokenTreeService } from '../src/plugin/service.ts'
-import { PRESETS, presetOf } from '../src/plugin/presets.ts'
+import { PRESETS, PLUGIN_TOOL_NAMES, presetOf } from '../src/plugin/presets.ts'
 import { SettingsStore } from '../src/plugin/settings.ts'
 
 const logger = { info: () => {}, warn: () => {}, debug: () => {}, error: () => {} }
@@ -21,16 +21,20 @@ function store() {
   return { settings, files }
 }
 
-test('the shipped default uses DeepSeek cache prices', () => {
+test('the shipped default is tree-only', () => {
   const config = Config['~standard'].validate({ logEdgeUpdates: false }).value!
-  assert.equal(config.foldAboveTokens, 30000)
+  assert.equal(config.foldAboveTokens, 0)
   assert.equal(config.foldScope, 'turns')
   assert.equal(config.foldKeepTurns, 2)
-  assert.equal(config.foldBlockRatio, 8)
-  assert.equal(config.foldCadence, 10)
+  assert.equal(config.foldBlockRatio, 0)
+  assert.equal(config.foldCadence, 0)
+  assert.equal(config.autoFold, false, 'no folding by default')
+  assert.equal(config.retrievalHint, false)
+  assert.equal(config.attachMode, 'local')
+  assert.equal(config.attachChoices, 0)
+  assert.equal(config.attachSummary, false)
   assert.equal(config.cacheHitPrice, 0.02, 'DeepSeek cache-hit price is the default')
   assert.equal(config.cacheMissPrice, 1, 'DeepSeek cache-miss price is the default')
-  assert.equal(config.autoFold, true, 'prices drive the threshold out of the box')
 })
 
 test('cache prices are per-session overridable', () => {
@@ -62,7 +66,7 @@ test('the panel offers default, tree-only, and off', () => {
   assert.equal(treeOnly.settings.foldAboveTokens, 0)
   assert.equal(treeOnly.settings.foldBlockRatio, 0)
   assert.equal(treeOnly.settings.autoFold, false)
-  assert.deepEqual(treeOnly.settings.toolDeny, [], 'tree-only keeps the tools callable')
+  assert.deepEqual(treeOnly.settings.toolDeny, [...PLUGIN_TOOL_NAMES], 'tree-only hides every plugin tool')
   assert.equal(off.settings.autoInject, false)
   assert.equal(off.settings.retrievalHint, false)
   assert.equal(off.settings.attachChoices, 0)
@@ -109,7 +113,7 @@ test('applying the default clears a previous numeric override', () => {
   assert.deepEqual(service.toolDeny(), [], 'the old hidden-tool override is cleared')
 })
 
-test('off hides the plugin tools; tree-only leaves them available', () => {
+test('off and tree-only both hide every plugin tool', () => {
   const { settings } = store()
   const service = new TokenTreeService({
     config: Config['~standard'].validate({ logEdgeUpdates: false }).value!,
@@ -117,9 +121,9 @@ test('off hides the plugin tools; tree-only leaves them available', () => {
     settings,
   })
   service.applyPreset('off')
-  assert.deepEqual(service.effective().toolDeny, ['retrieve_context', 'tree_query', 'tree_mark', 'tree_focus', 'tree_attach', 'tree_backtrack'])
+  assert.deepEqual(service.effective().toolDeny, ['retrieve_context', 'tree_query', 'tree_reflect', 'tree_mark', 'tree_focus', 'tree_attach', 'tree_rule', 'tree_backtrack'])
   service.applyPreset('treeOnly')
-  assert.deepEqual(service.toolDeny(), [], 'tree-only restores the tools')
+  assert.deepEqual(service.toolDeny(), [...PLUGIN_TOOL_NAMES], 'tree-only keeps the tools hidden')
   assert.equal(service.effective().foldAboveTokens, 0, 'tree-only still records without folding')
 })
 
@@ -134,7 +138,7 @@ test('a preset applies to the scope it is asked for', () => {
   const applied = service.applyPreset('off', 'session-a')
   assert.ok(applied !== undefined)
   assert.equal(applied.effective.foldAboveTokens, 0, 'session sees the preset')
-  assert.deepEqual(applied.effective.toolDeny, ['retrieve_context', 'tree_query', 'tree_mark', 'tree_focus', 'tree_attach', 'tree_backtrack'])
+  assert.deepEqual(applied.effective.toolDeny, ['retrieve_context', 'tree_query', 'tree_reflect', 'tree_mark', 'tree_focus', 'tree_attach', 'tree_rule', 'tree_backtrack'])
   const written = JSON.parse(files.get('C:/tmp/settings.json') as string)
   assert.deepEqual(Object.keys(written), ['sessions'], 'only the session map was written')
   assert.equal(written.sessions['session-a'].foldAboveTokens, 0)

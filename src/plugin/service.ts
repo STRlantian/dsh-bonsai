@@ -43,7 +43,7 @@ import { loadTokenizerFile } from '../core/tokenizer.ts'
 import { TokenRatio } from '../core/ratio.ts'
 import { BillingFit, classCounts } from '../core/billing.ts'
 import { resolveTokenizer, defaultTokenizerDir, discoverTokenizers } from './tokenizer-select.ts'
-import { presetOf, PRESET_KEYS } from './presets.ts'
+import { presetOf, PRESET_KEYS, PLUGIN_TOOL_NAMES } from './presets.ts'
 import type { Tokenize } from '../core/tokenizer.ts'
 import { contentFeatures, embedText, termCounts } from '../core/embedding.ts'
 import type { RetrieveOptions, RetrieveResult, SelectedNode } from '../core/retrieve.ts'
@@ -442,10 +442,14 @@ export class TokenTreeService {
   attachChoices: number
   /** What the choices block asks for. */
   attachPrompt: string
+  /** How the model reports placement: `tool`, `marker`, or `local`. */
+  attachMode: string
   /** When the candidate block is offered. */
   attachGate: string
   /** Whether the model is asked for an aspect summary. */
   attachSummary: boolean
+  /** Candidate table source: attachment score or weighted retrieval. */
+  candidateSource: string
   /** Interface language for this scope. */
   locale: string
   /** Tokenizer generation/name; the tokenizer itself is process-global. */
@@ -477,8 +481,10 @@ export class TokenTreeService {
       foldPolicy: overrides.foldPolicy ?? this.config.foldPolicy,
       fileRegion: (overrides.fileRegion ?? this.config.fileRegion) as FileRegionMode,
       attachPrompt: overrides.attachPrompt ?? this.config.attachPrompt,
+      attachMode: (overrides.attachMode ?? this.config.attachMode) as string,
       attachGate: overrides.attachGate ?? this.config.attachGate,
       attachSummary: overrides.attachSummary ?? this.config.attachSummary,
+      candidateSource: this.config.candidateSource,
       attachChoices: overrides.attachChoices ?? this.config.attachChoices,
       mandatoryContext: overrides.mandatoryContext ?? this.config.mandatoryContext,
       locale: overrides.locale ?? 'auto',
@@ -716,8 +722,10 @@ export class TokenTreeService {
         foldPolicy: this.config.foldPolicy,
         fileRegion: this.config.fileRegion as FileRegionMode,
         attachPrompt: this.config.attachPrompt,
+        attachMode: this.config.attachMode,
         attachGate: this.config.attachGate,
         attachSummary: this.config.attachSummary,
+        candidateSource: this.config.candidateSource,
         attachChoices: this.config.attachChoices,
         mandatoryContext: this.config.mandatoryContext,
         hintAboveTokens: this.config.hintAboveTokens,
@@ -1566,10 +1574,13 @@ export class TokenTreeService {
     )
   }
 
-  /** Keep a session under the node cap by dropping the oldest inactive branch. */
+  /** Keep a session under the optional node cap by dropping the oldest inactive branch. */
   private prune(state: SessionState): void {
     const tree = state.tree
     const cap = this.config.maxNodesPerSession
+    // 0 (the default) means no cap: long sessions keep every node, so retrieval can still find
+    // early facts after many folds.
+    if (cap <= 0) return
     while (tree.nodes.size > cap) {
       const keep = new Set<NodeId>([tree.currentId, ...tree.ancestors(tree.currentId)])
       const branches = tree.node(tree.rootId).children
@@ -1878,18 +1889,13 @@ export class TokenTreeService {
   memoryBlock(sessionId: string, query: string, budgetTokens?: number): string | undefined {
     const total = budgetTokens ?? this.config.injectBudgetTokens
     const result = this.retrieve(sessionId, { query, budgetTokens: total })
-    const constraints = activeConstraints(this.stateOf(sessionId).constraints)
-    const preamble = constraints.length === 0
-      ? ''
-      : `[token-tree constraints] still in force: ${constraints.map(entry => entry.text).join(' | ')}\n`
-    // The tree half has already spent its budget; the file region only gets what is left after
-    // the constraints preamble, so the composed block cannot grow past the requested total.
-    const remaining = Math.max(0, total - result.tokensUsed - this.estimateTokens(preamble))
+    // Rules are not part of the retrieved context: they are appended after it by the hook so the
+    // newest instruction is the last thing the model reads, not the first thing in the block.
+    const remaining = Math.max(0, total - result.tokensUsed)
     const fileSection = remaining <= 0 ? '' : this.fileBlock(sessionId, query, remaining)
     const treeBlock = result.selected.length === 0 ? '' : renderContextBlock(result)
     const body = [treeBlock, fileSection].filter(part => part !== '').join('\n\n')
-    if (body === '') return preamble.length === 0 ? undefined : preamble.trimEnd()
-    return `${preamble}${body}`
+    return body === '' ? undefined : body
   }
 
   /**
@@ -1931,7 +1937,14 @@ export class TokenTreeService {
    * @returns Instruction text, or an empty string when summaries are disabled.
    */
   summaryInstruction(sessionId?: string): string {
-    return this.effective(sessionId).attachSummary
+    const settings = this.effective(sessionId)
+    if (settings.attachMode === 'local') return ''
+    if (settings.attachMode === 'marker') {
+      return settings.attachSummary
+        ? '[token-tree] 回答最后另起一行写 [summary:2–4 个短语，≤40 字]。'
+        : ''
+    }
+    return settings.attachSummary
       ? '[token-tree] 回答前调用 tree_attach：summary 用 2–4 个短语说明本条回答讲了哪些方面（逗号分隔，≤40 字）；落点拿不准就传 target="auto"。'
       : ''
   }
@@ -1958,31 +1971,60 @@ export class TokenTreeService {
       this.logger.debug('token-tree: confident placement, no candidate block')
       return ''
     }
+    // One Q→V table can serve both jobs: retrieve by id, or use the same ids as attach targets.
+    // The shipped default keeps the attachment ranking; the experiment opts into the retrieval
+    // ranking so the candidate table and the search index are literally the same list.
     const tree = state.tree
-    const context = this.attachmentContext(state, query)
-    const scored: { id: NodeId; score: number }[] = []
-    for (const node of tree.nodes.values()) {
-      if (node.kind !== 'answer' || tree.hidden(node.id)) continue
-      scored.push({ id: node.id, score: this.attachmentScore(context, node) })
+    const merged = this.effective(sessionId).candidateSource === 'retrieve'
+    const picked: { id: NodeId; kind: string; weight: number; tokens: number }[] = []
+    if (merged) {
+      const result = this.retrieve(sessionId, { query, topK: limit })
+      for (const entry of result.selected) {
+        if (entry.kind !== 'answer' || tree.hidden(entry.nodeId)) continue
+        picked.push({ id: entry.nodeId, kind: entry.kind, weight: entry.weight, tokens: entry.tokens })
+        if (picked.length >= limit) break
+      }
+    } else {
+      const context = this.attachmentContext(state, query)
+      const scored: { id: NodeId; score: number }[] = []
+      for (const node of tree.nodes.values()) {
+        if (node.kind !== 'answer' || tree.hidden(node.id)) continue
+        scored.push({ id: node.id, score: this.attachmentScore(context, node) })
+      }
+      scored.sort((left, right) => right.score - left.score)
+      for (const entry of scored.slice(0, limit)) {
+        picked.push({ id: entry.id, kind: 'answer', weight: entry.score, tokens: tree.node(entry.id).tokens })
+      }
     }
-    scored.sort((left, right) => right.score - left.score)
-    const picked = scored.slice(0, limit)
     if (picked.length === 0) return ''
+    const rows = picked.map(entry => {
+      const label = this.candidateLabel(tree, entry.id)
+      return merged
+        ? `- ${entry.id} ${entry.kind} w=${entry.weight.toFixed(3)} tokens=${entry.tokens} · ${label}`
+        : `- ${entry.id} · ${label}`
+    })
+    const mode = this.effective(sessionId).attachMode
+    if (mode === 'local') {
+      // Local does not report placement, but in merged mode it still gets the retrieval index;
+      // otherwise marker/tool would be the only arms that can jump straight to a node id.
+      return merged ? ['[token-tree] 相关节点索引（检索用，不参与挂树）：', ...rows].join('\n') : ''
+    }
     state.offered = picked.map(entry => entry.id)
-    const rows = picked.map(entry => '- ' + entry.id + ' · ' + this.candidateLabel(tree, entry.id))
     const anyMode = this.effective(sessionId).attachPrompt === 'any'
+    const marker = mode === 'marker'
     // `any` owns the whole decision: a dependency is named as a node id, a new topic as `root`.
     // `auto` keeps the automatic placement and is the right choice when the list is not useful.
     state.offeredRoot = anyMode
+    const call = marker ? '回答最后另起一行写 [attach:目标]' : '回答前调用 tree_attach'
     const instruction = anyMode
       ? [
-        '[token-tree] 本轮的落点由你判，回答前调用 tree_attach：',
+        `[token-tree] 本轮的落点由你判，${call}：`,
         '  target: "nX" 依赖下面某一条（含代词指代）；"root" 新话题；"here" 要求/元指令（让我换个方式来问），留在当前这条线上；"auto" 保持自动落点。',
         '问题问的是某条回答里提到的子概念时，挂那条回答（不是刚才那条）。',
         '只给问题；需要正文时先取候选索引，再用 nodeId 取详情。',
       ]
       : [
-        '[token-tree] 若本轮是在追问下面某一条，回答前调用 tree_attach，target 取列表中的 id；',
+        `[token-tree] 若本轮是在追问下面某一条，${call}，target 取列表中的 id；`,
         '只是延续上一条或都不是，就传 target="auto"。只给问题；需要正文时先取候选索引，再用 nodeId 取详情。',
       ]
     return [...instruction, ...rows].join('\n')
@@ -2113,23 +2155,86 @@ export class TokenTreeService {
     }
   }
 
+  /**
+   * Record a rule the model recognised in the current user turn.
+   *
+   * Deliberately does not remove the pending question or set `skipNextAnswer`: an utterance can be
+   * both a durable rule and a question worth retrieving, and `tree_attach` must keep working on it.
+   * @param sessionId - session identity.
+   * @param text - rule text; defaults to the pending question.
+   * @param cancel - lift every active rule instead of adding one.
+   * @returns The recorded rule, or the surviving active count for a cancellation.
+   */
+  recordRule(sessionId: string, text?: string, cancel = false): {
+    ruleId?: string
+    text: string
+    cancel: boolean
+    active: number
+  } {
+    const state = this.requireState(sessionId)
+    const pending = state.pendingQuestionId === undefined ? undefined : state.tree.nodes.get(state.pendingQuestionId)
+    const body = (text?.trim() || pending?.content || '').trim().slice(0, 500)
+    if (!cancel && body === '') throw new Error('tree_rule: text is required when there is no pending question')
+    if (!cancel) {
+      const existing = activeConstraints(state.constraints).find(entry => entry.text === body)
+      if (existing !== undefined) {
+        return { ruleId: existing.id, text: existing.text, cancel: false, active: activeConstraints(state.constraints).length }
+      }
+    }
+    const classification: Classification = {
+      kind: 'constraint',
+      reason: cancel ? 'model:cancel' : 'model',
+      cancels: cancel,
+    }
+    state.constraints = applyConstraint(state.constraints, body || '取消之前的规则', Date.now(), classification, 8, 'model')
+    const active = activeConstraints(state.constraints)
+    this.logger.info(`token-tree: rule ${cancel ? 'cancelled' : 'recorded'} by the model: ${body.slice(0, 40)}`)
+    return {
+      ...(!cancel && active[0] !== undefined ? { ruleId: active[0].id } : {}),
+      text: body,
+      cancel,
+      active: active.length,
+    }
+  }
+
+  /**
+   * Ask the model to recognise durable rules the phrase classifier cannot.
+   * @param sessionId - session identity, for the effective feature switches.
+   * @returns The instruction, or an empty string when classification is disabled or the turn is silent.
+   */
+  ruleInstruction(sessionId?: string): string {
+    if (!this.config.classifyConstraints) return ''
+    const settings = this.effective(sessionId)
+    if (!settings.attachSummary && settings.attachChoices <= 0) return ''
+    if (settings.toolDeny.includes('tree_rule')) return ''
+    const attach = settings.attachMode === 'tool' ? '需要落点时 tree_attach 仍照常调用。' : '需要落点时按本轮的落点指令处理。'
+    return '[token-tree] 如果用户这句话是在定一条长期规则/偏好，回答前调用 tree_rule；它只记录规则，不改变落点，' + attach
+  }
+
   retrievalHint(sessionId: string): string | undefined {
     const stale = this.staleReads(sessionId)
     const staleLine = stale.length === 0
       ? ''
-      : `[盆栽] 这些文件在你读过之后被改动过（上下文里是旧内容，用前重读）：${stale.slice(0, 3).map(entry => relativeLabel(entry.path)).join('、')}${stale.length > 3 ? ` 等 ${stale.length} 个` : ''}`
-    const rules = activeConstraints(this.stateOf(sessionId).constraints)
-    const ruleLine = rules.length === 0
-      ? ''
-      : `[盆栽] 仍然生效的规则：${rules.map(entry => entry.text).join(' | ')}`
+      : `[token-tree] 这些文件在你读过之后被改动过（上下文里是旧内容，用前重读）：${stale.slice(0, 3).map(entry => relativeLabel(entry.path)).join('、')}${stale.length > 3 ? ` 等 ${stale.length} 个` : ''}`
     const hint = this.baseHint(sessionId)
-    if (ruleLine === '' && staleLine === '') return hint
-    const extra = [staleLine, ruleLine].filter(line => line !== '').join('\n')
-    if (hint === undefined) return extra + '\n' + HINT_TEXT
-    return hint + '\n\n' + extra
-    // Rules are the one thing a user writes by hand and expects to see take effect, so they ride
-    // along with the hint instead of waiting for the (off by default) full injection.
-    return hint === undefined ? ruleLine + '\n' + HINT_TEXT : hint + '\n\n' + ruleLine
+    if (staleLine === '') return hint
+    if (hint === undefined) return staleLine + '\n' + HINT_TEXT
+    return hint + '\n\n' + staleLine
+  }
+
+  /**
+   * The active rules, as the last block of the injected turn.
+   *
+   * Rules are appended after the retrieval block, the candidate questions and the summary
+   * instruction: they are constraints on the answer, so the model should read them last.
+   * @param sessionId - session identity.
+   * @returns The rule line, or `undefined` when no rule is active.
+   */
+  ruleBlock(sessionId: string): string | undefined {
+    const rules = activeConstraints(this.stateOf(sessionId).constraints)
+    return rules.length === 0
+      ? undefined
+      : `[token-tree] 仍然生效的规则：${rules.map(entry => entry.text).join(' | ')}`
   }
 
   /**
@@ -2516,10 +2621,8 @@ export class TokenTreeService {
   toolDeny(sessionId?: string): string[] {
     const scoped = sessionId === undefined ? undefined : this.settings?.allFor?.(sessionId)
     const override = scoped?.toolDeny ?? this.settings?.all().toolDeny
-    // Measured across 201 sessions: tree_mark and tree_focus were never called, while their schemas
-    // cost about 570 tokens per request. The supervisor prompt names tree_query/tree_reflect, so
-    // those stay.
-    return override ?? ['tree_mark', 'tree_focus']
+    // Tree-only is the shipped default: every plugin tool is hidden from the model.
+    return override ?? [...PLUGIN_TOOL_NAMES]
   }
 
   /**
@@ -2719,7 +2822,7 @@ export class TokenTreeService {
       const summary = (node.summary ?? node.content).replace(/\s+/g, ' ').slice(0, 60)
       lines.push(`- ${node.id} [${label}] ${summary}（${node.tokens} tok）`)
     }
-    const header = `[盆栽] 更早的对话已被压缩，原文完整保存在对话树中（不是摘要）。最近被折叠的节点：`
+    const header = `[token-tree] 更早的对话已被压缩，原文完整保存在对话树中（不是摘要）。最近被折叠的节点：`
     const footer = '需要原始细节时调用 retrieve_context("关键词") 取回原文；不要把摘要里的数字当成原文，也不要在缺细节时凭印象编造。'
     let text = `${header}\n${lines.join('\n')}\n${footer}`
     if (text.length > maxChars) {

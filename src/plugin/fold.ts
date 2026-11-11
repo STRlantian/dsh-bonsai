@@ -12,15 +12,15 @@
  * @module dsh-token-tree/plugin/fold
  */
 
-/** Outcome of folding a whole turn: a range plus the placeholder that replaces it. */
+/** Outcome of folding one contiguous run of turns: a range plus the placeholder that replaces it. */
 export interface TurnFold {
-  /** First visible seq of the turn. */
+  /** First visible seq of the run. */
   startSeq: number
-  /** Last visible seq of the turn. */
+  /** Last visible seq of the run. */
   endSeq: number
-  /** Turns covered (always 1 today; kept for the placeholder text). */
+  /** Number of adjacent turns covered by this replacement. */
   turns: number
-  /** Turn number this replacement covers, for the size bookkeeping. */
+  /** First turn number in the run, for the size bookkeeping. */
   turn: number
   /** Every visible seq the replacement shadows, as the host requires. */
   seqs: number[]
@@ -43,6 +43,31 @@ export interface FoldEvent {
   type: string
   seq: number
   data?: Record<string, unknown>
+}
+
+/**
+ * One entry in the host's surface list.
+ *
+ * The host normally reports one seq per entry, but it may compress a run of adjacent
+ * user/message nodes into an inclusive `[start, end]` range. The planner must expand those ranges
+ * before it can cite or group individual nodes.
+ */
+export type SurfaceSeqLike = number | readonly [number, number]
+
+/**
+ * Expand one surface entry into individual sequence numbers.
+ * @param entry - a seq, or an inclusive `[start, end]` range from the host.
+ * @returns Every seq in the entry, in order; empty for a malformed range.
+ */
+export function expandSurfaceSeq(entry: SurfaceSeqLike): number[] {
+  if (typeof entry === 'number') return Number.isSafeInteger(entry) ? [entry] : []
+  const [start, end] = entry
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start) return []
+  // A corrupt range must not allocate an unbounded array.
+  if (end - start > 10_000) return []
+  const seqs: number[] = []
+  for (let seq = start; seq <= end; seq++) seqs.push(seq)
+  return seqs
 }
 
 /**
@@ -105,7 +130,9 @@ export const SURFACE_TYPES = new Set(['user/message', 'assistant/message', 'tool
  */
 export function blockTokensOf(folds: readonly TurnFold[], turnTokens: ReadonlyMap<number, number>): number {
   let total = 0
-  for (const fold of folds) total += turnTokens.get(fold.turn) ?? 0
+  for (const fold of folds) {
+    for (let turn = fold.turn; turn < fold.turn + fold.turns; turn++) total += turnTokens.get(turn) ?? 0
+  }
   return total
 }
 
@@ -119,7 +146,10 @@ export function blockTokensOf(folds: readonly TurnFold[], turnTokens: ReadonlyMa
 export function keptTokensOf(folds: readonly TurnFold[], turnTokens: ReadonlyMap<number, number>): number {
   // Only what sits after the fold point is re-priced: the prompt head before it stays cached, so
   // counting it would overstate the cost of a fold and make the rule needlessly conservative.
-  const folded = new Set(folds.map(fold => fold.turn))
+  const folded = new Set<number>()
+  for (const fold of folds) {
+    for (let turn = fold.turn; turn < fold.turn + fold.turns; turn++) folded.add(turn)
+  }
   let start = Number.POSITIVE_INFINITY
   for (const fold of folds) start = Math.min(start, fold.turn)
   let total = 0
@@ -189,25 +219,30 @@ export function turnPlaceholder(turns: number): string {
 /**
  * Choose whole turns to fold.
  *
- * Each turn's visible range is replaced by a single placeholder, so an assistant tool call and
- * its result always disappear together. Only turns entirely older than the keep window are
- * taken, and the prompt head (system messages before the first user message) is never touched.
+ * Every foldable turn is still removed, but adjacent chosen turns are coalesced into one
+ * replacement so the model and the transcript see a single placeholder instead of one line per
+ * turn. Only turns entirely older than the keep window are taken, and the prompt head (system
+ * messages before the first user message) is never touched.
  *
  * @param events - durable events in log order.
- * @param visible - seqs currently visible to the model.
+ * @param visible - surface entries currently visible to the model; may contain range entries.
  * @param keepTurns - most recent turns to leave alone.
- * @returns One replacement per foldable turn, oldest first.
+ * @param turnOf - resolver for a surface seq's turn.
+ * @param excludeTurn - the turn that is still stopping; it must never be folded.
+ * @returns One replacement per contiguous run of foldable turns, oldest first.
  */
 export function planTurnFold(
   events: readonly FoldEvent[],
-  visible: readonly number[],
+  visible: readonly SurfaceSeqLike[],
   keepTurns: number,
   turnOf?: (seq: number) => number | undefined,
+  excludeTurn?: number,
 ): TurnFold[] {
   // A host may list its surface out of conversation order, so group by sequence instead of by
   // position: the range the fold op cites must be a contiguous seq interval whose visible members
   // all belong to the same turn.
-  const visibleSet = new Set(visible)
+  const visibleSeqs = visible.flatMap(expandSurfaceSeq)
+  const visibleSet = new Set(visibleSeqs)
   const turnOfSeq = new Map<number, number>()
   const protectedTurns = new Set<number>()
   let current = 0
@@ -246,13 +281,25 @@ export function planTurnFold(
   // The first surface node belongs to the prompt head and may only be rewritten by a
   // system/message over exactly that node, so the opening turn is left alone.
   const earliest = turns[0]
-  const chosen = turns.filter(turn => turn !== earliest && !kept.has(turn) && !protectedTurns.has(turn))
+  const chosen = turns.filter(turn =>
+    turn !== earliest && turn !== excludeTurn && !kept.has(turn) && !protectedTurns.has(turn))
   if (chosen.length === 0) return []
-  const folds: TurnFold[] = []
-  const surfaceIndex = new Map(visible.map((seq, index) => [seq, index]))
+  // Coalesce adjacent chosen turns: folding all old turns is intentional (it keeps them out of the
+  // cache), but one replacement per turn would emit one placeholder per turn. A contiguous run can
+  // be shadowed by a single replace op and still remove every turn in it.
+  const runs: number[][] = []
   for (const turn of chosen) {
-    const seqs = [...(byTurn.get(turn) as number[])].sort((left, right) =>
-      (surfaceIndex.get(left) ?? left) - (surfaceIndex.get(right) ?? right))
+    const last = runs[runs.length - 1]
+    if (last !== undefined && last[last.length - 1] === turn - 1) last.push(turn)
+    else runs.push([turn])
+  }
+  const folds: TurnFold[] = []
+  const surfaceIndex = new Map(visibleSeqs.map((seq, index) => [seq, index]))
+  for (const run of runs) {
+    const runTurns = new Set(run)
+    const seqs: number[] = []
+    for (const turn of run) seqs.push(...(byTurn.get(turn) as number[]))
+    seqs.sort((left, right) => (surfaceIndex.get(left) ?? left) - (surfaceIndex.get(right) ?? right))
     const first = seqs[0]
     const last = seqs[seqs.length - 1]
     // The host validates a replacement by surface position, not numeric seq. Check every visible
@@ -263,25 +310,29 @@ export function planTurnFold(
     let foreign = false
     if (firstIndex !== undefined && lastIndex !== undefined) {
       for (let index = firstIndex; index <= lastIndex; index++) {
-        if (turnOfSeq.get(visible[index]) !== turn) { foreign = true; break }
+        const owner = turnOfSeq.get(visibleSeqs[index])
+        if (owner === undefined) continue
+        if (!runTurns.has(owner)) { foreign = true; break }
       }
     } else {
       for (let seq = first; seq <= last; seq++) {
         if (!visibleSet.has(seq)) continue
-        if (turnOfSeq.get(seq) !== turn) { foreign = true; break }
+        const owner = turnOfSeq.get(seq)
+        if (owner === undefined) continue
+        if (!runTurns.has(owner)) { foreign = true; break }
       }
     }
     if (foreign) continue
     folds.push({
-      turn,
+      turn: run[0],
       startSeq: first,
       endSeq: last,
-      turns: 1,
+      turns: run.length,
       seqs,
       data: {
         role: "user",
         id: globalThis.crypto.randomUUID(),
-        content: [{ type: "text", text: turnPlaceholder(1) }],
+        content: [{ type: "text", text: turnPlaceholder(run.length) }],
         source: { kind: "token-tree", id: "fold" },
       },
     })

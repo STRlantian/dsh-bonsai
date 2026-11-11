@@ -8,7 +8,7 @@ import { TokenTreeService } from '../src/plugin/service.ts'
 const logger = { info: () => {}, warn: () => {}, debug: () => {}, error: () => {} }
 
 function conversation() {
-  const config = Config['~standard'].validate({ logEdgeUpdates: false }).value
+  const config = Config['~standard'].validate({ logEdgeUpdates: false, mandatoryContext: true }).value
   const service = new TokenTreeService({ config, logger })
   const events = []
   const session = { id: 'anaphora', snapshotEvents: () => events }

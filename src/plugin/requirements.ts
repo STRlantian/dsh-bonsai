@@ -22,8 +22,8 @@ export interface Constraint {
   id: string
   /** Original turn text. */
   text: string
-  /** Where it came from: the classifier, or the rule editor. */
-  source: 'auto' | 'manual'
+  /** Where it came from: the classifier, the model, or the rule editor. */
+  source: 'auto' | 'manual' | 'model'
   /** When it arrived. */
   createdAt: number
   /** Whether it still applies. */
@@ -130,6 +130,7 @@ export function applyConstraint(
   createdAt: number,
   classification: Classification,
   keep = 8,
+  source: Constraint['source'] = 'auto',
 ): Constraint[] {
   const next: Constraint[] = classification.cancels
     ? list.map(entry => (entry.active ? { ...entry, active: false, supersededBy: text } : entry))
@@ -140,7 +141,7 @@ export function applyConstraint(
       text,
       createdAt,
       active: true,
-      source: 'auto',
+      source,
       reason: classification.reason,
     })
   }

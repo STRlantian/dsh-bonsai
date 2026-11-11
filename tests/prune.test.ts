@@ -6,6 +6,22 @@ import { TokenTreeService } from '../src/plugin/service.ts'
 
 const logger = { info: () => {}, warn: () => {}, debug: () => {}, error: () => {} }
 
+test('the default has no node cap', () => {
+  const config = Config['~standard'].validate({ logEdgeUpdates: false }).value!
+  assert.equal(config.maxNodesPerSession, 0, '0 means unlimited')
+  const service = new TokenTreeService({ config, logger })
+  const state = service.stateOf('uncapped')
+  const tree = state.tree
+  const root = tree.rootId
+  const first = tree.addNode({ kind: 'question', content: 'first', tokens: 1, parentId: root, timestamp: 1, setCurrent: true })
+  tree.addNode({ kind: 'answer', content: 'first answer', tokens: 1, parentId: first.id, timestamp: 2, setCurrent: true })
+  const second = tree.addNode({ kind: 'question', content: 'second', tokens: 1, parentId: root, timestamp: 3, setCurrent: false })
+  tree.addNode({ kind: 'answer', content: 'second answer', tokens: 1, parentId: second.id, timestamp: 4, setCurrent: false })
+  const before = tree.nodes.size
+  ;(service as unknown as { prune(state: unknown): void }).prune(state)
+  assert.equal(tree.nodes.size, before, 'prune is a no-op when the cap is 0')
+})
+
 test('the node cap removes inactive branches instead of detaching them forever', () => {
   const config = Config['~standard'].validate({ logEdgeUpdates: false, maxNodesPerSession: 4 }).value!
   const service = new TokenTreeService({ config, logger })

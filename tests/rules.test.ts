@@ -51,9 +51,9 @@ test('a hand-written rule survives a replay and reaches the hint', () => {
   assert.equal(state.ops.length, 1, 'and recorded for the next replay')
   assert.equal(state.ops[0].action, 'rule')
 
-  // The hint carries it, so the model actually sees the rule.
-  const hint = service.retrievalHint('s')
-  assert.ok(hint !== undefined && hint.includes('不要擅自发布'), 'the hint names the rule')
+  // The rule block carries it at the end of the injected turn, so the model actually sees the rule.
+  const ruleBlock = service.ruleBlock('s')
+  assert.ok(ruleBlock !== undefined && ruleBlock.includes('不要擅自发布'), 'the rule block names the rule')
 
   // A fresh service replays the same session and gets the rule back.
   const replay = new TokenTreeService({

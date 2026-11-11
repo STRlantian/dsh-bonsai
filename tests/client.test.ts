@@ -496,7 +496,7 @@ test('an existing rule opens with its text and can be edited or deleted', { time
   assert.ok(String(removal.body).includes('rule-1'), 'for the existing rule')
 })
 
-test('the settings panel offers five intent-named presets', { timeout: 30000 }, async t => {
+test('the settings panel offers the tree-only default and two opt-in modes', { timeout: 30000 }, async t => {
   const client = await mountClient('header')
   t.after(client.cleanup)
   await client.click('盆栽')
@@ -505,10 +505,10 @@ test('the settings panel offers five intent-named presets', { timeout: 30000 }, 
   assert.ok(bar !== null, 'the preset bar is present')
   assert.ok(bar.querySelector('.twt-preset-grid') !== null, 'presets use the two-column grid wrapper')
   const labels = [...bar.querySelectorAll('button')].map(button => button.textContent ?? '')
-  assert.deepEqual(labels, ['默认', '只建树', '关闭'], 'default, tree-only, and off')
+  assert.deepEqual(labels, ['默认（只建树）', '完整功能', '关闭'], 'tree-only default, full feature, off')
   const hints = [...bar.querySelectorAll('.twt-preset-hint')].map(node => node.textContent ?? '')
   assert.equal(hints.length, 3, 'every mode carries a visible explanation')
-  assert.ok(hints[0].includes('缓存价格'), 'the default says cost is price-dependent')
+  assert.ok(hints[0].includes('只记录'), 'the default explains tree-only mode')
   const preset = [...bar.querySelectorAll('button')].find(button => (button.textContent ?? '') === '关闭')
   assert.ok(preset !== undefined, 'the off button is present')
   await React.act(async () => { preset.dispatchEvent(new client.window.MouseEvent('click', { bubbles: true })) })
@@ -690,13 +690,49 @@ test('the settings panel offers one default preset row', { timeout: 30000 }, asy
   await client.click('盆栽')
   await client.click('设置')
   const labels = [...client.document.querySelectorAll('.twt-presets button')].map(node => (node.textContent ?? '').trim())
-  assert.deepEqual(labels, ['默认', '只建树', '关闭'], 'the measured default and two tree modes')
+  assert.deepEqual(labels, ['默认（只建树）', '完整功能', '关闭'], 'tree-only default, full feature, off')
   assert.equal(client.document.querySelectorAll('.twt-guide').length, 0, 'the guided card is gone')
   const before = client.requests.filter(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST').length
   await client.click('关闭')
   const posts = client.requests.filter(entry => entry.url.includes('/api/token-tree/preset') && entry.method === 'POST')
   assert.ok(posts.length > before, 'the choice goes through the preset route')
   assert.ok(String(posts.at(-1).body).includes('off'), 'and names the off preset')
+})
+
+test('assistant marker text is hidden without touching the transcript source', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  const row = client.document.createElement('div')
+  row.setAttribute('data-chat-flow-kind', 'assistant-step')
+  row.innerHTML = '<p>answer [attach:n9] [summary:TTL、端口]</p><pre><code>[attach:n1]</code></pre>'
+  client.document.body.appendChild(row)
+  await new Promise(resolve => setTimeout(resolve, 80))
+  assert.equal(row.querySelectorAll('.twt-marker-hidden').length, 2, 'both markers are hidden')
+  assert.equal(row.querySelectorAll('pre .twt-marker-hidden').length, 0, 'code blocks are untouched')
+  assert.ok(row.textContent?.includes('answer'), 'the answer text remains')
+  row.remove()
+})
+
+test('the settings panel exposes attach mode with local as the default', { timeout: 30000 }, async t => {
+  const client = await mountClient('header')
+  t.after(client.cleanup)
+  await client.click('盆栽')
+  await client.click('设置')
+  const selects = [...client.document.querySelectorAll('select')]
+  const attach = selects.find(select => [...select.options].some(option => option.value === 'marker'))
+  assert.ok(attach !== undefined, 'attach-mode select rendered')
+  assert.deepEqual([...attach.options].map(option => option.value), ['local', 'marker'], 'local and marker only')
+  assert.equal(attach.value, 'local', 'local is the default')
+
+  await React.act(async () => {
+    attach.value = 'marker'
+    attach.dispatchEvent(new client.window.Event('change', { bubbles: true }))
+  })
+  await client.flush()
+  const saved = client.requests.find(entry => entry.url.includes('/api/token-tree/settings') && entry.method === 'POST')
+  assert.ok(saved !== undefined, 'settings POST issued')
+  assert.ok(String(saved.body).includes('attachMode'), 'attachMode persisted')
+  assert.ok(String(saved.body).includes('marker'), 'marker persisted')
 })
 
 test('the settings panel can switch the interface language', { timeout: 30000 }, async t => {

@@ -338,7 +338,7 @@ signal: pinned +1.2 / ignored −1.5 / reflection −0.6
 | 用户忽略分支（`tree_mark` / `mark`） | `metadata.ignored = true`，入边 `+ignorePenalty`；检索直接丢弃该节点 |
 | 用户置顶分支 | `metadata.pinned = true`，入边 `−ignorePenalty/2`；检索乘 `pinBoost` |
 | 回合失败/停滞 | 反思节点（不移动光标）+ 可能的回溯节点（移动光标）|
-| 节点数超 `maxNodesPerSession` | 裁剪「最冷且不在当前路径上、未被置顶」的根分支 |
+| 节点数超 `maxNodesPerSession`（`>0` 时） | 裁剪「最冷且不在当前路径上、未被置顶」的根分支；默认 `0` = 不裁剪，长会话不会丢节点 |
 
 边权每次变化都写一条 `info` 日志（`logEdgeUpdates: true`）：
 

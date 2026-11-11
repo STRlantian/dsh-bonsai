@@ -1,0 +1,119 @@
+{
+  "name": "retrieval-heavy-v1",
+  "description": "Early facts are folded; later questions require retrieving exact values from distant turns.",
+  "turns": 36,
+  "setup": {
+    "profile": "ab-tokentree",
+    "patch": "- id: token-tree\n  config:\n    attachChoices: 0\n    autoInject: false\n    retrievalHint: true\n    autoFold: false\n    foldPolicy: always\n    foldKeepTurns: 1\n    foldScope: turns\n    foldCadence: 0\n",
+    "why": "ab-tokentree is the headless copy of tokentree; always + keepTurns 1 forces the early fact turns out of the visible prompt before the query block."
+  },
+  "dialogue": [
+    "你好，我们开始记录青禾项目的配置。只在对话里记录，不要创建、修改或读取任何文件。",
+    "项目代号青禾；主区域 ap-east-1，备用区域 ap-south-1。",
+    "缓存 TTL 37 分钟；失败重试预算 4 次；服务端口 7419。",
+    "SLA 99.95%；p95 延迟目标 240ms。",
+    "计划发布日 2026-03-14；负责人林岚。",
+    "数据默认保留 45 天；核心表 ledger_events，归档表 ledger_archive 只读。",
+    "客户北辰要求数据留在 ap-east-1；客户南屿接受 ap-south-1 作为备份。",
+    "2 月 18 日事故根因是时钟偏移 4.5 秒，已排除网络分区。",
+    "合同 7.3 条：跨境备份必须加密，密钥每 90 天轮换一次。",
+    "发布日前三天关闭 fold_v3 开关。",
+    "向量索引选 HNSW，recall 0.94；IVF 只有 0.88，所以不用 IVF。",
+    "预算 1200 单位，已花 860。",
+    "更正：v2 的 7419 端口废弃，v3 改用 7421。",
+    "先聊点别的：早餐吃什么比较好？",
+    "我昨天买了香蕉和燕麦。",
+    "给我一个简单的早餐搭配。",
+    "为什么香蕉适合早餐？",
+    "那燕麦呢？",
+    "怎么挑选燕麦？",
+    "即食燕麦和钢切燕麦有什么区别？",
+    "钢切燕麦怎么煮？",
+    "需要提前泡吗？",
+    "不泡会怎么样？",
+    "那用压力锅呢？",
+    "回到青禾：staging 和 production 都使用 7421。",
+    "新增监控指标 fold_latency_p95。",
+    "把数据保留期从 45 天改成 30 天。",
+    "北辰后来也同意 ap-south-1 备份了。",
+    "再确认一下：SLA 和 p95 目标没变。",
+    "青禾现在的缓存 TTL、重试预算和端口分别是多少？",
+    "2 月 18 日事故的根因是什么？排除了什么？",
+    "北辰和南屿现在的数据驻留要求分别是什么？",
+    "HNSW 和 IVF 的 recall 各是多少？为什么选 HNSW？预算还剩多少？",
+    "合同 7.3 条要求密钥多久轮换一次？当前数据保留多少天？SLA 和 p95 目标是多少？",
+    "v2 端口、当前端口、fold_v3 状态和新增监控指标分别是什么？",
+    "按时间顺序列出端口、数据保留期、北辰备份这三次变更。"
+  ],
+  "checks": [
+    {
+      "turn": 30,
+      "type": "single-hop + update",
+      "question": "青禾现在的缓存 TTL、重试预算和端口分别是多少？",
+      "must": ["37 分钟", "4 次", "7421"],
+      "must_not": ["7419 as the current port"],
+      "sources": [3, 13, 25],
+      "note": "7419 is the deprecated v2 port; 7421 is current."
+    },
+    {
+      "turn": 31,
+      "type": "single-hop + negative",
+      "question": "2 月 18 日事故的根因是什么？排除了什么？",
+      "must": ["时钟偏移", "4.5 秒"],
+      "must_not": ["网络分区 as the root cause"],
+      "sources": [8],
+      "note": "An answer saying '不是网络分区' is correct; do not fail it for containing the word."
+    },
+    {
+      "turn": 32,
+      "type": "multi-hop + update",
+      "question": "北辰和南屿现在的数据驻留要求分别是什么？",
+      "must": ["北辰", "ap-east-1", "ap-south-1", "南屿"],
+      "must_not": [],
+      "sources": [7, 28],
+      "note": "北辰: primary ap-east-1, later agrees to ap-south-1 backup. 南屿: accepts ap-south-1 backup."
+    },
+    {
+      "turn": 33,
+      "type": "multi-hop",
+      "question": "HNSW 和 IVF 的 recall 各是多少？为什么选 HNSW？预算还剩多少？",
+      "must": ["0.94", "0.88", "340"],
+      "must_not": [],
+      "sources": [11, 12],
+      "note": "1200 - 860 = 340."
+    },
+    {
+      "turn": 34,
+      "type": "multi-hop + update",
+      "question": "合同 7.3 条要求密钥多久轮换一次？当前数据保留多少天？SLA 和 p95 目标是多少？",
+      "must": ["90 天", "30 天", "99.95%", "240ms"],
+      "must_not": ["45 天 as the current retention"],
+      "sources": [9, 27, 4],
+      "note": "90 days is key rotation, not retention; retention changed from 45 to 30."
+    },
+    {
+      "turn": 35,
+      "type": "single-hop + distractor",
+      "question": "v2 端口、当前端口、fold_v3 状态和新增监控指标分别是什么？",
+      "must": ["7419", "7421", "关闭", "fold_latency_p95"],
+      "must_not": ["fold_v3 as enabled"],
+      "sources": [13, 10, 26],
+      "note": "7419 is v2/deprecated; 7421 is current; fold_v3 was closed three days before release."
+    },
+    {
+      "turn": 36,
+      "type": "temporal synthesis",
+      "question": "按时间顺序列出端口、数据保留期、北辰备份这三次变更。",
+      "must": ["端口", "保留", "北辰"],
+      "must_not": [],
+      "ordered": true,
+      "sources": [13, 27, 28],
+      "note": "Correct order: port change (turn 13), retention 45->30 (turn 27), 北辰 backup agreement (turn 28)."
+    }
+  ],
+  "scoring": {
+    "points": 23,
+    "accuracy": "count each required fact as one point; a wrong current value cancels that point; order in turn 36 counts once",
+    "retrieval": "for each check, record whether any retrieve_context result contains the source turn; target >= 90% source-hit"
+  }
+}

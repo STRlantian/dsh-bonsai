@@ -14,6 +14,26 @@ function defaults(): ResolvedConfig {
   return result.value
 }
 
+/** The full-feature preset used by tests that exercise model-facing behaviour. */
+function balancedConfig(): ResolvedConfig {
+  const result = Config['~standard'].validate({
+    attachMode: 'tool',
+    attachSummary: true,
+    attachChoices: 10,
+    retrievalHint: true,
+    autoInject: false,
+    autoFold: true,
+    foldAboveTokens: 30000,
+    foldCadence: 10,
+    foldBlockRatio: 8,
+    autoReflect: true,
+    mandatoryContext: true,
+    fileRegion: 'auto',
+  })
+  assert.ok(result.value !== undefined)
+  return result.value
+}
+
 /** A harness stand-in: registry, event bus, logger, and one agent. */
 class FakeHarness {
   readonly handlers = new Map<string, ((...args: never[]) => unknown)[]>()
@@ -143,7 +163,7 @@ function tell(harness: FakeHarness, text: string): void {
 }
 
 /** Mount the plugin against the fake harness. */
-function mount(config: ResolvedConfig = defaults()): { harness: FakeHarness; service: TokenTreeService } {
+function mount(config: ResolvedConfig = balancedConfig()): { harness: FakeHarness; service: TokenTreeService } {
   const harness = new FakeHarness()
   // In-memory stores: the suite must never read or write the user's real settings file.
   const files = new Map<string, string>()
@@ -154,6 +174,7 @@ function mount(config: ResolvedConfig = defaults()): { harness: FakeHarness; ser
     makeDir: () => {},
   }
   const settings = new SettingsStore({ path: 'mem://settings.json', io, onError: () => {} })
+  settings.apply({ toolDeny: [] })
   apply(harness.ctx, config, { settings })
   return { harness, service: harness.service }
 }
@@ -186,10 +207,18 @@ test('Config validates and resolves defaults', () => {
   const resolved = defaults()
   assert.equal(resolved.weights.lambda, 0.5)
   assert.equal(resolved.loop.maxSteps, 12)
-  // Tool-first default: the block is opt-in, the one-line hint is not.
+  // Tree-only default: record the tree, change nothing in the model view.
   assert.equal(resolved.autoInject, false)
-  assert.equal(resolved.retrievalHint, true)
+  assert.equal(resolved.retrievalHint, false)
   assert.equal(resolved.attachments, 'semantic')
+  assert.equal(resolved.attachMode, 'local')
+  assert.equal(resolved.attachChoices, 0)
+  assert.equal(resolved.attachSummary, false)
+  assert.equal(resolved.foldAboveTokens, 0)
+  assert.equal(resolved.autoFold, false)
+  for (const mode of ['marker', 'local', 'tool']) {
+    assert.equal(Config['~standard'].validate({ attachMode: mode }).value?.attachMode, mode)
+  }
 
   const overridden = Config['~standard'].validate({ weights: { lambda: 0.9, combine: 'product' }, autoInject: true })
   assert.ok(overridden.value !== undefined)
@@ -212,9 +241,31 @@ test('mounting registers every tool and publishes the service', () => {
     'tree_mark',
     'tree_query',
     'tree_reflect',
+    'tree_rule',
   ])
   assert.ok(harness.service !== undefined)
   assert.ok(harness.logs.some(line => line.includes('token-tree: mounted')))
+})
+
+test('marker and local modes do not register tree_attach', () => {
+  for (const mode of ['marker', 'local']) {
+    const config = Config['~standard'].validate({ attachMode: mode }).value!
+    const { harness } = mount(config)
+    assert.equal(harness.tools.has('tree_attach'), false, `${mode} hides the tool`)
+    assert.equal(harness.tools.has('tree_rule'), true, `${mode} keeps the rule tool`)
+  }
+})
+
+test('attachMode changes the model instruction', () => {
+  const marker = mount(Config['~standard'].validate({ attachMode: 'marker', attachSummary: true }).value!).service
+  assert.match(marker.summaryInstruction('session-1'), /\[summary:/)
+  assert.doesNotMatch(marker.summaryInstruction('session-1'), /tree_attach/)
+
+  const local = mount(Config['~standard'].validate({ attachMode: 'local', attachSummary: true }).value!).service
+  assert.equal(local.summaryInstruction('session-1'), '')
+
+  const tool = mount(Config['~standard'].validate({ attachMode: 'tool', attachSummary: true }).value!).service
+  assert.match(tool.summaryInstruction('session-1'), /tree_attach/)
 })
 
 test('session events build the tree', () => {
@@ -500,7 +551,7 @@ test('the pre-step hook prepends exactly one memory block', async () => {
 })
 
 test('with injection off the hook appends the summary request and a post-fold hint', async () => {
-  const { harness, service } = mount({ ...defaults(), autoInject: false, retrievalHint: true })
+  const { harness, service } = mount({ ...balancedConfig(), autoInject: false, retrievalHint: true })
   const state = service.stateOf('session-1')
   // The retrieval hint is suppressed until something was folded, but the summary request is
   // present every turn.
@@ -517,6 +568,7 @@ test('with injection off the hook appends the summary request and a post-fold hi
   ) as { messages: UserMessageLike[] }
   assert.equal(early.messages.length, 2, 'the summary request is appended')
   assert.ok(JSON.stringify(early.messages[1]).includes('tree_attach'), 'summary every turn')
+  assert.ok(JSON.stringify(early.messages[1]).includes('tree_rule'), 'model rule instruction every turn')
   assert.ok(!JSON.stringify(early.messages[1]).includes('retrieve_context'), 'no retrieval hint before a fold')
 
   for (let index = 0; index < 6; index += 1) {
@@ -533,7 +585,7 @@ test('with injection off the hook appends the summary request and a post-fold hi
   assert.ok(JSON.stringify(shortConversation.messages[1]).includes('tree_attach'), 'and asks for a placement')
   assert.ok(!JSON.stringify(shortConversation.messages[1]).includes('retrieve_context'), 'still no hint before a fold')
 
-  const withoutChoices = mount({ ...defaults(), autoInject: false, retrievalHint: true, attachChoices: 0 })
+  const withoutChoices = mount({ ...balancedConfig(), autoInject: false, retrievalHint: true, attachChoices: 0 })
   const plainState = withoutChoices.service.stateOf('session-1')
   for (let index = 0; index < 3; index += 1) {
     plainState.tree.addNode({ kind: 'question', content: 'q' + index, timestamp: 1_000 + index })
@@ -561,7 +613,7 @@ test('with injection off the hook appends the summary request and a post-fold hi
   assert.ok(hint.length < 1200, 'hint stays small')
 
   // Turning both switches off leaves the step untouched.
-  const silent = mount({ ...defaults(), autoInject: false, retrievalHint: false, attachSummary: false })
+  const silent = mount({ ...balancedConfig(), autoInject: false, retrievalHint: false, attachSummary: false, attachChoices: 0 })
   const silentState = silent.service.stateOf('session-1')
   for (let index = 0; index < 6; index += 1) {
     silentState.tree.addNode({ kind: 'question', content: `q${index}`, timestamp: 1_000 + index })
