@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.1.16] - 2026-11-11
+
+The default is now tree-only: the plugin records the tree but changes nothing the model sees.
+
+### Changed
+
+- **Tree-only default**: no injection, hints, folding, candidate blocks, summaries, reflection, or
+  plugin tools. The tree remains available for viewing and editing.
+- **Presets**: `默认（只建树）` / `完整功能` / `关闭`. `完整功能` restores folding, marker placement,
+  retrieval, candidates, and reflection.
+- **Settings**: `attachMode` defaults to `local`; `attachChoices=0`, `attachSummary=false`,
+  `autoFold=false`, and all fold thresholds are `0`.
+- **Marker cleanup**: trailing `[attach:...]` / `[summary:...]` text is hidden in the rendered
+  assistant message (client-only; the session log and model input are unchanged).
+
+### Added
+
+- **`candidateSource: retrieve`** experiment switch: the attach candidate table and the retrieval
+  index share one weighted-retrieval list.
+- Retrieval-heavy experiment data, scripts, and results under `docs/experiments/`.
+
+### Fixed
+
+- `tree_attach` is only registered when the mount-time mode is `tool`; marker/local never expose it.
+- `tree_only` hides all plugin tools instead of leaving them callable.
+
 ## [0.1.15] — 2026-11-07
 
 Placement is a tool call now, and the automatic fold threshold works out of the box.

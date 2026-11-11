@@ -290,8 +290,7 @@ pnpm test           # 269 个用例
 pnpm run check      # 类型检查 + 测试
 ```
 
-调试日志：设置 `DSH_BONSAI_LOG=1` 后，插件通过 `ctx.logger.exporter()` 把每条日志逐行写到 stdout；
-默认关闭，不会污染正常输出。
+调试导出 helper 仍在 `plugin/logger.ts`，但发布版不自动安装 stdout exporter；调试时可在本地临时改 `debugMode`。
 
 零成本自查（不需要模型）：
 

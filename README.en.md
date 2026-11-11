@@ -304,8 +304,7 @@ pnpm test           # 269 tests
 pnpm run check      # typecheck + tests
 ```
 
-Debug logging: set `DSH_BONSAI_LOG=1` and the plugin installs a stdout exporter through
-`ctx.logger.exporter()`, writing one line per log entry. It is off by default so normal output stays clean.
+The stdout exporter helper remains in `plugin/logger.ts`, but a release build never installs it automatically; enable it only in a local debug build.
 
 Zero-cost self-checks (no model needed):
 
