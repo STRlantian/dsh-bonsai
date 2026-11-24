@@ -184,6 +184,15 @@ export interface ToolRegistryLike {
    * @returns A disposer, or nothing.
    */
   restrict?(filter: { allow?: readonly string[]; deny?: readonly string[] }): unknown
+  /**
+   * All definitions visible from this scope, before a per-step `toolSet` narrows them.
+   *
+   * Used only to draw the settings checklist; `restrict()` remains the hiding mechanism.
+   * Older hosts do not expose this, so callers must fall back.
+   */
+  definitions?(scope?: unknown, toolSet?: unknown): readonly unknown[]
+  /** Resolve one definition from this scope, for descriptions and schemas. */
+  get?(name: string, scope?: unknown, toolSet?: unknown): unknown
 }
 
 /** One durable session event envelope. */

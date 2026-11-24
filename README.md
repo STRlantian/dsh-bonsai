@@ -2,6 +2,8 @@
 
 [English](README.en.md) · 简体中文
 
+> **项目状态：暂时搁置（2026-11-24）。** 插件仍可安装和使用，但作者暂时不再继续开发。原因是：在依赖前缀缓存的模型上，树主要作为索引和编辑界面，默认只建树、不影响模型上下文，继续投入的收益有限；如果以后模型不再依赖前缀缓存，这个方向可能会重新启动。
+
 **DeepSeek Harness 的对话树插件：默认只建树，不改变模型上下文。**
 
 一段对话被画成一棵树：问题、回答、工具结果都是节点，可以分叉、改挂、隐藏、回收、跳回某一点继续长。
@@ -286,7 +288,7 @@ tree_attach(target="nX", summary="方面 1, 方面 2")
 ```powershell
 pnpm install
 pnpm run build      # TypeScript → dist/ + lib/client.js
-pnpm test           # 269 个用例
+pnpm test           # 270 个用例
 pnpm run check      # 类型检查 + 测试
 ```
 
@@ -324,7 +326,7 @@ powershell -File scripts/release.ps1           # 发布并推进到下一个测�
 | `src/core/` | 纯算法：图、边权、路径成本、加权检索、评估与回溯 |
 | `src/plugin/` | DSH 接线：`Config`、会话服务、工具、事件订阅、HTTP 路由、折叠规划 |
 | `client/client.js` | 浏览器端：dock、编辑器、图形视图、回收站、规则栏、设置面板、预设选择器 |
-| `tests/` | 269 个用例，含 jsdom 挂载真实 React 的客户端测试 |
+| `tests/` | 270 个用例，含 jsdom 挂载真实 React 的客户端测试 |
 | `docs/experiment-context-cache.md` | 全部实测记录（53 节，含失败实验） |
 
 ## License

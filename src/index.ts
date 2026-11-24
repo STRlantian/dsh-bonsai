@@ -126,7 +126,7 @@ export function apply(
     for (const tool of tools) ctx.tools.register(tool)
   })
   guard('hooks', () => {
-    installHooks(ctx, service, config)
+    installHooks(ctx, service, config, new Set(tools.map(tool => tool.name)))
   })
   guard('/tree command', () => {
     installCommand(ctx, service)

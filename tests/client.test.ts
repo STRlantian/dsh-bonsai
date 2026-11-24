@@ -84,8 +84,8 @@ function settingsPayload(preset = null) {
     drift: { samples: 0, ratio: null },
     lastHint: null,
     availableTools: Array.isArray(settingsPayload.hiddenTools) && settingsPayload.hiddenTools.includes('workflow')
-      ? [{ name: 'pwsh', chars: 3495 }, { name: 'schedule_create', chars: 3143 }]
-      : [{ name: 'pwsh', chars: 3495 }, { name: 'workflow', chars: 3389 }, { name: 'schedule_create', chars: 3143 }],
+      ? [{ name: 'pwsh', chars: 3495, description: 'Run a PowerShell command' }, { name: 'schedule_create', chars: 3143, description: 'Create a scheduled task' }]
+      : [{ name: 'pwsh', chars: 3495, description: 'Run a PowerShell command' }, { name: 'workflow', chars: 3389, description: 'Run a multi-agent workflow' }, { name: 'schedule_create', chars: 3143, description: 'Create a scheduled task' }],
     toolRestriction: null,
   }
 }
@@ -532,6 +532,7 @@ test('tools are hidden through a checklist, not a name field', { timeout: 30000 
   assert.ok((rows[0].textContent ?? '').includes('pwsh'), 'heaviest tool first')
   const workflow = rows.find(row => (row.textContent ?? '').includes('workflow'))
   assert.ok(workflow !== undefined, 'workflow is listed')
+  assert.equal(workflow.getAttribute('title'), 'Run a multi-agent workflow', 'the row shows the tool description as a tooltip')
   const box = workflow.querySelector('input[type="checkbox"]')
   await React.act(async () => { box.click() })
   await client.flush()

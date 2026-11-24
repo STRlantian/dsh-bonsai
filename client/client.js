@@ -98,6 +98,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
   "已隐藏 {} 个": "{} hidden",
   "选择工具…": "Choose tools…",
   "暂无工具清单": "No tool list yet",
+  "额外工具名，逗号分隔": "Extra tool names, comma-separated",
   "先打开一个会话，宿主装配过提示词后才有工具清单": "Open a session first; the list appears once the host has assembled a prompt.",
   "选择要隐藏的工具": "Choose tools to hide",
   "共 {} 个 · 已选 {} 个 · 预计每轮省约 {} token": "{} available · {} selected · about {} tokens saved per turn",
@@ -1819,7 +1820,29 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
               setToolQuery('')
               setToolPickerOpen(true)
             },
-          }, availableTools.length === 0 ? t('暂无工具清单') : t('选择工具…'))),
+          }, availableTools.length === 0 ? t('暂无工具清单') : t('选择工具…')),
+          h('input', {
+            type: 'text',
+            className: 'twt-input',
+            placeholder: t('额外工具名，逗号分隔'),
+            title: t('清单为空或缺少某个工具时，直接输入要隐藏的工具名；只追加，不会取消已有选择'),
+            defaultValue: deniedTools
+              .filter(function (name) { return !availableTools.some(function (tool) { return tool.name === name }) })
+              .join(','),
+            disabled: busy,
+            style: { width: '150px' },
+            onBlur: function (event) {
+              var extras = String(event.target.value || '')
+                .split(',')
+                .map(function (name) { return name.trim() })
+                .filter(function (name) { return name !== '' })
+              if (extras.length === 0) return
+              var merged = deniedTools.slice()
+              extras.forEach(function (name) { if (merged.indexOf(name) === -1) merged.push(name) })
+              if (merged.length !== deniedTools.length) saveSetting('toolDeny', merged)
+              event.target.value = merged.join(',')
+            },
+          })),
       }),
       settings && settings.toolRestriction && settings.toolRestriction.applied === false && settings.toolRestriction.error
         ? h('p', { className: 'twt-hint twt-err' }, t('上次隐藏失败：') + settings.toolRestriction.error)
@@ -2143,7 +2166,7 @@ window.__ModuleLoader__.load({ id: 'dsh-bonsai', factory: (require) => {
       var weight = draftWeight()
       var rows = listed.map(function (tool) {
         var checked = toolDraft.indexOf(tool.name) >= 0
-        return h('label', { key: tool.name, className: 'twt-tool-row' },
+        return h('label', { key: tool.name, className: 'twt-tool-row', title: tool.description },
           h('input', {
             type: 'checkbox',
             checked: checked,

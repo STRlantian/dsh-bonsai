@@ -27,6 +27,7 @@ import { homedir } from 'node:os'
 
 import { blockTokensOf, expandSurfaceSeq, foldWorthIt, keptTokensOf, optimalFoldThreshold, planFold, planTurnFold } from './fold.ts'
 import { SURFACE_TYPES } from './fold.ts'
+import { PLUGIN_TOOL_NAMES } from './presets.ts'
 import type { TokenTreeService } from './service.ts'
 
 /** Longest query text taken from a user message. */
@@ -92,7 +93,12 @@ function recordFailure(sessionId: string, type: string, error: unknown): void {
   }
 }
 
-export function installHooks(ctx: ContextLike, service: TokenTreeService, config: ResolvedConfig): void {
+export function installHooks(
+  ctx: ContextLike,
+  service: TokenTreeService,
+  config: ResolvedConfig,
+  availableToolNames?: ReadonlySet<string>,
+): void {
   ctx.on('session/event', (session, event) => {
     try {
       service.noteSessionCapability(session)
@@ -159,8 +165,57 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
   /** The host disposer for that agent's current restriction; restrictions intersect, so the old
    * one must be lifted before a new one (otherwise an empty deny cannot bring tools back). */
   const denyDisposers = new Map<string, () => void>()
+  /**
+   * The host rejects an unknown name before applying a restriction, but its error lists every
+   * restrictable global tool. Use one deliberately-invalid name as a metadata probe.
+   */
+  const knownByAgent = new Map<string, Set<string>>()
+  const cataloguedAgents = new Set<string>()
+  const restrictableNames = (agent: AgentLike): Set<string> | undefined => {
+    const cached = knownByAgent.get(agent.id)
+    if (cached !== undefined) return cached
+    const restrict = agent.ctx?.tools?.restrict
+    if (typeof restrict !== 'function') return undefined
+    try {
+      const undo = restrict.call(agent.ctx?.tools, { deny: ['__dsh_bonsai_probe__'] }) as unknown
+      if (typeof undo === 'function') (undo as () => void)()
+      return undefined
+    } catch (error) {
+      const match = /known global tools:\s*(.+)$/m.exec(describe(error))
+      if (match === null) return undefined
+      const names = new Set(match[1].split(',').map(name => name.trim()).filter(name => name !== ''))
+      knownByAgent.set(agent.id, names)
+      return names
+    }
+  }
+
   const applyToolDeny = (agent: AgentLike): void => {
-    const deny = service.toolDeny(agent.session?.id)
+    const requested = service.toolDeny(agent.session?.id)
+    const known = restrictableNames(agent)
+    if (known !== undefined && !cataloguedAgents.has(agent.id)) {
+      cataloguedAgents.add(agent.id)
+      const get = agent.ctx?.tools?.get
+      if (typeof get === 'function') {
+        const definitions = [...known].map(name => {
+          try {
+            return get.call(agent.ctx?.tools, name) ?? { name }
+          } catch {
+            return { name }
+          }
+        })
+        service.noteToolCatalog(definitions, true)
+      } else {
+        service.noteToolNames([...known])
+      }
+    }
+    // Never let one missing name reject the whole filter. Prefer the host's own restrictable
+    // set; fall back to dropping only own tools that this mount did not register.
+    const ownTools = new Set<string>(PLUGIN_TOOL_NAMES)
+    const deny = known !== undefined
+      ? requested.filter(name => known.has(name))
+      : availableToolNames === undefined
+        ? requested
+        : requested.filter(name => !ownTools.has(name) || availableToolNames.has(name))
     const key = deny.join('\u0000')
     if (appliedDeny.get(agent.id) === key) return
     const scoped = agent.ctx
@@ -192,10 +247,32 @@ export function installHooks(ctx: ContextLike, service: TokenTreeService, config
       ctx.logger.warn(`token-tree: could not hide tools (${describe(error)})`)
     }
   }
+  const noteToolCatalog = (agent?: AgentLike): void => {
+    // The root registry holds the host's built-in tools; an agent scope can add a few more.
+    // Merge both instead of letting a 13-tool agent view replace the full 30+ list.
+    const sources = [
+      ctx.tools?.definitions,
+      agent?.ctx?.tools?.definitions,
+    ]
+    let fresh = 0
+    for (const definitions of sources) {
+      if (typeof definitions !== 'function') continue
+      const registry = definitions === ctx.tools?.definitions ? ctx.tools : agent?.ctx?.tools
+      try {
+        service.noteToolCatalog(definitions.call(registry), true)
+        fresh++
+      } catch (error) {
+        ctx.logger.warn(`token-tree: could not read tool definitions (${describe(error)})`)
+      }
+    }
+    if (fresh === 0) return
+  }
+  noteToolCatalog()
   try {
     ctx.on('agent/created', (payload) => {
       const agent = payload?.agent
       if (agent === undefined) return
+      noteToolCatalog(agent)
       applyToolDeny(agent)
     })
   } catch (error) {

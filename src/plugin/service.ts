@@ -199,6 +199,8 @@ export interface SessionState {
     tools: { name: string; chars: number }[]
     at: number
   }
+  /** Tool definitions read from the agent registry, for the settings checklist. */
+  toolCatalog?: { name: string; chars: number; description?: string }[]
   /** Whether the post-compaction index was already injected. */
   indexInjected?: boolean
   /** What the provider billed for the last answer, for /usage and /cache. */
@@ -690,7 +692,7 @@ export class TokenTreeService {
     toolRestriction: NonNullable<SessionState['toolRestriction']> | null
     fold: NonNullable<SessionState['fold']> | null
     sessionCapability: SessionState['sessionCapability'] | null
-    availableTools: { name: string; chars: number }[]
+    availableTools: { name: string; chars: number; description?: string }[]
     drift: { samples: number; ratio: number | null }
     lastHint: SessionState['lastHint'] | null
   } {
@@ -2708,9 +2710,10 @@ export class TokenTreeService {
     }
   }
 
-  private availableTools(): { name: string; chars: number }[] {
+  private availableTools(): { name: string; chars: number; description?: string }[] {
     const live = this.stateOf('assembly').assembly?.tools ?? []
-    const tools = live.length > 0 ? live : this.cachedTools()
+    const catalog = this.stateOf('assembly').toolCatalog ?? []
+    const tools = live.length > 0 ? live : catalog.length > 0 ? catalog : this.cachedTools()
     return [...tools]
       .filter(tool => typeof tool.name === 'string' && tool.name !== '?')
       .sort((left, right) => right.chars - left.chars)
@@ -2844,6 +2847,65 @@ export class TokenTreeService {
     const state = typeof sessionIdOrState === 'string' ? this.stateOf(sessionIdOrState) : sessionIdOrState
     state.compacted = true
     state.indexInjected = false
+  }
+
+  /**
+   * Record every tool definition visible from an agent scope.
+   *
+   * The system-prompt waterfall intentionally does not receive the tool array on current
+   * hosts, so the assembly snapshot alone cannot populate the settings checklist. This is
+   * read-only metadata; it never changes what the model can call.
+   * @param definitions - values returned by `ctx.tools.definitions()`.
+   */
+  noteToolCatalog(definitions: readonly unknown[], merge = false): void {
+    const byName = new Map<string, { name: string; chars: number; description?: string }>()
+    if (merge) {
+      for (const tool of this.stateOf('assembly').toolCatalog ?? []) byName.set(tool.name, tool)
+    }
+    for (const entry of definitions) {
+      if (entry === null || typeof entry !== 'object') continue
+      const name = (entry as { name?: unknown }).name
+      if (typeof name !== 'string' || name === '') continue
+      let chars = 0
+      try {
+        chars = JSON.stringify(entry)?.length ?? 0
+      } catch {
+        chars = -1
+      }
+      const description = (entry as { description?: unknown }).description
+      const existing = byName.get(name)
+      if (existing !== undefined) {
+        if (existing.description === undefined && typeof description === 'string' && description !== '') {
+          existing.description = description
+        }
+        if (chars > existing.chars) existing.chars = chars
+        continue
+      }
+      byName.set(name, {
+        name,
+        chars,
+        ...(typeof description === 'string' && description !== '' ? { description } : {}),
+      })
+    }
+    const tools = [...byName.values()].sort((left, right) => right.chars - left.chars)
+    this.stateOf('assembly').toolCatalog = tools
+    this.persistTools(tools)
+  }
+
+  /**
+   * Add names discovered from a host restriction error, without overwriting known schema sizes.
+   * @param names - restrictable global tool names.
+   */
+  noteToolNames(names: readonly string[]): void {
+    const byName = new Map<string, { name: string; chars: number; description?: string }>()
+    for (const tool of this.stateOf('assembly').toolCatalog ?? []) byName.set(tool.name, tool)
+    for (const name of names) {
+      if (typeof name !== 'string' || name === '' || byName.has(name)) continue
+      byName.set(name, { name, chars: 0 })
+    }
+    const tools = [...byName.values()].sort((left, right) => right.chars - left.chars)
+    this.stateOf('assembly').toolCatalog = tools
+    this.persistTools(tools)
   }
 
   /**

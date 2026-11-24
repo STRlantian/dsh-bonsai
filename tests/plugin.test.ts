@@ -5,6 +5,7 @@ import { apply, blocksOf, Config, inject, name } from '../src/index.ts'
 import type { ContextLike, SessionEventLike, UserMessageLike } from '../src/plugin/dsh.ts'
 import type { ResolvedConfig } from '../src/plugin/config.ts'
 import { SettingsStore } from '../src/plugin/settings.ts'
+import { PLUGIN_TOOL_NAMES } from '../src/plugin/presets.ts'
 import type { TokenTreeService } from '../src/plugin/service.ts'
 
 /** Resolve the default configuration the way the loader would. */
@@ -42,10 +43,25 @@ class FakeHarness {
   readonly commands = new Map<string, { handler: (invocation: { agent: unknown; rawInput: string }) => unknown }>()
   readonly logs: string[] = []
   readonly injected: UserMessageLike[] = []
+  readonly denies: string[][] = []
   readonly agent = {
     id: 'agent-1',
     session: { id: 'session-1' },
     inject: (message: UserMessageLike) => { this.injected.push(message) },
+    ctx: {
+      tools: {
+        restrict: (options: { deny: string[] }) => {
+          const known = new Set([...this.tools.keys(), 'workflow'])
+          const unknown = options.deny.filter(name => !known.has(name))
+          if (unknown.length > 0) {
+            throw new Error(`tools.restrict() names unknown global tools ${unknown.map(name => `"${name}"`).join(', ')}; known global tools: ${[...known].sort().join(', ')}`)
+          }
+          this.denies.push([...options.deny])
+          return () => {}
+        },
+        definitions: () => [...this.tools.keys()].map(name => ({ name, description: name, parameters: {} })),
+      },
+    },
   }
 
   readonly ctx: ContextLike
@@ -58,6 +74,10 @@ class FakeHarness {
           self.tools.set(definition.name, definition)
           return () => { self.tools.delete(definition.name) }
         },
+        definitions: () => [
+          ...[...self.tools.keys()].map(name => ({ name, description: name, parameters: {} })),
+          { name: 'workflow', description: 'host tool', parameters: {} },
+        ],
       },
       logger: {
         info: (format: unknown) => { self.logs.push(String(format)) },
@@ -163,7 +183,7 @@ function tell(harness: FakeHarness, text: string): void {
 }
 
 /** Mount the plugin against the fake harness. */
-function mount(config: ResolvedConfig = balancedConfig()): { harness: FakeHarness; service: TokenTreeService } {
+function mount(config: ResolvedConfig = balancedConfig(), toolDeny: string[] = []): { harness: FakeHarness; service: TokenTreeService } {
   const harness = new FakeHarness()
   // In-memory stores: the suite must never read or write the user's real settings file.
   const files = new Map<string, string>()
@@ -174,7 +194,7 @@ function mount(config: ResolvedConfig = balancedConfig()): { harness: FakeHarnes
     makeDir: () => {},
   }
   const settings = new SettingsStore({ path: 'mem://settings.json', io, onError: () => {} })
-  settings.apply({ toolDeny: [] })
+  settings.apply({ toolDeny })
   apply(harness.ctx, config, { settings })
   return { harness, service: harness.service }
 }
@@ -254,6 +274,26 @@ test('marker and local modes do not register tree_attach', () => {
     assert.equal(harness.tools.has('tree_attach'), false, `${mode} hides the tool`)
     assert.equal(harness.tools.has('tree_rule'), true, `${mode} keeps the rule tool`)
   }
+})
+
+test('a tree-only deny list omits tools that were never registered', () => {
+  const config = Config['~standard'].validate({ attachMode: 'local' }).value!
+  const { harness, service } = mount(config, [...PLUGIN_TOOL_NAMES])
+  for (const listener of harness.handlers.get('agent/created') ?? []) {
+    (listener as (payload: unknown) => unknown)({ agent: harness.agent })
+  }
+  assert.equal(harness.tools.has('tree_attach'), false, 'local mode did not register the attach tool')
+  assert.deepEqual(
+    harness.denies.at(-1),
+    PLUGIN_TOOL_NAMES.filter(name => name !== 'tree_attach'),
+    'the unknown tree_attach name is removed before tools.restrict()',
+  )
+  assert.ok(harness.denies.at(-1)?.includes('retrieve_context'), 'the registered tree tools are still hidden')
+  const names = service.settingsInfo('session-1').availableTools.map(tool => tool.name)
+  assert.ok(names.includes('retrieve_context'), 'the checklist is populated from the agent registry')
+  assert.ok(names.includes('workflow'), 'host tools from the root registry are included')
+  assert.equal(service.settingsInfo('session-1').availableTools.find(tool => tool.name === 'workflow')?.description, 'host tool', 'descriptions travel with the names')
+  assert.equal(names.includes('tree_attach'), false, 'unregistered tools are not offered')
 })
 
 test('attachMode changes the model instruction', () => {

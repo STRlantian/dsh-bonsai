@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.1.17] - 2026-11-24
+
+Project status: temporarily on hold. This is the final planned release for now; the plugin remains usable.
+
+### Added
+
+- **Tool descriptions in the picker**: hovering a tool row shows the description from the host
+  registry (native tooltip).
+- **Complete tool list**: the settings picker now reads the host's restrictable global names from
+  the registry probe, so it lists every tool the host can hide, not only the agent-scope subset.
+  A manual name field remains as a fallback when a host does not expose the list.
+- **Tree-only preserves the tree**: the default still records and edits the tree without changing
+  the prompt, retrieval, attachment, folding, or model-facing tools.
+
+### Fixed
+
+- **Tree-only could fail to hide every tool.** `tree_attach` is absent from the registry in
+  `local` mode, but was still included in `toolDeny`; the host rejects a whole restriction batch
+  when one name is unknown. The deny list is now intersected with the probe's restrictable names,
+  so the remaining tools are hidden and the settings page no longer reports a missing tool.
+- **npm README mojibake**: repaired the English README's title, links, dashes, quotes, emoji and
+  numeric symbols; the staged package and manifest `readme` are regenerated from clean UTF-8.
+
 ## [0.1.16] - 2026-11-11
 
 The default is now tree-only: the plugin records the tree but changes nothing the model sees.
